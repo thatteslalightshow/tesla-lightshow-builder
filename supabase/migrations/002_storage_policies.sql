@@ -1,0 +1,2 @@
+-- See Supabase SQL Editor — already run
+-- This file is for version control reference
