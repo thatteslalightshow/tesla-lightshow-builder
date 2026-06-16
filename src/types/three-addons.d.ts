@@ -11,3 +11,7 @@ declare module 'three/examples/jsm/environments/RoomEnvironment' {
 declare module 'three/examples/jsm/loaders/GLTFLoader' {
   export { GLTFLoader, GLTF } from '@types/three/examples/jsm/loaders/GLTFLoader';
 }
+
+declare module 'three/examples/jsm/loaders/DRACOLoader' {
+  export { DRACOLoader } from '@types/three/examples/jsm/loaders/DRACOLoader';
+}

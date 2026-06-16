@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { MODELS, generateFrames } from '@/lib/tesla-channels';
 import type { TeslaModel, ShowStyle } from '@/lib/supabase';
 
@@ -482,7 +483,10 @@ export default function TeslaScene({ teslaModel, style, intensity, bpm, previewB
     scene.add(proceduralGroup);
     setGltfStatus('loading');
 
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('/draco/');
     const loader = new GLTFLoader();
+    loader.setDRACOLoader(dracoLoader);
     loader.load(
       GLTF_PATHS[teslaModel],
       (gltf: { scene: THREE.Group }) => {
@@ -608,7 +612,7 @@ export default function TeslaScene({ teslaModel, style, intensity, bpm, previewB
     return () => {
       cancelAnimationFrame(raf);
       el.removeEventListener('mousemove', onMouseMove);
-      obs.disconnect(); controls.dispose(); renderer.dispose();
+      obs.disconnect(); controls.dispose(); renderer.dispose(); dracoLoader.dispose();
       if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement);
       setTooltip(null); setDoorsOpen(false); setFalconOpen(false);
     };
