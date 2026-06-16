@@ -3,10 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "dev":            "next dev",
+    "build":          "next build",
+    "start":          "next start",
+    "lint":           "next lint",
+    "type-check":     "tsc --noEmit",
+    "cap:sync":       "next build && npx cap sync",
+    "cap:ios":        "npm run cap:sync && npx cap open ios",
+    "cap:android":    "npm run cap:sync && npx cap open android",
+    "security:audit": "npm audit --audit-level=moderate"
   },
   "dependencies": {
     "next": "^14.2.0",
