@@ -3,3 +3,7 @@
 declare module 'three/examples/jsm/controls/OrbitControls' {
   export { OrbitControls, OrbitControlsEventMap } from '@types/three/examples/jsm/controls/OrbitControls';
 }
+
+declare module 'three/examples/jsm/environments/RoomEnvironment' {
+  export { RoomEnvironment } from '@types/three/examples/jsm/environments/RoomEnvironment';
+}
