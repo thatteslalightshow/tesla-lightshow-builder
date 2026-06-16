@@ -1,63 +1,72 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import styles from './page.module.css';
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+
+    const setSize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+    setSize();
+
     const colors = ['#e8404a','#ff8c00','#ffffff','#4488ff','#00e887'];
-    const particles = Array.from({length:80}, () => ({
-      x: Math.random()*canvas.width,
-      y: Math.random()*canvas.height,
-      vx: (Math.random()-.5)*.4,
-      vy: (Math.random()-.5)*.4,
-      size: Math.random()*2.5+.5,
-      opacity: Math.random()*.6+.1,
-      color: colors[Math.floor(Math.random()*colors.length)]
+    const particles = Array.from({length:100}, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      vx: (Math.random() - .5) * .5,
+      vy: (Math.random() - .5) * .5,
+      size: Math.random() * 3 + .5,
+      opacity: Math.random() * .7 + .2,
+      color: colors[Math.floor(Math.random() * colors.length)]
     }));
+
     let raf: number;
     function draw() {
       if (!ctx || !canvas) return;
-      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       particles.forEach(p => {
-        p.x+=p.vx; p.y+=p.vy;
-        if(p.x<0)p.x=canvas.width;
-        if(p.x>canvas.width)p.x=0;
-        if(p.y<0)p.y=canvas.height;
-        if(p.y>canvas.height)p.y=0;
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0) p.x = canvas.width;
+        if (p.x > canvas.width) p.x = 0;
+        if (p.y < 0) p.y = canvas.height;
+        if (p.y > canvas.height) p.y = 0;
         ctx.beginPath();
-        ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
-        ctx.fillStyle=p.color;
-        ctx.globalAlpha=p.opacity;
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.opacity;
         ctx.fill();
       });
-      ctx.globalAlpha=1;
-      raf=requestAnimationFrame(draw);
+      ctx.globalAlpha = 1;
+      raf = requestAnimationFrame(draw);
     }
     draw();
-    const resize = () => {
-      if(!canvas) return;
-      canvas.width=window.innerWidth;
-      canvas.height=window.innerHeight;
-    };
-    window.addEventListener('resize',resize);
+
+    window.addEventListener('resize', setSize);
     return () => {
       cancelAnimationFrame(raf);
-      window.removeEventListener('resize',resize);
+      window.removeEventListener('resize', setSize);
     };
-  },[]);
+  }, [mounted]);
 
   return (
     <div className={styles.page}>
-      <canvas ref={canvasRef} className={styles.canvas}/>
+      {mounted && <canvas ref={canvasRef} className={styles.canvas}/>}
       <nav className={styles.nav}>
         <div className={styles.navLogo}>
           <div className={styles.logoMark}>T</div>
