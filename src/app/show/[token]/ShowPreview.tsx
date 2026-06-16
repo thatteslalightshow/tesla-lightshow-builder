@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import * as THREE from 'three';
-import type { Show, ShowStyle } from '@/lib/supabase';
+import type { Show } from '@/lib/supabase';
+import TeslaScene from '@/components/TeslaScene';
 
 const MODEL_LABELS: Record<string, string> = {
   model3: 'Model 3', modelY: 'Model Y', modelS: 'Model S',
@@ -11,115 +11,6 @@ const MODEL_LABELS: Record<string, string> = {
 
 const STYLE_LABELS: Record<string, string> = {
   energetic: 'Energetic', wave: 'Wave', strobe: 'Strobe', chase: 'Chase',
-}
-
-function ThreePreview({ style, intensity, bpm }: { style: ShowStyle; intensity: number; bpm: number }) {
-  const mountRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = mountRef.current;
-    if (!el) return;
-    const w = el.clientWidth || 800;
-    const h = el.clientHeight || 480;
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(w, h);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    el.appendChild(renderer.domElement);
-
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0a0f);
-    scene.fog = new THREE.Fog(0x0a0a0f, 12, 26);
-
-    const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
-    camera.position.set(5, 3, 8);
-    camera.lookAt(0, 0, 0);
-
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(20, 20),
-      new THREE.MeshStandardMaterial({ color: 0x0f0f18, roughness: 0.9 })
-    );
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.y = -0.8;
-    floor.receiveShadow = true;
-    scene.add(floor);
-    scene.add(new THREE.AmbientLight(0x111122, 0.5));
-
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2a, roughness: 0.3, metalness: 0.7 });
-    const addBox = (x: number, y: number, z: number, w: number, h: number, d: number) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), bodyMat);
-      m.position.set(x, y, z);
-      m.castShadow = true;
-      scene.add(m);
-    };
-    addBox(0, -0.15, 0, 3.8, 0.55, 1.65);
-    addBox(0, 0.35, -0.05, 2.6, 0.65, 1.55);
-    addBox(0, -0.4, 0, 3.8, 0.05, 1.75);
-
-    const lightDefs: [number, number, number, number][] = [
-      [1.9, -0.1, 0.65, 0xffffff], [1.9, -0.1, -0.65, 0xffffff],
-      [-1.9, -0.1, 0.65, 0xe8404a], [-1.9, -0.1, -0.65, 0xe8404a],
-      [1.85, 0.05, 0.5, 0x88aaff], [1.85, 0.05, -0.5, 0x88aaff],
-      [1.85, -0.2, 0.72, 0xff8c00], [1.85, -0.2, -0.72, 0xff8c00],
-      [-1.85, -0.2, 0.72, 0xff8c00], [-1.85, -0.2, -0.72, 0xff8c00],
-      [0, 0.68, 0.78, 0x4488ff], [0, 0.68, -0.78, 0x4488ff],
-    ];
-
-    const lights = lightDefs.map(([x, y, z, color]) => {
-      const mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.06, 8, 8),
-        new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 2 })
-      );
-      mesh.position.set(x, y, z);
-      scene.add(mesh);
-      const pl = new THREE.PointLight(color, 0, 3);
-      pl.position.set(x, y, z);
-      scene.add(pl);
-      return { mesh, pl };
-    });
-
-    let raf: number;
-    let t = 0;
-    const scale = intensity / 100;
-    const beatsPerSec = bpm / 60;
-
-    function animate() {
-      raf = requestAnimationFrame(animate);
-      t += 0.016;
-      const beat = t * beatsPerSec;
-      lights.forEach(({ mesh, pl }, i) => {
-        const zone = Math.floor(i / 2);
-        let brightness = 0;
-        switch (style) {
-          case 'energetic': brightness = Math.sin(beat * Math.PI * 2 + zone * 0.8) > 0 ? 1 : 0.05; break;
-          case 'wave':      brightness = Math.sin(beat * Math.PI * 2 - zone * 0.6) * 0.5 + 0.5; break;
-          case 'strobe':    brightness = Math.floor(beat * 2) % 2 === 0 && i % 3 === 0 ? 1 : 0.02; break;
-          case 'chase':     brightness = zone === Math.floor(beat) % lights.length ? 1 : 0.05; break;
-        }
-        const b = brightness * scale;
-        (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = b * 3;
-        pl.intensity = b * 2;
-      });
-      camera.position.x = Math.sin(t * 0.08) * 9;
-      camera.position.z = Math.cos(t * 0.08) * 9;
-      camera.lookAt(0, 0, 0);
-      renderer.render(scene, camera);
-    }
-    animate();
-
-    const onResize = () => {
-      const nw = el.clientWidth || 800;
-      const nh = el.clientHeight || 480;
-      camera.aspect = nw / nh;
-      camera.updateProjectionMatrix();
-      renderer.setSize(nw, nh);
-    };
-    window.addEventListener('resize', onResize);
-    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', onResize); renderer.dispose(); el.removeChild(renderer.domElement); };
-  }, [style, intensity, bpm]);
-
-  return <div ref={mountRef} style={{ width: '100%', height: '100%' }} />;
 }
 
 export default function ShowPreview({ show }: { show: Show }) {
@@ -180,7 +71,7 @@ export default function ShowPreview({ show }: { show: Show }) {
       {/* 3D Preview */}
       <div style={{ flex: 1, maxWidth: 960, width: '100%', margin: '0 auto', padding: '0 2rem 2rem' }}>
         <div style={{ height: 460, borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border)' }}>
-          <ThreePreview style={show.style} intensity={show.intensity} bpm={show.bpm ?? 120} />
+          <TeslaScene teslaModel={show.tesla_model} style={show.style} intensity={show.intensity} bpm={show.bpm ?? 120} />
         </div>
 
         {/* CTA */}

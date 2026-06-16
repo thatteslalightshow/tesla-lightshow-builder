@@ -5,6 +5,8 @@ import Link from 'next/link';
 import * as THREE from 'three';
 import JSZip from 'jszip';
 import { supabase, validateAudioFile, type TeslaModel, type ShowStyle } from '@/lib/supabase';
+import TeslaScene from '@/components/TeslaScene';
+import { generateFrames, getChannelCount } from '@/lib/tesla-channels';
 
 const TESLA_MODELS: { value: TeslaModel; label: string }[] = [
   { value: 'model3', label: 'Model 3' },
@@ -55,14 +57,13 @@ function buildFseq(channels: number, frames: number, stepMs: number, frameData: 
   const buf = new ArrayBuffer(totalSize);
   const view = new DataView(buf);
   const u8 = new Uint8Array(buf);
-  // Magic "PSEQ"
   u8[0] = 0x50; u8[1] = 0x53; u8[2] = 0x45; u8[3] = 0x51;
-  view.setUint16(4, headerSize, true);  // channel data start
-  u8[6] = 0; u8[7] = 2;                // version 2.0
-  view.setUint16(8, headerSize, true);  // header length
-  view.setUint32(10, channels, true);   // channel count
-  view.setUint32(14, frames, true);     // frame count
-  view.setUint16(18, stepMs, true);     // step time ms
+  view.setUint16(4, headerSize, true);
+  u8[6] = 0; u8[7] = 2;
+  view.setUint16(8, headerSize, true);
+  view.setUint32(10, channels, true);
+  view.setUint32(14, frames, true);
+  view.setUint16(18, stepMs, true);
   u8[20] = 0; u8[21] = 0;
   view.setUint16(22, 0, true);
   u8[24] = 1; u8[25] = 0; u8[26] = 0; u8[27] = 0;
@@ -72,183 +73,6 @@ function buildFseq(channels: number, frames: number, stepMs: number, frameData: 
     u8.set(frameData[f] ?? new Uint8Array(channels), offset);
   }
   return buf;
-}
-
-function generateFrames(style: ShowStyle, intensity: number, bpm: number, frames: number, channels: number): Uint8Array[] {
-  const result: Uint8Array[] = [];
-  const scale = intensity / 100;
-  const beatsPerFrame = bpm / (60 * 20); // frames at 20fps
-  for (let f = 0; f < frames; f++) {
-    const frame = new Uint8Array(channels);
-    const t = f * beatsPerFrame;
-    for (let c = 0; c < channels; c++) {
-      let val = 0;
-      const zone = Math.floor(c / 3);
-      switch (style) {
-        case 'energetic':
-          val = Math.sin(t * Math.PI * 2 + zone * 0.8) > 0.2 ? 255 : 0;
-          break;
-        case 'wave':
-          val = Math.round((Math.sin(t * Math.PI * 2 - zone * 0.5) * 0.5 + 0.5) * 255);
-          break;
-        case 'strobe':
-          val = Math.floor(t) % 2 === 0 && f % 3 === 0 ? 255 : 0;
-          break;
-        case 'chase':
-          val = (zone === Math.floor(t) % Math.ceil(channels / 3)) ? 255 : 0;
-          break;
-      }
-      frame[c] = Math.round(val * scale);
-    }
-    result.push(frame);
-  }
-  return result;
-}
-
-function ThreePreview({ style, intensity, bpm }: { style: ShowStyle; intensity: number; bpm: number }) {
-  const mountRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = mountRef.current;
-    if (!el) return;
-
-    const w = el.clientWidth || 600;
-    const h = el.clientHeight || 340;
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(w, h);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    el.appendChild(renderer.domElement);
-
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0a0f);
-    scene.fog = new THREE.Fog(0x0a0a0f, 12, 25);
-
-    const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
-    camera.position.set(5, 3, 8);
-    camera.lookAt(0, 0, 0);
-
-    // Floor
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(20, 20),
-      new THREE.MeshStandardMaterial({ color: 0x0f0f18, roughness: 0.9 })
-    );
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.y = -0.8;
-    floor.receiveShadow = true;
-    scene.add(floor);
-
-    // Ambient
-    scene.add(new THREE.AmbientLight(0x111122, 0.5));
-
-    // Car body segments
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2a, roughness: 0.3, metalness: 0.7 });
-    const addBox = (x: number, y: number, z: number, w: number, h: number, d: number) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), bodyMat);
-      m.position.set(x, y, z);
-      m.castShadow = true;
-      scene.add(m);
-      return m;
-    };
-    addBox(0, -0.15, 0, 3.8, 0.55, 1.65);  // chassis
-    addBox(0, 0.35, -0.05, 2.6, 0.65, 1.55); // cabin
-    addBox(0, -0.4, 0, 3.8, 0.05, 1.75);    // underbody
-
-    // Light positions: [x, y, z, color, label]
-    const lightDefs: [number, number, number, number][] = [
-      // headlights
-      [1.9, -0.1, 0.65, 0xffffff],
-      [1.9, -0.1, -0.65, 0xffffff],
-      // tail lights
-      [-1.9, -0.1, 0.65, 0xe8404a],
-      [-1.9, -0.1, -0.65, 0xe8404a],
-      // DRL / running
-      [1.85, 0.05, 0.5, 0x88aaff],
-      [1.85, 0.05, -0.5, 0x88aaff],
-      // turn signals front
-      [1.85, -0.2, 0.72, 0xff8c00],
-      [1.85, -0.2, -0.72, 0xff8c00],
-      // turn signals rear
-      [-1.85, -0.2, 0.72, 0xff8c00],
-      [-1.85, -0.2, -0.72, 0xff8c00],
-      // top marker
-      [0, 0.68, 0.78, 0x4488ff],
-      [0, 0.68, -0.78, 0x4488ff],
-    ];
-
-    const lights = lightDefs.map(([x, y, z, color]) => {
-      const mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.06, 8, 8),
-        new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 2 })
-      );
-      mesh.position.set(x, y, z);
-      scene.add(mesh);
-      const pl = new THREE.PointLight(color, 0, 3);
-      pl.position.set(x, y, z);
-      scene.add(pl);
-      return { mesh, pl, baseColor: new THREE.Color(color) };
-    });
-
-    let raf: number;
-    let t = 0;
-    const scale = intensity / 100;
-    const beatsPerSec = bpm / 60;
-
-    function animate() {
-      raf = requestAnimationFrame(animate);
-      t += 0.016;
-      const beat = t * beatsPerSec;
-
-      lights.forEach(({ mesh, pl, baseColor }, i) => {
-        const zone = Math.floor(i / 2);
-        let brightness = 0;
-        switch (style) {
-          case 'energetic':
-            brightness = Math.sin(beat * Math.PI * 2 + zone * 0.8) > 0 ? 1 : 0.05;
-            break;
-          case 'wave':
-            brightness = Math.sin(beat * Math.PI * 2 - zone * 0.6) * 0.5 + 0.5;
-            break;
-          case 'strobe':
-            brightness = Math.floor(beat * 2) % 2 === 0 && i % 3 === 0 ? 1 : 0.02;
-            break;
-          case 'chase':
-            brightness = zone === Math.floor(beat) % lights.length ? 1 : 0.05;
-            break;
-        }
-        const b = brightness * scale;
-        (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = b * 3;
-        pl.intensity = b * 2;
-      });
-
-      // Slow camera orbit
-      camera.position.x = Math.sin(t * 0.1) * 9;
-      camera.position.z = Math.cos(t * 0.1) * 9;
-      camera.lookAt(0, 0, 0);
-
-      renderer.render(scene, camera);
-    }
-    animate();
-
-    const onResize = () => {
-      const nw = el.clientWidth || 600;
-      const nh = el.clientHeight || 340;
-      camera.aspect = nw / nh;
-      camera.updateProjectionMatrix();
-      renderer.setSize(nw, nh);
-    };
-    window.addEventListener('resize', onResize);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', onResize);
-      renderer.dispose();
-      el.removeChild(renderer.domElement);
-    };
-  }, [style, intensity, bpm]);
-
-  return <div ref={mountRef} style={{ width: '100%', height: 340, borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: '#0a0a0f' }} />;
 }
 
 function BuilderInner() {
@@ -411,8 +235,9 @@ function BuilderInner() {
     // Client-side fallback (unsaved show or API error)
     const FPS = 20;
     const frames = 600;
-    const channels = 48;
-    const frameData = generateFrames(style, intensity, bpm, frames, channels);
+    const channels = getChannelCount(model);
+    const { MODELS } = await import('@/lib/tesla-channels');
+    const frameData = generateFrames(style, intensity, bpm, frames, MODELS[model]);
     const fseq = buildFseq(channels, frames, Math.round(1000 / FPS), frameData);
     const zip = new JSZip();
     const folder = zip.folder('LightShow')!;
@@ -555,7 +380,9 @@ function BuilderInner() {
 
         {/* Main area */}
         <main style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
-          <ThreePreview style={style} intensity={intensity} bpm={bpm} />
+          <div style={{ height: 420, borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border)' }}>
+            <TeslaScene teslaModel={model} style={style} intensity={intensity} bpm={bpm} />
+          </div>
 
           {/* Stats bar */}
           <div style={{ display: 'flex', gap: '1rem', padding: '1rem', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
