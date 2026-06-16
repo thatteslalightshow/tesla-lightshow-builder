@@ -258,6 +258,7 @@ function BuilderInner() {
 
   const [authed, setAuthed] = useState(false);
   const [userId, setUserId] = useState('');
+  const [savedShowId, setSavedShowId] = useState<string | null>(editId);
   const [name, setName] = useState('My Light Show');
   const [model, setModel] = useState<TeslaModel>('model3');
   const [style, setStyle] = useState<ShowStyle>('energetic');
@@ -265,7 +266,9 @@ function BuilderInner() {
   const [bpm, setBpm] = useState(120);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioError, setAudioError] = useState('');
+  const [audioUploaded, setAudioUploaded] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
 
@@ -290,6 +293,10 @@ function BuilderInner() {
     setStyle(data.style);
     setIntensity(data.intensity);
     if (data.bpm) setBpm(data.bpm);
+    // Check if audio already uploaded for this show
+    const { data: audio } = await supabase
+      .from('audio_files').select('id').eq('show_id', id).limit(1);
+    if (audio?.length) setAudioUploaded(true);
   }
 
   function onAudioChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -299,8 +306,8 @@ function BuilderInner() {
     if (err) { setAudioError(err); return; }
     setAudioError('');
     setAudioFile(file);
+    setAudioUploaded(false);
 
-    // Detect BPM
     const reader = new FileReader();
     reader.onload = async ev => {
       try {
@@ -312,6 +319,22 @@ function BuilderInner() {
       } catch { /* ignore */ }
     };
     reader.readAsArrayBuffer(file);
+  }
+
+  async function uploadAudio(showId: string, file: File) {
+    setUploading(true);
+    const form = new FormData();
+    form.append('file', file);
+    form.append('show_id', showId);
+    const res = await fetch('/api/upload', { method: 'POST', body: form });
+    setUploading(false);
+    if (res.ok) {
+      setAudioUploaded(true);
+    } else {
+      const { error } = await res.json();
+      setSaveMsg(`Audio upload failed: ${error}`);
+      setTimeout(() => setSaveMsg(''), 4000);
+    }
   }
 
   async function save() {
@@ -326,34 +349,69 @@ function BuilderInner() {
       bpm,
       updated_at: new Date().toISOString(),
     };
+    let showId = savedShowId;
     let error;
-    if (editId) {
-      ({ error } = await supabase.from('shows').update(payload).eq('id', editId));
+    if (showId) {
+      ({ error } = await supabase.from('shows').update(payload).eq('id', showId));
     } else {
-      const { error: e, data } = await supabase.from('shows').insert({ ...payload, is_public: false, share_token: crypto.randomUUID() }).select().single();
+      const { error: e, data } = await supabase
+        .from('shows')
+        .insert({ ...payload, is_public: false, share_token: crypto.randomUUID() })
+        .select().single();
       error = e;
-      if (data) router.replace(`/builder?id=${data.id}`);
+      if (data) {
+        showId = data.id;
+        setSavedShowId(data.id);
+        router.replace(`/builder?id=${data.id}`);
+      }
     }
     setSaving(false);
-    setSaveMsg(error ? `Error: ${error.message}` : 'Saved!');
+    if (error) {
+      setSaveMsg(`Error: ${error.message}`);
+      setTimeout(() => setSaveMsg(''), 4000);
+      return;
+    }
+    setSaveMsg('Saved!');
     setTimeout(() => setSaveMsg(''), 3000);
+    // Auto-upload audio if a new file was selected and not yet uploaded
+    if (audioFile && !audioUploaded && showId) {
+      await uploadAudio(showId, audioFile);
+    }
   }
 
   async function exportZip() {
     setExporting(true);
+    // Prefer server-side export when the show has been saved (includes stored audio)
+    if (savedShowId) {
+      try {
+        const res = await fetch('/api/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ show_id: savedShowId }),
+        });
+        if (res.ok) {
+          const { url, filename } = await res.json();
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          a.click();
+          setExporting(false);
+          return;
+        }
+      } catch { /* fall through to client-side export */ }
+    }
+
+    // Client-side fallback (unsaved show or API error)
     const FPS = 20;
-    const durationSec = audioFile ? 0 : 30;
-    const frames = durationSec * FPS || 600;
+    const frames = 600;
     const channels = 48;
     const frameData = generateFrames(style, intensity, bpm, frames, channels);
-    const fseq = buildFseq(channels, frames, 1000 / FPS, frameData);
-
+    const fseq = buildFseq(channels, frames, Math.round(1000 / FPS), frameData);
     const zip = new JSZip();
     const folder = zip.folder('LightShow')!;
     folder.file('lightshow.fseq', fseq);
     if (audioFile) folder.file('lightshow.wav', await audioFile.arrayBuffer());
     folder.file('show_config.json', JSON.stringify({ name, tesla_model: model, style, intensity, bpm }, null, 2));
-
     const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -381,10 +439,11 @@ function BuilderInner() {
             style={{ background: 'none', border: 'none', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15, color: 'var(--text)', minWidth: 0, outline: 'none' }}
           />
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {saveMsg && <span style={{ fontSize: 12, color: saveMsg.startsWith('Error') ? '#ff8a8a' : 'var(--green)', alignSelf: 'center' }}>{saveMsg}</span>}
-          <button onClick={save} disabled={saving} className="btn btn-ghost btn-sm">{saving ? 'Saving…' : 'Save'}</button>
-          <button onClick={exportZip} disabled={exporting} className="btn btn-primary btn-sm">{exporting ? 'Exporting…' : '⬇ Export ZIP'}</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {uploading && <span style={{ fontSize: 12, color: 'var(--muted)' }}>Uploading audio…</span>}
+          {saveMsg && <span style={{ fontSize: 12, color: saveMsg.startsWith('Error') || saveMsg.startsWith('Audio') ? '#ff8a8a' : 'var(--green)' }}>{saveMsg}</span>}
+          <button onClick={save} disabled={saving || uploading} className="btn btn-ghost btn-sm">{saving ? 'Saving…' : 'Save'}</button>
+          <button onClick={exportZip} disabled={exporting || saving} className="btn btn-primary btn-sm">{exporting ? 'Exporting…' : '⬇ Export ZIP'}</button>
         </div>
       </nav>
 
@@ -399,10 +458,10 @@ function BuilderInner() {
               onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
               <input type="file" accept="audio/mpeg,audio/mp3,audio/wav" onChange={onAudioChange} style={{ display: 'none' }} />
               <div style={{ fontSize: '1.5rem', marginBottom: 4 }}>🎵</div>
-              <div style={{ fontSize: 12, color: audioFile ? 'var(--green)' : 'var(--muted)' }}>
-                {audioFile ? audioFile.name : 'Click to upload MP3 or WAV'}
+              <div style={{ fontSize: 12, color: audioUploaded ? 'var(--green)' : audioFile ? '#ff8c00' : 'var(--muted)' }}>
+                {audioUploaded ? `✓ ${audioFile?.name ?? 'Audio saved'}` : audioFile ? `${audioFile.name} (save to upload)` : 'Click to upload MP3 or WAV'}
               </div>
-              {!audioFile && <div style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 2 }}>Max 50MB</div>}
+              {!audioFile && <div style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 2 }}>Max 50MB · uploaded to your account</div>}
             </label>
             {audioError && <div style={{ fontSize: 11, color: '#ff8a8a', marginTop: 4 }}>{audioError}</div>}
           </div>
