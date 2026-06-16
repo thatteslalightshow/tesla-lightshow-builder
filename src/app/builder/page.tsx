@@ -267,6 +267,9 @@ function BuilderInner() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioError, setAudioError] = useState('');
   const [audioUploaded, setAudioUploaded] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -293,6 +296,8 @@ function BuilderInner() {
     setStyle(data.style);
     setIntensity(data.intensity);
     if (data.bpm) setBpm(data.bpm);
+    setIsPublic(data.is_public);
+    setShareToken(data.share_token);
     // Check if audio already uploaded for this show
     const { data: audio } = await supabase
       .from('audio_files').select('id').eq('show_id', id).limit(1);
@@ -347,6 +352,7 @@ function BuilderInner() {
       style,
       intensity,
       bpm,
+      is_public: isPublic,
       updated_at: new Date().toISOString(),
     };
     let showId = savedShowId;
@@ -362,6 +368,7 @@ function BuilderInner() {
       if (data) {
         showId = data.id;
         setSavedShowId(data.id);
+        setShareToken(data.share_token);
         router.replace(`/builder?id=${data.id}`);
       }
     }
@@ -518,6 +525,32 @@ function BuilderInner() {
               <span>10%</span><span>100%</span>
             </div>
           </div>
+
+          {/* Share */}
+          {savedShowId && (
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+              <div className="label" style={{ marginBottom: '.5rem' }}>Share</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '.5rem' }}>
+                <span style={{ fontSize: 13, color: 'var(--muted)' }}>{isPublic ? 'Anyone with the link can view' : 'Only you can see this'}</span>
+                <button
+                  onClick={() => setIsPublic(p => !p)}
+                  style={{ width: 36, height: 20, borderRadius: 10, background: isPublic ? 'var(--green)' : 'var(--bg4)', border: '1px solid var(--border2)', cursor: 'pointer', position: 'relative', transition: 'background .2s', flexShrink: 0 }}
+                >
+                  <span style={{ position: 'absolute', top: 2, left: isPublic ? 18 : 2, width: 14, height: 14, borderRadius: '50%', background: '#fff', transition: 'left .2s' }} />
+                </button>
+              </div>
+              {isPublic && shareToken && (
+                <button
+                  onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/show/${shareToken}`); setCopiedLink(true); setTimeout(() => setCopiedLink(false), 2000); }}
+                  className="btn btn-ghost btn-sm btn-full"
+                  style={{ fontSize: 12 }}
+                >
+                  {copiedLink ? '✓ Link copied!' : '🔗 Copy share link'}
+                </button>
+              )}
+              {isPublic && <p style={{ fontSize: 11, color: 'var(--muted2)', marginTop: '.4rem' }}>Save to publish your changes.</p>}
+            </div>
+          )}
         </aside>
 
         {/* Main area */}

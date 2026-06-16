@@ -10,6 +10,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [toggling, setToggling] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -17,7 +19,6 @@ export default function DashboardPage() {
       setEmail(session.user.email ?? '');
       loadShows();
     });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || !session) router.replace('/auth');
     });
@@ -41,6 +42,25 @@ export default function DashboardPage() {
     setDeleting(null);
   }
 
+  async function togglePublic(show: Show) {
+    setToggling(show.id);
+    const next = !show.is_public;
+    const { error } = await supabase
+      .from('shows')
+      .update({ is_public: next })
+      .eq('id', show.id);
+    if (!error) setShows(prev => prev.map(s => s.id === show.id ? { ...s, is_public: next } : s));
+    setToggling(null);
+  }
+
+  function copyShareLink(show: Show) {
+    const url = `${window.location.origin}/show/${show.share_token}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(show.id);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  }
+
   async function signOut() {
     await supabase.auth.signOut();
     router.replace('/');
@@ -55,7 +75,6 @@ export default function DashboardPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
-      {/* Nav */}
       <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 2rem', borderBottom: '1px solid var(--border)', background: 'rgba(10,10,15,0.9)', backdropFilter: 'blur(12px)', position: 'sticky', top: 0, zIndex: 10 }}>
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 32, height: 32, background: 'var(--red)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14, color: '#fff', fontFamily: 'var(--font-display)' }}>T</div>
@@ -73,15 +92,13 @@ export default function DashboardPage() {
             <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 700, marginBottom: '.25rem' }}>My Shows</h1>
             <p style={{ fontSize: 13, color: 'var(--muted)' }}>{shows.length} show{shows.length !== 1 ? 's' : ''}</p>
           </div>
-          <Link href="/builder" className="btn btn-primary">
-            + New show
-          </Link>
+          <Link href="/builder" className="btn btn-primary">+ New show</Link>
         </div>
 
         {loading ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: '1rem' }}>
             {[1, 2, 3].map(i => (
-              <div key={i} style={{ height: 140, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', animation: 'pulse 2s ease infinite' }} />
+              <div key={i} style={{ height: 175, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', animation: 'pulse 2s ease infinite' }} />
             ))}
           </div>
         ) : shows.length === 0 ? (
@@ -92,22 +109,48 @@ export default function DashboardPage() {
             <Link href="/builder" className="btn btn-primary">Build your first show →</Link>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: '1rem' }}>
             {shows.map(show => (
-              <div key={show.id} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '.75rem', transition: 'border-color .15s' }}>
+              <div key={show.id} style={{ background: 'var(--bg2)', border: `1px solid ${show.is_public ? 'rgba(0,232,135,0.2)' : 'var(--border)'}`, borderRadius: 'var(--radius-lg)', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '.75rem', transition: 'border-color .2s' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                   <div>
                     <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15, marginBottom: 3 }}>{show.name}</div>
                     <div style={{ fontSize: 12, color: 'var(--muted)' }}>{modelLabels[show.tesla_model] ?? show.tesla_model}</div>
                   </div>
-                  <span className="badge badge-red" style={{ flexShrink: 0 }}>{styleLabels[show.style] ?? show.style}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                    <span className="badge badge-red">{styleLabels[show.style] ?? show.style}</span>
+                    {show.is_public && <span className="badge badge-green">Public</span>}
+                  </div>
                 </div>
+
                 <div style={{ display: 'flex', gap: '1rem', fontSize: 12, color: 'var(--muted)' }}>
                   {show.bpm && <span>🎵 {show.bpm} BPM</span>}
-                  {show.duration_sec && <span>⏱ {Math.floor(show.duration_sec / 60)}:{String(show.duration_sec % 60).padStart(2, '0')}</span>}
+                  {show.duration_sec && <span>⏱ {Math.floor(show.duration_sec / 60)}:{String(Math.round(show.duration_sec % 60)).padStart(2, '0')}</span>}
                   <span>⚡ {show.intensity}%</span>
                 </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
+
+                {/* Share row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingTop: '.25rem', borderTop: '1px solid var(--border)' }}>
+                  <button
+                    onClick={() => togglePublic(show)}
+                    disabled={toggling === show.id}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: show.is_public ? 'var(--green)' : 'var(--muted)', padding: '2px 0', transition: 'color .15s' }}
+                  >
+                    <span style={{ fontSize: 14 }}>{show.is_public ? '🌐' : '🔒'}</span>
+                    {toggling === show.id ? '…' : show.is_public ? 'Public' : 'Private'}
+                  </button>
+                  {show.is_public && (
+                    <button
+                      onClick={() => copyShareLink(show)}
+                      className="btn btn-ghost btn-sm"
+                      style={{ marginLeft: 'auto', fontSize: 11 }}
+                    >
+                      {copied === show.id ? '✓ Copied!' : '🔗 Copy link'}
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: 8 }}>
                   <Link href={`/builder?id=${show.id}`} className="btn btn-ghost btn-sm" style={{ flex: 1, textAlign: 'center' }}>Edit</Link>
                   <button
                     className="btn btn-ghost btn-sm"
