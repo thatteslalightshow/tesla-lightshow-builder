@@ -3,14 +3,10 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Tesla LightShow Builder",
-  description: "Build and export custom Tesla light shows synced to your music",
+  description: "Build custom Tesla light shows synced to your music. Export ready for USB.",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>{children}</body>
