@@ -47,7 +47,9 @@ export async function getSignedDownloadUrl(
   path: string,
   expiresIn = 900
 ): Promise<string> {
-  const { data, error } = await supabase.storage
+  // Use the admin client so signed URL generation runs under service role, not anon
+  const admin = getAdminClient()
+  const { data, error } = await admin.storage
     .from(bucket)
     .createSignedUrl(path, expiresIn)
   if (error || !data) throw new Error('Failed to create download URL')

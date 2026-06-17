@@ -14,7 +14,10 @@ interface Props {
   style: ShowStyle;
   intensity: number;
   bpm: number;
-  previewBeat?: number | null; // when set, drives light frame directly from audio time
+  previewBeat?: number | null;
+  customFrames?: Uint8Array[] | null;       // audio-analyzed frames override generated frames
+  paintColor?: number;                       // 0xRRGGBB body color; defaults to model signature color
+  audioTriggerFrames?: Set<number> | null;  // frame indices with beat onset → animates doors
 }
 interface Tooltip { label: string; x: number; y: number }
 interface DoorAnim { group: THREE.Group; axis: 'x' | 'y'; openAngle: number; current: number }
@@ -29,16 +32,36 @@ const GLTF_PATHS: Record<TeslaModel, string> = {
 };
 
 // ─── Materials ────────────────────────────────────────────────────────────────
-function bodyMat(metalness = 0.78) {
+const DEFAULT_PAINT: Record<TeslaModel, number> = {
+  model3:     0xcc1f1f,  // Multi-Coat Red
+  modelY:     0xf0efeb,  // Pearl White
+  modelS:     0x4a4d5f,  // Midnight Silver
+  modelX:     0x183861,  // Deep Blue Metallic
+  cybertruck: 0xb8bfc8,  // Stainless (no paint)
+};
+
+function makePaint(color: number, model: TeslaModel): THREE.MeshPhysicalMaterial {
+  if (model === 'cybertruck') {
+    return new THREE.MeshPhysicalMaterial({
+      color: 0xb8bfc8, roughness: 0.20, metalness: 1.0,
+      clearcoat: 0.1, clearcoatRoughness: 0.45, envMapIntensity: 2.2,
+    });
+  }
   return new THREE.MeshPhysicalMaterial({
-    color: 0x1b1b28, roughness: 0.15, metalness,
-    clearcoat: 1.0, clearcoatRoughness: 0.04,
+    color, roughness: 0.10, metalness: 0.55,
+    clearcoat: 1.0, clearcoatRoughness: 0.03,
+    envMapIntensity: 1.4, reflectivity: 0.95,
   });
 }
-const GLASS = () => new THREE.MeshPhysicalMaterial({
-  color: 0x1e3344, roughness: 0.0, metalness: 0.05,
-  transmission: 0.55, transparent: true, opacity: 0.42, ior: 1.52,
-});
+
+function makeGlass(): THREE.MeshPhysicalMaterial {
+  return new THREE.MeshPhysicalMaterial({
+    color: 0x8aafc4, roughness: 0.0, metalness: 0.0,
+    transmission: 0.88, transparent: true, opacity: 0.55,
+    ior: 1.52, thickness: 0.12,
+    reflectivity: 0.85, envMapIntensity: 1.8,
+  });
+}
 const RUBBER = new THREE.MeshStandardMaterial({ color: 0x080808, roughness: 0.88, metalness: 0.04 });
 const RIM    = new THREE.MeshStandardMaterial({ color: 0x909aaa, roughness: 0.22, metalness: 0.92 });
 const BRAKE  = new THREE.MeshStandardMaterial({ color: 0xcc4400, roughness: 0.55, metalness: 0.18 });
@@ -170,7 +193,7 @@ function addMirror(scene: THREE.Object3D, x: number, y: number, z: number, side:
   const housing = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.14, 0.04), bMat);
   housing.position.set(x - 0.02, y, z + side * 0.17);
   housing.castShadow = true; scene.add(housing);
-  const lens = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.11, 0.012), GLASS());
+  const lens = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.11, 0.012), makeGlass());
   lens.position.set(x - 0.02, y, z + side * 0.19);
   scene.add(lens);
 }
@@ -262,7 +285,7 @@ function buildDoors(
 
 // ─── Window panels ────────────────────────────────────────────────────────────
 function addWindows(model: TeslaModel, halfW: number, scene: THREE.Object3D) {
-  const gm = GLASS();
+  const gm = makeGlass();
 
   function plane(cx: number, cy: number, cz: number, pw: number, ph: number, ry = 0, rz = 0) {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), gm);
@@ -384,7 +407,10 @@ function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function TeslaScene({ teslaModel, style, intensity, bpm, previewBeat }: Props) {
+export default function TeslaScene({
+  teslaModel, style, intensity, bpm, previewBeat,
+  customFrames, paintColor, audioTriggerFrames,
+}: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [doorsOpen, setDoorsOpen] = useState(false);
@@ -398,6 +424,9 @@ export default function TeslaScene({ teslaModel, style, intensity, bpm, previewB
   const doorsOpenRef = useRef(false);
   const falconOpenRef = useRef(false);
   const previewBeatRef = useRef<number | null>(null);
+  const customFramesRef = useRef<Uint8Array[] | null>(null);
+  const audioTriggerFramesRef = useRef<Set<number> | null>(null);
+  const bMatRef = useRef<THREE.MeshPhysicalMaterial | null>(null);
 
   // Keep style/intensity/bpm in sync without rebuilding scene
   useEffect(() => {
@@ -409,6 +438,15 @@ export default function TeslaScene({ teslaModel, style, intensity, bpm, previewB
   useEffect(() => { doorsOpenRef.current = doorsOpen; }, [doorsOpen]);
   useEffect(() => { falconOpenRef.current = falconOpen; }, [falconOpen]);
   useEffect(() => { previewBeatRef.current = previewBeat ?? null; }, [previewBeat]);
+  useEffect(() => { customFramesRef.current = customFrames ?? null; }, [customFrames]);
+  useEffect(() => { audioTriggerFramesRef.current = audioTriggerFrames ?? null; }, [audioTriggerFrames]);
+
+  // Live paint color update without scene rebuild
+  useEffect(() => {
+    if (bMatRef.current && paintColor !== undefined && teslaModel !== 'cybertruck') {
+      bMatRef.current.color.setHex(paintColor);
+    }
+  }, [paintColor, teslaModel]);
 
   // Rebuild scene when model changes
   useEffect(() => {
@@ -475,7 +513,9 @@ export default function TeslaScene({ teslaModel, style, intensity, bpm, previewB
     scene.add(grid);
 
     // ── Car body: try GLTF, fall back to procedural ──────────────────────────
-    const bMat = bodyMat(teslaModel === 'cybertruck' ? 0.92 : 0.78);
+    const resolvedColor = paintColor ?? DEFAULT_PAINT[teslaModel];
+    const bMat = makePaint(resolvedColor, teslaModel);
+    bMatRef.current = bMat;
 
     // Procedural body group — shown immediately; removed if GLTF loads
     const proceduralGroup = new THREE.Group();
@@ -500,15 +540,27 @@ export default function TeslaScene({ teslaModel, style, intensity, bpm, previewB
         gltfScene.position.x = -centre.x * scale;
         gltfScene.position.y = -box.min.y * scale;
         gltfScene.position.z = -centre.z * scale;
-        // Apply PBR materials
+        // Apply PBR materials: detect by mesh + material name, keep originals for unknown
         gltfScene.traverse(child => {
           if (!(child instanceof THREE.Mesh)) return;
-          const n = child.name.toLowerCase();
-          if (n.includes('glass') || n.includes('window') || n.includes('wind')) child.material = GLASS();
-          else if (n.includes('wheel') || n.includes('tyre') || n.includes('tire')) child.material = RUBBER;
-          else if (n.includes('rim') || n.includes('alloy')) child.material = RIM;
-          else child.material = bMat;
           child.castShadow = true; child.receiveShadow = true;
+          const mat = Array.isArray(child.material) ? child.material[0] : child.material;
+          const nm = ((child.name || '') + ' ' + ((mat as THREE.Material)?.name || '')).toLowerCase();
+
+          if (/glass|window|wind|windscreen|windshield|visor/.test(nm)) {
+            child.material = makeGlass();
+          } else if (/tyre|tire|rubber/.test(nm)) {
+            child.material = RUBBER;
+          } else if (/\brim\b|alloy|wheel_hub|wheelrim/.test(nm)) {
+            child.material = RIM;
+          } else if (/chrome|trim|badge|molding/.test(nm)) {
+            child.material = CHROME;
+          } else if (/seat|leather|fabric|carpet|steer|dash|console/.test(nm)) {
+            // keep original interior material
+          } else {
+            // body panels and unknown surfaces: apply paint
+            child.material = bMat;
+          }
         });
         // Replace procedural with GLTF
         scene.remove(proceduralGroup);
@@ -559,27 +611,35 @@ export default function TeslaScene({ teslaModel, style, intensity, bpm, previewB
     // ── Animation loop ────────────────────────────────────────────────────────
     let raf: number;
     let lastFrame = 0;
+    let autoDoorCounter = 0; // frames remaining for beat-triggered door open
     const FMS = 1000 / 20;
 
     function animate(now: number) {
       raf = requestAnimationFrame(animate);
       controls.update();
 
-      // Light animation
       if (now - lastFrame >= FMS) {
         lastFrame = now;
-        const frames = frameDataRef.current;
+        // Use audio-analyzed frames if available, fall back to generated
+        const frames = customFramesRef.current ?? frameDataRef.current;
         if (frames.length > 0) {
-          let frame: Uint8Array;
+          let frameIdx: number;
           const pb = previewBeatRef.current;
           if (pb !== null) {
-            // Preview mode: map beat to exact frame
-            const idx = Math.floor(pb * (FMS / 1000) * 20) % frames.length;
-            frame = frames[idx];
+            frameIdx = Math.floor(pb * (FMS / 1000) * 20) % frames.length;
           } else {
-            frame = frames[frameIdxRef.current % frames.length];
+            frameIdx = frameIdxRef.current % frames.length;
             frameIdxRef.current++;
           }
+          const frame = frames[frameIdx];
+
+          // Beat-driven door animation: open on onset, auto-close after ~1.3s
+          const triggers = audioTriggerFramesRef.current;
+          if (triggers?.has(frameIdx) && autoDoorCounter === 0) {
+            autoDoorCounter = 26;
+          }
+          if (autoDoorCounter > 0) autoDoorCounter--;
+
           lightObjs.forEach(({ mesh, pl, ch }) => {
             const b = frame[ch] / 255;
             (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.12 + b * 4.5;
@@ -588,10 +648,11 @@ export default function TeslaScene({ teslaModel, style, intensity, bpm, previewB
         }
       }
 
-      // Door / falcon wing animations
+      // Door / falcon wing animations (manual OR beat-triggered)
+      const beatOpen = autoDoorCounter > 0;
       animsRef.current.forEach(a => {
         const isFW = a.axis === 'x';
-        const shouldOpen = isFW ? falconOpenRef.current : doorsOpenRef.current;
+        const shouldOpen = beatOpen || (isFW ? falconOpenRef.current : doorsOpenRef.current);
         const target = shouldOpen ? a.openAngle : 0;
         a.current = THREE.MathUtils.lerp(a.current, target, 0.075);
         a.group.rotation[a.axis] = a.current;
@@ -722,7 +783,7 @@ function buildProceduralCar(
   // Rooftop accent / panoramic roof tint
   if (model !== 'cybertruck') {
     const roofY = model === 'modelX' ? 1.68 : model === 'modelY' ? 1.62 : 1.44;
-    const roofGlass = new THREE.Mesh(new THREE.BoxGeometry(p.bodyL * 0.42, 0.018, p.bodyW * 0.86), GLASS());
+    const roofGlass = new THREE.Mesh(new THREE.BoxGeometry(p.bodyL * 0.42, 0.018, p.bodyW * 0.86), makeGlass());
     roofGlass.position.set(-0.05, roofY - 0.008, 0);
     scene.add(roofGlass);
   }
