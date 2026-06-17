@@ -14,7 +14,9 @@ interface Props {
   style: ShowStyle;
   intensity: number;
   bpm: number;
-  previewBeat?: number | null; // when set, drives light frame directly from audio time
+  previewBeat?: number | null;
+  customFrames?: Uint8Array[] | null;
+  audioTriggerFrames?: Set<number> | null;
 }
 interface Tooltip { label: string; x: number; y: number }
 interface DoorAnim { group: THREE.Group; axis: 'x' | 'y'; openAngle: number; current: number }
@@ -335,26 +337,69 @@ function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
   def.zones.forEach(zone => {
     const [x, y, z] = zone.position;
 
-    // Shape each zone to approximate real light geometry
+    // Lights are flat panels flush with the front/rear fascia.
+    // Depth (X dimension) is kept thin so they sit on the surface, not protrude.
+    // Span (Z dimension) reflects real light width. Y = vertical height of element.
+    const D = 0.020; // fascia depth — how far the panel protrudes
     let geo: THREE.BufferGeometry;
-    const isFront = x > 0;
-    const isRear = x < 0;
-    const isSide = Math.abs(z) > Math.abs(x) * 0.7;
 
-    if (zone.type === 'strip') {
-      geo = new THREE.BoxGeometry(isSide ? 0.06 : 0.06, 0.04, isSide ? 0.38 : 0.22);
-    } else if (zone.type === 'drl') {
-      // DRL strips: thin long horizontal bar
-      geo = new THREE.BoxGeometry(0.035, 0.030, 0.34);
-    } else if (zone.type === 'headlight') {
-      // Boomerang-ish headlight — tall narrow box
-      geo = new THREE.BoxGeometry(0.055, 0.12, 0.20);
-    } else if (zone.type === 'tail' || zone.type === 'brake') {
-      geo = new THREE.BoxGeometry(0.055, 0.11, 0.18);
-    } else if (zone.type === 'interior') {
-      geo = new THREE.BoxGeometry(0.10, 0.04, 0.22);
-    } else {
-      geo = new THREE.BoxGeometry(0.055, 0.08, 0.12);
+    switch (zone.type) {
+      case 'drl':
+        // Thin wide horizontal LED strip (full-width bar on modern Teslas)
+        geo = new THREE.BoxGeometry(D, 0.022, 0.54);
+        break;
+      case 'headlight':
+        // Main headlight element — moderately wide, taller than DRL
+        geo = new THREE.BoxGeometry(D, 0.058, 0.40);
+        break;
+      case 'highbeam':
+        geo = new THREE.BoxGeometry(D, 0.028, 0.24);
+        break;
+      case 'tail':
+        // Wide red tail bar, spans most of the rear half
+        geo = new THREE.BoxGeometry(D, 0.058, 0.44);
+        break;
+      case 'brake':
+        geo = new THREE.BoxGeometry(D, 0.044, 0.38);
+        break;
+      case 'turn_front':
+      case 'turn_rear':
+        geo = new THREE.BoxGeometry(D, 0.036, 0.18);
+        break;
+      case 'fog':
+        geo = new THREE.BoxGeometry(D, 0.048, 0.14);
+        break;
+      case 'reverse':
+        geo = new THREE.BoxGeometry(D, 0.036, 0.14);
+        break;
+      case 'plate':
+        geo = new THREE.BoxGeometry(D, 0.026, 0.40);
+        break;
+      case 'interior':
+        // Flat ceiling dome panel — wide in X (car length), thin in Y
+        geo = new THREE.BoxGeometry(0.52, 0.014, 0.26);
+        break;
+      case 'strip': {
+        const isSill = Math.abs(z) > 0.88;
+        const isBed  = zone.id.includes('bed');
+        const isUnder = zone.id.includes('under');
+        if (isSill) {
+          // Side sill strip: runs along the car body length
+          geo = new THREE.BoxGeometry(2.10, 0.014, 0.022);
+        } else if (isBed) {
+          // Truck bed rail strip: runs across the width
+          geo = new THREE.BoxGeometry(0.022, 0.014, 1.92);
+        } else if (isUnder) {
+          // Undercarriage glow panel
+          geo = new THREE.BoxGeometry(1.60, 0.010, 1.90);
+        } else {
+          // Cybertruck front/rear LED bar segments: wide in Z
+          geo = new THREE.BoxGeometry(D, 0.055, 0.44);
+        }
+        break;
+      }
+      default:
+        geo = new THREE.BoxGeometry(D, 0.048, 0.18);
     }
 
     const mat = new THREE.MeshStandardMaterial({
@@ -367,13 +412,11 @@ function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
 
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(x, y, z);
-    // Face front/rear correctly
-    if (isSide && !isFront && !isRear) mesh.rotation.y = Math.PI / 2;
     mesh.userData.label = zone.label;
     scene.add(mesh);
     zoneHitboxes.push(mesh);
 
-    const pl = new THREE.PointLight(zone.color, 0, 1.8);
+    const pl = new THREE.PointLight(zone.color, 0, 2.0);
     pl.position.set(x, y, z);
     scene.add(pl);
 
@@ -384,7 +427,10 @@ function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function TeslaScene({ teslaModel, style, intensity, bpm, previewBeat }: Props) {
+export default function TeslaScene({
+  teslaModel, style, intensity, bpm, previewBeat,
+  customFrames, audioTriggerFrames,
+}: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [doorsOpen, setDoorsOpen] = useState(false);
@@ -398,6 +444,8 @@ export default function TeslaScene({ teslaModel, style, intensity, bpm, previewB
   const doorsOpenRef = useRef(false);
   const falconOpenRef = useRef(false);
   const previewBeatRef = useRef<number | null>(null);
+  const customFramesRef = useRef<Uint8Array[] | null>(null);
+  const audioTriggerFramesRef = useRef<Set<number> | null>(null);
 
   // Keep style/intensity/bpm in sync without rebuilding scene
   useEffect(() => {
@@ -409,6 +457,8 @@ export default function TeslaScene({ teslaModel, style, intensity, bpm, previewB
   useEffect(() => { doorsOpenRef.current = doorsOpen; }, [doorsOpen]);
   useEffect(() => { falconOpenRef.current = falconOpen; }, [falconOpen]);
   useEffect(() => { previewBeatRef.current = previewBeat ?? null; }, [previewBeat]);
+  useEffect(() => { customFramesRef.current = customFrames ?? null; }, [customFrames]);
+  useEffect(() => { audioTriggerFramesRef.current = audioTriggerFrames ?? null; }, [audioTriggerFrames]);
 
   // Rebuild scene when model changes
   useEffect(() => {
@@ -559,27 +609,32 @@ export default function TeslaScene({ teslaModel, style, intensity, bpm, previewB
     // ── Animation loop ────────────────────────────────────────────────────────
     let raf: number;
     let lastFrame = 0;
+    let autoDoorCounter = 0;
     const FMS = 1000 / 20;
 
     function animate(now: number) {
       raf = requestAnimationFrame(animate);
       controls.update();
 
-      // Light animation
       if (now - lastFrame >= FMS) {
         lastFrame = now;
-        const frames = frameDataRef.current;
+        const frames = customFramesRef.current ?? frameDataRef.current;
         if (frames.length > 0) {
-          let frame: Uint8Array;
+          let frameIdx: number;
           const pb = previewBeatRef.current;
           if (pb !== null) {
-            // Preview mode: map beat to exact frame
-            const idx = Math.floor(pb * (FMS / 1000) * 20) % frames.length;
-            frame = frames[idx];
+            frameIdx = Math.floor(pb * (FMS / 1000) * 20) % frames.length;
           } else {
-            frame = frames[frameIdxRef.current % frames.length];
+            frameIdx = frameIdxRef.current % frames.length;
             frameIdxRef.current++;
           }
+          const frame = frames[frameIdx];
+          // Beat-triggered door open: stays open ~1.3s then auto-closes
+          if (audioTriggerFramesRef.current?.has(frameIdx) && autoDoorCounter === 0) {
+            autoDoorCounter = 26;
+          }
+          if (autoDoorCounter > 0) autoDoorCounter--;
+
           lightObjs.forEach(({ mesh, pl, ch }) => {
             const b = frame[ch] / 255;
             (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.12 + b * 4.5;
@@ -588,10 +643,11 @@ export default function TeslaScene({ teslaModel, style, intensity, bpm, previewB
         }
       }
 
-      // Door / falcon wing animations
+      // Door / falcon wing animations (manual OR beat-triggered)
+      const beatOpen = autoDoorCounter > 0;
       animsRef.current.forEach(a => {
         const isFW = a.axis === 'x';
-        const shouldOpen = isFW ? falconOpenRef.current : doorsOpenRef.current;
+        const shouldOpen = beatOpen || (isFW ? falconOpenRef.current : doorsOpenRef.current);
         const target = shouldOpen ? a.openAngle : 0;
         a.current = THREE.MathUtils.lerp(a.current, target, 0.075);
         a.group.rotation[a.axis] = a.current;
