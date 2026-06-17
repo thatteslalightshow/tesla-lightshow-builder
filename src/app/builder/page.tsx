@@ -774,6 +774,11 @@ function BuilderInner() {
           {uploading && <span style={{ fontSize: 12, color: 'var(--muted)' }}>Uploading audio…</span>}
           {checkoutMsg && <span style={{ fontSize: 12, color: checkoutMsg.startsWith('✓') ? 'var(--green)' : checkoutMsg.startsWith('Could') || checkoutMsg.startsWith('Payment cancelled') ? '#ff8a8a' : 'var(--muted)' }}>{checkoutMsg}</span>}
           {!checkoutMsg && saveMsg && <span style={{ fontSize: 12, color: saveMsg.startsWith('Error') || saveMsg.startsWith('Audio') ? '#ff8a8a' : 'var(--green)' }}>{saveMsg}</span>}
+          {isAdmin && (
+            <Link href="/admin" style={{ padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, background: 'rgba(232,64,74,0.12)', border: '1px solid rgba(232,64,74,0.3)', color: 'var(--red)', letterSpacing: '.05em' }}>
+              Admin
+            </Link>
+          )}
           <button onClick={save} disabled={saving || uploading} className="btn btn-ghost btn-sm">{saving ? 'Saving…' : 'Save'}</button>
           <div style={{ position: 'relative' }}>
             <button onClick={exportZip} disabled={exporting || saving} className="btn btn-primary btn-sm">

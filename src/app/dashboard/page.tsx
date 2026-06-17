@@ -9,15 +9,18 @@ export default function DashboardPage() {
   const [shows, setShows] = useState<Show[]>([]);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [toggling, setToggling] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) { router.replace('/auth'); return; }
       setEmail(session.user.email ?? '');
       loadShows();
+      const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', session.user.id).single();
+      if (profile?.is_admin) setIsAdmin(true);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || !session) router.replace('/auth');
@@ -82,6 +85,11 @@ export default function DashboardPage() {
         </Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Link href="/gallery" className="btn btn-ghost btn-sm">Gallery</Link>
+          {isAdmin && (
+            <Link href="/admin" style={{ padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, background: 'rgba(232,64,74,0.12)', border: '1px solid rgba(232,64,74,0.3)', color: 'var(--red)', letterSpacing: '.05em' }}>
+              Admin
+            </Link>
+          )}
           <span style={{ fontSize: 13, color: 'var(--muted)' }}>{email}</span>
           <button onClick={signOut} className="btn btn-ghost btn-sm">Sign out</button>
         </div>
