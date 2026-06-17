@@ -16,7 +16,7 @@ const SECURITY_HEADERS = {
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob:",
     "media-src 'self' blob:",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co blob:",
     "worker-src 'self' blob:",
     "frame-ancestors 'none'",
   ].join('; '),
