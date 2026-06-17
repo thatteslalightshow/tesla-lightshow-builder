@@ -31,22 +31,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ShowPage({ params }: Props) {
   const admin = getAdminClient()
-  // Query with is_public filter so private show rows are never fetched
   const { data: show } = await admin
     .from('shows')
     .select('*')
     .eq('share_token', params.token)
-    .eq('is_public', true)
     .single()
 
-  if (!show) {
-    // Could be not found OR private — show the same "private" message to avoid leaking existence
-    const { data: exists } = await admin
-      .from('shows')
-      .select('id')
-      .eq('share_token', params.token)
-      .single()
-    if (!exists) return notFound()
+  if (!show) return notFound()
+
+  if (!show.is_public) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
         <div style={{ fontSize: '2.5rem' }}>🔒</div>

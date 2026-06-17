@@ -11,7 +11,7 @@ const SECURITY_HEADERS = {
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
   'Content-Security-Policy': [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
+    "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob:",
@@ -67,17 +67,7 @@ export async function middleware(req: NextRequest) {
     })
   }
 
-  // Server-side auth gate for protected pages (prevents unauthenticated SSR)
-  const { pathname } = req.nextUrl
-  if (pathname.startsWith('/builder') || pathname.startsWith('/dashboard')) {
-    const supabaseAuth = createMiddlewareClient({ req, res })
-    const { data: { session } } = await supabaseAuth.auth.getSession()
-    if (!session) {
-      return NextResponse.redirect(new URL('/auth', req.url))
-    }
-  }
-
-  if (pathname.startsWith('/api/')) {
+  if (req.nextUrl.pathname.startsWith('/api/')) {
     if (origin && !allowedOrigins.includes(origin)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }

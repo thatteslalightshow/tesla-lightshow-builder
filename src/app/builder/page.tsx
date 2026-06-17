@@ -6,7 +6,6 @@ import JSZip from 'jszip';
 import { supabase, validateAudioFile, type TeslaModel, type ShowStyle } from '@/lib/supabase';
 import TeslaScene from '@/components/TeslaScene';
 import { MODELS, generateFrames, getChannelCount } from '@/lib/tesla-channels';
-import { analyzeAudioToFrames } from '@/lib/audio-analysis';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TESLA_MODELS: { value: TeslaModel; label: string }[] = [
@@ -203,11 +202,6 @@ function BuilderInner() {
   const [savedShowId, setSavedShowId] = useState<string | null>(editId);
   const [name, setName] = useState('My Light Show');
   const [model, setModel] = useState<TeslaModel>('model3');
-  function changeModel(m: TeslaModel) {
-    setModel(m);
-    setAudioFrames(null);
-    setAudioTriggers(new Set());
-  }
   const [style, setStyle] = useState<ShowStyle>('energetic');
   const [intensity, setIntensity] = useState(80);
   const [bpm, setBpm] = useState(120);
@@ -233,11 +227,6 @@ function BuilderInner() {
   useEffect(() => { bpmRef.current = bpm; }, [bpm]);
 
   const [previewing, setPreviewing] = useState(false);
-
-  // ── Audio analysis state ──────────────────────────────────────────────────
-  const [analyzing, setAnalyzing] = useState(false);
-  const [audioFrames, setAudioFrames] = useState<Uint8Array[] | null>(null);
-  const [audioTriggers, setAudioTriggers] = useState<Set<number>>(new Set());
   const [previewBeat, setPreviewBeat] = useState<number | null>(null);
   const [previewProgress, setPreviewProgress] = useState(0);
 
@@ -287,21 +276,6 @@ function BuilderInner() {
         const detected = detectBPM(ab);
         setBpm(Math.max(60, Math.min(200, detected)));
         ctx.close();
-
-        // Full audio analysis for light show generation
-        setAnalyzing(true);
-        const modelDef = MODELS[model];
-        try {
-          // Re-decode for the analysis (OfflineAudioContext needs a fresh buffer)
-          const ctx2 = new AudioContext();
-          const ab2 = await ctx2.decodeAudioData((rawAudioRef.current as ArrayBuffer).slice(0));
-          await ctx2.close();
-          const result = await analyzeAudioToFrames(ab2, modelDef);
-          setAudioFrames(result.frames);
-          setAudioTriggers(result.triggerFrames);
-          if (result.bpm > 60) setBpm(Math.max(60, Math.min(200, result.bpm)));
-        } catch { /* fall back to generated frames */ }
-        setAnalyzing(false);
       } catch { /* ignore */ }
     };
     reader.readAsArrayBuffer(file);
@@ -418,10 +392,7 @@ function BuilderInner() {
     const FPS = 20;
     const frames = 600;
     const channels = getChannelCount(model);
-    // Use audio-analyzed frames if available and cover enough duration
-    const frameData = (audioFrames && audioFrames.length >= frames)
-      ? audioFrames.slice(0, frames)
-      : generateFrames(style, intensity, bpm, frames, MODELS[model]);
+    const frameData = generateFrames(style, intensity, bpm, frames, MODELS[model]);
     const fseq = buildFseq(channels, frames, Math.round(1000 / FPS), frameData);
     const zip = new JSZip();
     const folder = zip.folder('LightShow')!;
@@ -519,18 +490,6 @@ function BuilderInner() {
                 {Math.round(previewProgress * PREVIEW_DURATION)}s / {PREVIEW_DURATION}s · lights synced to audio
               </div>
             )}
-
-            {/* Audio analysis status */}
-            {analyzing && (
-              <div style={{ marginTop: 8, fontSize: 11, color: '#ff8c00', textAlign: 'center', padding: '6px 0', background: 'rgba(255,140,0,0.07)', borderRadius: 'var(--radius)', border: '1px solid rgba(255,140,0,0.2)' }}>
-                Analyzing audio… mapping beats to lights
-              </div>
-            )}
-            {audioFrames && !analyzing && (
-              <div style={{ marginTop: 8, fontSize: 11, color: 'var(--green)', textAlign: 'center', padding: '4px 0' }}>
-                ✓ {audioFrames.length} frames · audio-driven show ready
-              </div>
-            )}
           </div>
 
           {/* Tesla model */}
@@ -538,7 +497,7 @@ function BuilderInner() {
             <div className="label">Tesla model</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {TESLA_MODELS.map(m => (
-                <button key={m.value} onClick={() => changeModel(m.value)}
+                <button key={m.value} onClick={() => setModel(m.value)}
                   style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: `1px solid ${model === m.value ? 'var(--red)' : 'var(--border)'}`, background: model === m.value ? 'var(--red-glow)' : 'var(--bg3)', color: model === m.value ? 'var(--text)' : 'var(--muted)', fontSize: 13, textAlign: 'left', cursor: 'pointer', transition: 'all .15s' }}>
                   {m.label}
                 </button>
@@ -609,11 +568,7 @@ function BuilderInner() {
           {/* 3D Scene */}
           <div style={{ position: 'relative' }}>
             <div style={{ height: 420, borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: `1px solid ${previewing ? 'rgba(0,232,135,0.25)' : 'var(--border)'}`, transition: 'border-color .3s' }}>
-              <TeslaScene
-                teslaModel={model} style={style} intensity={intensity} bpm={bpm}
-                previewBeat={previewBeat} customFrames={audioFrames}
-                audioTriggerFrames={audioTriggers}
-              />
+              <TeslaScene teslaModel={model} style={style} intensity={intensity} bpm={bpm} previewBeat={previewBeat} />
             </div>
 
             {/* Preview indicator overlay */}

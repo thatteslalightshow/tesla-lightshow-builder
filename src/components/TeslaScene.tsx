@@ -14,9 +14,7 @@ interface Props {
   style: ShowStyle;
   intensity: number;
   bpm: number;
-  previewBeat?: number | null;
-  customFrames?: Uint8Array[] | null;
-  audioTriggerFrames?: Set<number> | null;
+  previewBeat?: number | null; // when set, drives light frame directly from audio time
 }
 interface Tooltip { label: string; x: number; y: number }
 interface DoorAnim { group: THREE.Group; axis: 'x' | 'y'; openAngle: number; current: number }
@@ -386,10 +384,7 @@ function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function TeslaScene({
-  teslaModel, style, intensity, bpm, previewBeat,
-  customFrames, audioTriggerFrames,
-}: Props) {
+export default function TeslaScene({ teslaModel, style, intensity, bpm, previewBeat }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [doorsOpen, setDoorsOpen] = useState(false);
@@ -403,8 +398,6 @@ export default function TeslaScene({
   const doorsOpenRef = useRef(false);
   const falconOpenRef = useRef(false);
   const previewBeatRef = useRef<number | null>(null);
-  const customFramesRef = useRef<Uint8Array[] | null>(null);
-  const audioTriggerFramesRef = useRef<Set<number> | null>(null);
 
   // Keep style/intensity/bpm in sync without rebuilding scene
   useEffect(() => {
@@ -416,8 +409,6 @@ export default function TeslaScene({
   useEffect(() => { doorsOpenRef.current = doorsOpen; }, [doorsOpen]);
   useEffect(() => { falconOpenRef.current = falconOpen; }, [falconOpen]);
   useEffect(() => { previewBeatRef.current = previewBeat ?? null; }, [previewBeat]);
-  useEffect(() => { customFramesRef.current = customFrames ?? null; }, [customFrames]);
-  useEffect(() => { audioTriggerFramesRef.current = audioTriggerFrames ?? null; }, [audioTriggerFrames]);
 
   // Rebuild scene when model changes
   useEffect(() => {
@@ -568,35 +559,27 @@ export default function TeslaScene({
     // ── Animation loop ────────────────────────────────────────────────────────
     let raf: number;
     let lastFrame = 0;
-    let autoDoorCounter = 0; // frames remaining for beat-triggered door open
     const FMS = 1000 / 20;
 
     function animate(now: number) {
       raf = requestAnimationFrame(animate);
       controls.update();
 
+      // Light animation
       if (now - lastFrame >= FMS) {
         lastFrame = now;
-        // Use audio-analyzed frames if available, fall back to generated
-        const frames = customFramesRef.current ?? frameDataRef.current;
+        const frames = frameDataRef.current;
         if (frames.length > 0) {
-          let frameIdx: number;
+          let frame: Uint8Array;
           const pb = previewBeatRef.current;
           if (pb !== null) {
-            frameIdx = Math.floor(pb * (FMS / 1000) * 20) % frames.length;
+            // Preview mode: map beat to exact frame
+            const idx = Math.floor(pb * (FMS / 1000) * 20) % frames.length;
+            frame = frames[idx];
           } else {
-            frameIdx = frameIdxRef.current % frames.length;
+            frame = frames[frameIdxRef.current % frames.length];
             frameIdxRef.current++;
           }
-          const frame = frames[frameIdx];
-
-          // Beat-driven door animation: open on onset, auto-close after ~1.3s
-          const triggers = audioTriggerFramesRef.current;
-          if (triggers?.has(frameIdx) && autoDoorCounter === 0) {
-            autoDoorCounter = 26;
-          }
-          if (autoDoorCounter > 0) autoDoorCounter--;
-
           lightObjs.forEach(({ mesh, pl, ch }) => {
             const b = frame[ch] / 255;
             (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.12 + b * 4.5;
@@ -605,11 +588,10 @@ export default function TeslaScene({
         }
       }
 
-      // Door / falcon wing animations (manual OR beat-triggered)
-      const beatOpen = autoDoorCounter > 0;
+      // Door / falcon wing animations
       animsRef.current.forEach(a => {
         const isFW = a.axis === 'x';
-        const shouldOpen = beatOpen || (isFW ? falconOpenRef.current : doorsOpenRef.current);
+        const shouldOpen = isFW ? falconOpenRef.current : doorsOpenRef.current;
         const target = shouldOpen ? a.openAngle : 0;
         a.current = THREE.MathUtils.lerp(a.current, target, 0.075);
         a.group.rotation[a.axis] = a.current;

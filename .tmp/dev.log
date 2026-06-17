@@ -1,0 +1,16 @@
+
+> tesla-lightshow-builder@1.0.0 dev
+> next dev
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 2.1s
+ ✓ Compiled /src/middleware in 113ms
+ ✓ Compiled (195 modules)
+ ○ Compiling / ...
+ ✓ Compiled / in 672ms (521 modules)
+ GET / 200 in 21ms
+[?25h
