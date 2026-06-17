@@ -604,6 +604,19 @@ export default function TeslaScene({
           child.castShadow = true; child.receiveShadow = true;
         });
 
+        // ── Step 6: rescale light zone Z positions to actual model width ─────────
+        // We scaled the model by bodyL/sizeX (length). The Z (width) may differ
+        // from p.bodyW, causing zones to float outside the car body.
+        const actualHalfZ = size.z / 2;
+        const expectedHalfZ = p.bodyW / 2;
+        const zFactor = actualHalfZ / expectedHalfZ;
+        if (Math.abs(zFactor - 1) > 0.05) {
+          lightObjsRef.current.forEach(({ mesh, pl }) => {
+            mesh.position.z *= zFactor;
+            pl.position.z  *= zFactor;
+          });
+        }
+
         // Replace procedural with GLTF
         scene.remove(proceduralGroup);
         scene.add(gltfScene);

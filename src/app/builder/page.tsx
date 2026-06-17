@@ -25,6 +25,7 @@ const STYLES: { value: ShowStyle; label: string; desc: string }[] = [
 ];
 
 const PREVIEW_DURATION = 30;
+const VISIBLE_BEATS = 16;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function hexToRgb(hex: number): [number, number, number] {
@@ -73,6 +74,44 @@ function buildFseq(channels: number, frames: number, stepMs: number, frameData: 
   return buf;
 }
 
+// ─── Beat-edit helpers ────────────────────────────────────────────────────────
+function getMirrorChannel(zoneId: string, zones: { id: string; channel: number }[]): number | null {
+  let mirrorId: string | null = null;
+  if (zoneId.startsWith('fl_'))      mirrorId = zoneId.replace('fl_', 'fr_');
+  else if (zoneId.startsWith('fr_')) mirrorId = zoneId.replace('fr_', 'fl_');
+  else if (zoneId.startsWith('rl_')) mirrorId = zoneId.replace('rl_', 'rr_');
+  else if (zoneId.startsWith('rr_')) mirrorId = zoneId.replace('rr_', 'rl_');
+  else if (zoneId === 'l_sill')      mirrorId = 'r_sill';
+  else if (zoneId === 'r_sill')      mirrorId = 'l_sill';
+  else if (zoneId === 'bed_l')       mirrorId = 'bed_r';
+  else if (zoneId === 'bed_r')       mirrorId = 'bed_l';
+  else if (zoneId.startsWith('falcon_l')) mirrorId = zoneId.replace('falcon_l', 'falcon_r');
+  else if (zoneId.startsWith('falcon_r')) mirrorId = zoneId.replace('falcon_r', 'falcon_l');
+  if (!mirrorId) return null;
+  return zones.find(z => z.id === mirrorId)?.channel ?? null;
+}
+
+function customBlocksToFrames(
+  blocks: Record<number, Set<number>>,
+  beats: number,
+  bpm: number,
+  channelCount: number,
+): Uint8Array[] {
+  const FPS = 20;
+  const fpb = (60 / bpm) * FPS;
+  const totalFrames = Math.ceil(beats * fpb);
+  const frames: Uint8Array[] = Array.from({ length: totalFrames }, () => new Uint8Array(channelCount));
+  Object.entries(blocks).forEach(([chStr, beatSet]) => {
+    const ch = Number(chStr);
+    beatSet.forEach(beatIdx => {
+      const start = Math.floor(beatIdx * fpb);
+      const end = Math.min(totalFrames, Math.ceil((beatIdx + 1) * fpb));
+      for (let f = start; f < end; f++) frames[f][ch] = 255;
+    });
+  });
+  return frames;
+}
+
 // ─── Timeline component ───────────────────────────────────────────────────────
 interface TimelineProps {
   model: TeslaModel;
@@ -80,101 +119,155 @@ interface TimelineProps {
   style: ShowStyle;
   intensity: number;
   playheadFraction: number | null;
+  audioFrames?: Uint8Array[] | null;
+  audioTriggers?: Set<number>;
+  editMode?: boolean;
+  symmetry?: boolean;
+  customBlocks?: Record<number, Set<number>>;
+  onToggleBeat?: (channel: number, beat: number) => void;
 }
 
-function Timeline({ model, bpm, style, intensity, playheadFraction }: TimelineProps) {
+function Timeline({
+  model, bpm, style, intensity, playheadFraction,
+  audioFrames, audioTriggers, editMode, symmetry, customBlocks, onToggleBeat,
+}: TimelineProps) {
   const def = MODELS[model];
   const zones = def.zones;
-  const LABEL_W = 108;
+  const LABEL_W = 112;
   const ROW_H = 22;
   const HEADER_H = 24;
-  const TOTAL_SEC = 8;
-  const totalBeats = Math.round(bpm * TOTAL_SEC / 60);
-  const frames = generateFrames(style, intensity, bpm, totalBeats, def);
+  const BEATS = VISIBLE_BEATS;
+  const FPS = 20;
+  const fpb = (60 / bpm) * FPS;
+
+  // Frames to render in preview mode
+  const hasCustom = customBlocks && Object.keys(customBlocks).length > 0;
+  const displayFrames: Uint8Array[] = (() => {
+    if (hasCustom) return customBlocksToFrames(customBlocks!, BEATS, bpm, def.channelCount);
+    if (audioFrames) return audioFrames;
+    return generateFrames(style, intensity, bpm, BEATS, def);
+  })();
 
   return (
     <div style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 11 }}>
-      {/* Header row: beat ruler */}
+      {/* Beat ruler */}
       <div style={{ display: 'flex', height: HEADER_H, alignItems: 'flex-end', marginBottom: 4 }}>
         <div style={{ width: LABEL_W, flexShrink: 0 }} />
-        <div style={{ flex: 1, position: 'relative', height: HEADER_H }}>
-          {Array.from({ length: totalBeats + 1 }, (_, b) => {
-            const isMeasure = b % 4 === 0;
-            return (
-              <div key={b} style={{
-                position: 'absolute',
-                left: (b / totalBeats * 100) + '%',
-                top: 0, bottom: 0,
-                borderLeft: `1px solid ${isMeasure ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.06)'}`,
-                paddingLeft: 3,
-                display: 'flex', alignItems: 'flex-end', paddingBottom: 3,
-              }}>
-                {isMeasure && (
-                  <span style={{ color: 'rgba(255,255,255,0.38)', fontSize: 9, whiteSpace: 'nowrap' }}>
-                    {(b / bpm * 60).toFixed(1)}s
-                  </span>
-                )}
+        {editMode ? (
+          // Edit mode: evenly-spaced beat numbers
+          <div style={{ flex: 1, display: 'flex' }}>
+            {Array.from({ length: BEATS }, (_, b) => (
+              <div key={b} style={{ flex: 1, textAlign: 'center', fontSize: 8, color: b % 4 === 0 ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.18)', paddingBottom: 3, borderBottom: `1px solid ${b % 4 === 0 ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.05)'}` }}>
+                {b + 1}
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        ) : (
+          // Preview mode: time ruler
+          <div style={{ flex: 1, position: 'relative', height: HEADER_H }}>
+            {Array.from({ length: BEATS + 1 }, (_, b) => {
+              const isMeasure = b % 4 === 0;
+              const isAudioBeat = audioTriggers?.has(Math.floor(b * fpb));
+              return (
+                <div key={b} style={{
+                  position: 'absolute',
+                  left: (b / BEATS * 100) + '%',
+                  top: 0, bottom: 0,
+                  borderLeft: `1px solid ${isAudioBeat ? 'rgba(255,140,0,0.45)' : isMeasure ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.06)'}`,
+                  paddingLeft: 3,
+                  display: 'flex', alignItems: 'flex-end', paddingBottom: 3,
+                }}>
+                  {isMeasure && (
+                    <span style={{ color: 'rgba(255,255,255,0.38)', fontSize: 9, whiteSpace: 'nowrap' }}>
+                      {(b / bpm * 60).toFixed(1)}s
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Zone rows */}
       {zones.map(zone => {
         const [r, g, b] = hexToRgb(zone.color);
         const colorStr = `rgb(${r},${g},${b})`;
+        const activeBeats = customBlocks?.[zone.channel] ?? new Set<number>();
+
+        if (editMode) {
+          return (
+            <div key={zone.channel} style={{ display: 'flex', height: ROW_H, marginBottom: 2, alignItems: 'stretch' }}>
+              <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5, paddingRight: 8, overflow: 'hidden' }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: colorStr, flexShrink: 0, boxShadow: `0 0 4px ${colorStr}` }} />
+                <span style={{ color: 'rgba(255,255,255,0.45)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 10 }}>
+                  {zone.label}
+                </span>
+              </div>
+              <div style={{ flex: 1, display: 'flex', gap: 1 }}>
+                {Array.from({ length: BEATS }, (_, beatIdx) => {
+                  const isActive = activeBeats.has(beatIdx);
+                  const isMeasure = beatIdx % 4 === 0;
+                  return (
+                    <div
+                      key={beatIdx}
+                      onClick={() => onToggleBeat?.(zone.channel, beatIdx)}
+                      title={`${zone.label} · beat ${beatIdx + 1}`}
+                      style={{
+                        flex: 1, height: '100%', cursor: 'pointer', borderRadius: 2,
+                        background: isActive ? `rgba(${r},${g},${b},0.88)` : isMeasure ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.03)',
+                        borderLeft: isMeasure && beatIdx > 0 ? '1px solid rgba(255,255,255,0.10)' : 'none',
+                        boxShadow: isActive ? `0 0 6px rgba(${r},${g},${b},0.5)` : 'none',
+                        transition: 'background .08s',
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          );
+        }
+
+        // Preview mode
         return (
           <div key={zone.channel} style={{ display: 'flex', height: ROW_H, marginBottom: 2, alignItems: 'stretch' }}>
-            {/* Label */}
-            <div style={{
-              width: LABEL_W, flexShrink: 0,
-              display: 'flex', alignItems: 'center', gap: 5,
-              paddingRight: 8, overflow: 'hidden',
-            }}>
+            <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5, paddingRight: 8, overflow: 'hidden' }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: colorStr, flexShrink: 0, boxShadow: `0 0 4px ${colorStr}` }} />
               <span style={{ color: 'rgba(255,255,255,0.48)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 10 }}>
                 {zone.label}
               </span>
             </div>
-
-            {/* Beat cells */}
             <div style={{ flex: 1, position: 'relative', background: 'rgba(255,255,255,0.025)', borderRadius: 3, overflow: 'hidden' }}>
-              {frames.map((frame, fi) => {
+              {displayFrames.map((frame, fi) => {
                 const val = frame[zone.channel] / 255;
                 if (val < 0.02) return null;
                 return (
                   <div key={fi} style={{
                     position: 'absolute',
-                    left: (fi / frames.length * 100) + '%',
-                    width: (100 / frames.length) + '%',
+                    left: (fi / displayFrames.length * 100) + '%',
+                    width: (100 / displayFrames.length) + '%',
                     top: 0, bottom: 0,
                     background: `rgba(${r},${g},${b},${val * 0.85})`,
                   }} />
                 );
               })}
-
-              {/* Beat grid lines */}
-              {Array.from({ length: totalBeats + 1 }, (_, b) => (
-                <div key={b} style={{
-                  position: 'absolute',
-                  left: (b / totalBeats * 100) + '%',
-                  top: 0, bottom: 0, width: 1,
-                  background: b % 4 === 0 ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)',
-                  pointerEvents: 'none',
-                }} />
-              ))}
-
-              {/* Playhead */}
+              {Array.from({ length: BEATS + 1 }, (_, b) => {
+                const isAudioBeat = audioTriggers?.has(Math.floor(b * fpb));
+                return (
+                  <div key={b} style={{
+                    position: 'absolute', left: (b / BEATS * 100) + '%',
+                    top: 0, bottom: 0, width: 1, pointerEvents: 'none',
+                    background: isAudioBeat ? 'rgba(255,140,0,0.28)' : b % 4 === 0 ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)',
+                  }} />
+                );
+              })}
               {playheadFraction !== null && (
                 <div style={{
-                  position: 'absolute',
-                  left: (playheadFraction * 100) + '%',
+                  position: 'absolute', left: (playheadFraction * 100) + '%',
                   top: -2, bottom: -2, width: 2,
                   background: 'rgba(255,255,255,0.90)',
                   boxShadow: '0 0 8px rgba(255,255,255,0.7)',
-                  zIndex: 3,
-                  borderRadius: 1,
+                  zIndex: 3, borderRadius: 1,
                 }} />
               )}
             </div>
@@ -182,10 +275,13 @@ function Timeline({ model, bpm, style, intensity, playheadFraction }: TimelinePr
         );
       })}
 
-      {/* Footer legend */}
       <div style={{ display: 'flex', gap: 16, marginTop: 10, paddingLeft: LABEL_W, fontSize: 9, color: 'rgba(255,255,255,0.24)' }}>
-        <span>|— 4 beats (1 measure) ——|</span>
-        <span>{bpm} BPM · {TOTAL_SEC}s view · {frames.length} frames</span>
+        {editMode
+          ? <span>Click beats to toggle · {BEATS} beats ({(BEATS / bpm * 60).toFixed(1)}s loop)</span>
+          : <><span>|— 4 beats ——|</span><span>{bpm} BPM · {BEATS} beats</span></>
+        }
+        {audioFrames && !editMode && <span style={{ color: 'rgba(255,140,0,0.7)' }}>♪ audio-synced</span>}
+        {hasCustom && <span style={{ color: 'rgba(0,232,135,0.7)' }}>✎ custom edits</span>}
       </div>
     </div>
   );
@@ -234,6 +330,11 @@ function BuilderInner() {
   const [audioFrames, setAudioFrames] = useState<Uint8Array[] | null>(null);
   const [audioTriggers, setAudioTriggers] = useState<Set<number>>(new Set());
 
+  // ── Manual edit state ─────────────────────────────────────────────────────
+  const [editMode, setEditMode] = useState(false);
+  const [symmetry, setSymmetry] = useState(true);
+  const [customBlocks, setCustomBlocks] = useState<Record<number, Set<number>>>({});
+
   // ── Auth check ────────────────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -258,6 +359,32 @@ function BuilderInner() {
     const { data: audio } = await supabase.from('audio_files').select('id').eq('show_id', id).limit(1);
     if (audio?.length) setAudioUploaded(true);
   }
+
+  // ── Beat toggle handler ───────────────────────────────────────────────────
+  function onToggleBeat(channel: number, beatIdx: number) {
+    const def = MODELS[model];
+    const zone = def.zones.find(z => z.channel === channel);
+    if (!zone) return;
+    const mirrorCh = symmetry ? getMirrorChannel(zone.id, def.zones) : null;
+    setCustomBlocks(prev => {
+      const next = { ...prev };
+      const beats = new Set(next[channel] ?? []);
+      if (beats.has(beatIdx)) beats.delete(beatIdx); else beats.add(beatIdx);
+      next[channel] = beats;
+      if (mirrorCh !== null) {
+        const mb = new Set(next[mirrorCh] ?? []);
+        if (beats.has(beatIdx)) mb.add(beatIdx); else mb.delete(beatIdx);
+        next[mirrorCh] = mb;
+      }
+      return next;
+    });
+  }
+
+  // Frames fed to the 3D scene: custom blocks > audio > null (uses internal generateFrames)
+  const hasCustom = Object.keys(customBlocks).length > 0;
+  const sceneFrames: Uint8Array[] | null = hasCustom
+    ? customBlocksToFrames(customBlocks, VISIBLE_BEATS, bpm, getChannelCount(model))
+    : audioFrames;
 
   // ── Audio file selection ──────────────────────────────────────────────────
   function onAudioChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -412,9 +539,17 @@ function BuilderInner() {
     const FPS = 20;
     const frames = 600;
     const channels = getChannelCount(model);
-    const frameData = audioFrames
-      ? audioFrames.slice(0, frames)
-      : generateFrames(style, intensity, bpm, frames, MODELS[model]);
+    const def = MODELS[model];
+    let frameData: Uint8Array[];
+    if (hasCustom) {
+      // Repeat the custom loop pattern to fill 30 seconds
+      const pattern = customBlocksToFrames(customBlocks, VISIBLE_BEATS, bpm, channels);
+      frameData = Array.from({ length: frames }, (_, f) => pattern[f % pattern.length]);
+    } else if (audioFrames) {
+      frameData = audioFrames.slice(0, frames);
+    } else {
+      frameData = generateFrames(style, intensity, bpm, frames, def);
+    }
     const fseq = buildFseq(channels, frames, Math.round(1000 / FPS), frameData);
     const zip = new JSZip();
     const folder = zip.folder('LightShow')!;
@@ -530,7 +665,7 @@ function BuilderInner() {
             <div className="label">Tesla model</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {TESLA_MODELS.map(m => (
-                <button key={m.value} onClick={() => { setModel(m.value); setAudioFrames(null); setAudioTriggers(new Set()); }}
+                <button key={m.value} onClick={() => { setModel(m.value); setAudioFrames(null); setAudioTriggers(new Set()); setCustomBlocks({}); }}
                   style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: `1px solid ${model === m.value ? 'var(--red)' : 'var(--border)'}`, background: model === m.value ? 'var(--red-glow)' : 'var(--bg3)', color: model === m.value ? 'var(--text)' : 'var(--muted)', fontSize: 13, textAlign: 'left', cursor: 'pointer', transition: 'all .15s' }}>
                   {m.label}
                 </button>
@@ -607,7 +742,7 @@ function BuilderInner() {
                 intensity={intensity}
                 bpm={bpm}
                 previewBeat={previewBeat}
-                customFrames={audioFrames}
+                customFrames={sceneFrames}
                 audioTriggerFrames={audioTriggers}
               />
             </div>
@@ -639,12 +774,55 @@ function BuilderInner() {
           </div>
 
           {/* Timeline */}
-          <div style={{ padding: '1.25rem 1.5rem', background: 'var(--bg2)', border: `1px solid ${previewing ? 'rgba(0,232,135,0.15)' : 'var(--border)'}`, borderRadius: 'var(--radius-lg)', transition: 'border-color .3s' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+          <div style={{ padding: '1.25rem 1.5rem', background: 'var(--bg2)', border: `1px solid ${previewing ? 'rgba(0,232,135,0.15)' : editMode ? 'rgba(255,140,0,0.2)' : 'var(--border)'}`, borderRadius: 'var(--radius-lg)', transition: 'border-color .3s' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', gap: 8, flexWrap: 'wrap' }}>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 13 }}>Light Channel Timeline</div>
-              <div style={{ display: 'flex', gap: 12, fontSize: 10, color: 'var(--muted)' }}>
-                {previewing && <span style={{ color: 'var(--green)' }}>● synced to audio</span>}
-                <span>{MODELS[model].zones.length} channels · {STYLES.find(s => s.value === style)?.label}</span>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {previewing && <span style={{ fontSize: 10, color: 'var(--green)' }}>● synced to audio</span>}
+                {audioFrames && !editMode && <span style={{ fontSize: 10, color: 'rgba(255,140,0,0.8)' }}>♪ audio-driven</span>}
+
+                {/* Symmetry toggle — only shown in edit mode */}
+                {editMode && (
+                  <button
+                    onClick={() => setSymmetry(s => !s)}
+                    style={{
+                      padding: '4px 10px', borderRadius: 12, fontSize: 10, fontWeight: 600,
+                      background: symmetry ? 'rgba(0,232,135,0.12)' : 'rgba(255,255,255,0.06)',
+                      border: `1px solid ${symmetry ? 'rgba(0,232,135,0.35)' : 'rgba(255,255,255,0.14)'}`,
+                      color: symmetry ? 'var(--green)' : 'var(--muted)', cursor: 'pointer',
+                    }}>
+                    ⇔ Symmetry {symmetry ? 'On' : 'Off'}
+                  </button>
+                )}
+
+                {/* Clear edits button */}
+                {hasCustom && (
+                  <button
+                    onClick={() => setCustomBlocks({})}
+                    style={{
+                      padding: '4px 10px', borderRadius: 12, fontSize: 10, fontWeight: 600,
+                      background: 'rgba(255,80,80,0.08)', border: '1px solid rgba(255,80,80,0.25)',
+                      color: '#ff8a8a', cursor: 'pointer',
+                    }}>
+                    ✕ Clear
+                  </button>
+                )}
+
+                {/* Edit / Preview mode toggle */}
+                <button
+                  onClick={() => setEditMode(e => !e)}
+                  style={{
+                    padding: '4px 12px', borderRadius: 12, fontSize: 10, fontWeight: 600,
+                    background: editMode ? 'rgba(255,140,0,0.14)' : 'rgba(255,255,255,0.06)',
+                    border: `1px solid ${editMode ? 'rgba(255,140,0,0.4)' : 'rgba(255,255,255,0.14)'}`,
+                    color: editMode ? '#ff8c00' : 'var(--muted)', cursor: 'pointer',
+                  }}>
+                  {editMode ? '✎ Editing' : '✎ Edit'}
+                </button>
+
+                <span style={{ fontSize: 10, color: 'var(--muted)' }}>
+                  {MODELS[model].zones.length} channels
+                </span>
               </div>
             </div>
             <Timeline
@@ -652,7 +830,13 @@ function BuilderInner() {
               bpm={bpm}
               style={style}
               intensity={intensity}
-              playheadFraction={previewing ? previewProgress : null}
+              playheadFraction={previewing && !editMode ? previewProgress : null}
+              audioFrames={audioFrames}
+              audioTriggers={audioTriggers}
+              editMode={editMode}
+              symmetry={symmetry}
+              customBlocks={customBlocks}
+              onToggleBeat={onToggleBeat}
             />
           </div>
 
