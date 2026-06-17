@@ -413,6 +413,7 @@ function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(x, y, z);
     mesh.userData.label = zone.label;
+    mesh.visible = false; // invisible — used only for raycaster hover detection
     scene.add(mesh);
     zoneHitboxes.push(mesh);
 
@@ -685,10 +686,8 @@ export default function TeslaScene({
           }
           if (autoDoorCounter > 0) autoDoorCounter--;
 
-          lightObjs.forEach(({ mesh, pl, ch }) => {
-            const b = frame[ch] / 255;
-            (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.12 + b * 4.5;
-            pl.intensity = b * 2.8;
+          lightObjs.forEach(({ pl, ch }) => {
+            pl.intensity = (frame[ch] / 255) * 2.8;
           });
         }
       }
