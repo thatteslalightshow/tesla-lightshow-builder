@@ -7,6 +7,7 @@ import { supabase, validateAudioFile, type TeslaModel, type ShowStyle } from '@/
 import TeslaScene from '@/components/TeslaScene';
 import { MODELS, generateFrames, getChannelCount } from '@/lib/tesla-channels'
 import { analyzeAudioToFrames } from '@/lib/audio-analysis';
+import { validateFseq, type FseqValidation } from '@/lib/fseq';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TESLA_MODELS: { value: TeslaModel; label: string }[] = [
@@ -121,6 +122,7 @@ interface TimelineProps {
   playheadFraction: number | null;
   audioFrames?: Uint8Array[] | null;
   audioTriggers?: Set<number>;
+  waveformData?: Float32Array | null;
   editMode?: boolean;
   symmetry?: boolean;
   customBlocks?: Record<number, Set<number>>;
@@ -129,7 +131,7 @@ interface TimelineProps {
 
 function Timeline({
   model, bpm, style, intensity, playheadFraction,
-  audioFrames, audioTriggers, editMode, symmetry, customBlocks, onToggleBeat,
+  audioFrames, audioTriggers, waveformData, editMode, symmetry, customBlocks, onToggleBeat,
 }: TimelineProps) {
   const def = MODELS[model];
   const zones = def.zones;
@@ -139,6 +141,36 @@ function Timeline({
   const BEATS = VISIBLE_BEATS;
   const FPS = 20;
   const fpb = (60 / bpm) * FPS;
+
+  // ── Waveform SVG path ──────────────────────────────────────────────────────
+  // Build a mirrored amplitude envelope SVG covering the visible beat window.
+  const WF_FPS = 100; // waveformData is at 100fps (10ms windows)
+  const VW = 1000, VH = 56, MID = VH / 2;
+  const wfPath = (() => {
+    if (!waveformData || waveformData.length === 0) return null;
+    const visibleSecs = BEATS / bpm * 60;
+    const visibleN = Math.min(Math.ceil(visibleSecs * WF_FPS), waveformData.length);
+    const step = VW / Math.max(visibleN - 1, 1);
+    // Top edge (left → right)
+    const top = Array.from({ length: visibleN }, (_, i) =>
+      `${(i * step).toFixed(1)},${(MID - waveformData[i] * MID * 0.88).toFixed(1)}`
+    );
+    // Bottom edge (right → left, mirrored)
+    const bot = Array.from({ length: visibleN }, (_, i) => {
+      const j = visibleN - 1 - i;
+      return `${(j * step).toFixed(1)},${(MID + waveformData[j] * MID * 0.88).toFixed(1)}`;
+    });
+    return `M 0,${MID} L ${top.join(' L ')} L ${VW},${MID} L ${bot.join(' L ')} Z`;
+  })();
+
+  // Beat trigger positions as fractions of the visible window
+  const triggerFracs = (() => {
+    if (!audioTriggers || !waveformData) return [];
+    const visibleFrames = BEATS * fpb;
+    return [...audioTriggers]
+      .filter(f => f < visibleFrames)
+      .map(f => f / visibleFrames);
+  })();
 
   // Frames to render in preview mode
   const hasCustom = customBlocks && Object.keys(customBlocks).length > 0;
@@ -150,6 +182,71 @@ function Timeline({
 
   return (
     <div style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 11 }}>
+
+      {/* ── Waveform row ──────────────────────────────────────────────────── */}
+      {wfPath && (
+        <div style={{ display: 'flex', height: VH, marginBottom: 8, alignItems: 'stretch' }}>
+          {/* Label */}
+          <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', paddingRight: 8 }}>
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.06em', color: 'rgba(255,255,255,0.28)', textTransform: 'uppercase' }}>Waveform</span>
+          </div>
+          {/* SVG waveform */}
+          <div style={{ flex: 1, position: 'relative', borderRadius: 4, overflow: 'hidden', background: 'rgba(0,0,0,0.25)' }}>
+            <svg
+              viewBox={`0 0 ${VW} ${VH}`}
+              preserveAspectRatio="none"
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+            >
+              <defs>
+                <linearGradient id="wfGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="rgba(0,200,110,0.18)" />
+                  <stop offset="50%" stopColor="rgba(0,232,135,0.55)" />
+                  <stop offset="100%" stopColor="rgba(0,200,110,0.18)" />
+                </linearGradient>
+              </defs>
+              {/* Waveform fill */}
+              <path d={wfPath} fill="url(#wfGrad)" />
+              {/* Centre line */}
+              <line x1="0" y1={MID} x2={VW} y2={MID} stroke="rgba(0,232,135,0.18)" strokeWidth="0.5" />
+              {/* Measure grid lines */}
+              {Array.from({ length: BEATS + 1 }, (_, b) => (
+                <line key={b}
+                  x1={(b / BEATS * VW).toFixed(1)} y1="0"
+                  x2={(b / BEATS * VW).toFixed(1)} y2={VH}
+                  stroke={b % 4 === 0 ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)'}
+                  strokeWidth="0.8"
+                />
+              ))}
+              {/* Beat trigger spikes (orange) */}
+              {triggerFracs.map((frac, i) => (
+                <line key={i}
+                  x1={(frac * VW).toFixed(1)} y1="0"
+                  x2={(frac * VW).toFixed(1)} y2={VH}
+                  stroke="rgba(255,140,0,0.55)" strokeWidth="1.2"
+                />
+              ))}
+              {/* Playhead */}
+              {playheadFraction !== null && (
+                <line
+                  x1={(playheadFraction * VW).toFixed(1)} y1="0"
+                  x2={(playheadFraction * VW).toFixed(1)} y2={VH}
+                  stroke="rgba(255,255,255,0.9)" strokeWidth="1.5"
+                />
+              )}
+            </svg>
+            {/* Beat number labels inside waveform for edit mode */}
+            {editMode && Array.from({ length: BEATS / 4 }, (_, m) => (
+              <div key={m} style={{
+                position: 'absolute', left: ((m * 4) / BEATS * 100) + '%',
+                top: 3, paddingLeft: 4, fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none',
+              }}>
+                bar {m + 1}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Beat ruler */}
       <div style={{ display: 'flex', height: HEADER_H, alignItems: 'flex-end', marginBottom: 4 }}>
         <div style={{ width: LABEL_W, flexShrink: 0 }} />
@@ -292,6 +389,7 @@ function BuilderInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get('id');
+  const remixToken = searchParams.get('remix');
 
   // ── Auth & show state ─────────────────────────────────────────────────────
   const [authed, setAuthed] = useState(false);
@@ -329,6 +427,10 @@ function BuilderInner() {
   const [analyzing, setAnalyzing] = useState(false);
   const [audioFrames, setAudioFrames] = useState<Uint8Array[] | null>(null);
   const [audioTriggers, setAudioTriggers] = useState<Set<number>>(new Set());
+  const [waveformData, setWaveformData] = useState<Float32Array | null>(null);
+
+  // ── Export validation state ───────────────────────────────────────────────
+  const [fseqValidation, setFseqValidation] = useState<FseqValidation | null>(null);
 
   // ── Manual edit state ─────────────────────────────────────────────────────
   const [editMode, setEditMode] = useState(false);
@@ -342,12 +444,13 @@ function BuilderInner() {
       setAuthed(true);
       setUserId(session.user.id);
       if (editId) loadShow(editId);
+      else if (remixToken) loadRemix(remixToken);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || !session) router.replace('/auth');
     });
     return () => subscription.unsubscribe();
-  }, [router, editId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [router, editId, remixToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadShow(id: string) {
     const { data } = await supabase.from('shows').select('*').eq('id', id).single();
@@ -358,6 +461,22 @@ function BuilderInner() {
     setIsPublic(data.is_public); setShareToken(data.share_token);
     const { data: audio } = await supabase.from('audio_files').select('id').eq('show_id', id).limit(1);
     if (audio?.length) setAudioUploaded(true);
+  }
+
+  async function loadRemix(token: string) {
+    const { data } = await supabase
+      .from('shows')
+      .select('name, tesla_model, style, intensity, bpm')
+      .eq('share_token', token)
+      .eq('is_public', true)
+      .single();
+    if (!data) return;
+    setName(`${data.name} (remix)`);
+    setModel(data.tesla_model as TeslaModel);
+    setStyle(data.style as ShowStyle);
+    setIntensity(data.intensity);
+    if (data.bpm) setBpm(data.bpm);
+    // Remix starts as a fresh unsaved show — no savedShowId or shareToken
   }
 
   // ── Beat toggle handler ───────────────────────────────────────────────────
@@ -399,6 +518,7 @@ function BuilderInner() {
 
     setAudioFrames(null);
     setAudioTriggers(new Set());
+    setWaveformData(null);
 
     const reader = new FileReader();
     reader.onload = async ev => {
@@ -420,6 +540,7 @@ function BuilderInner() {
           const result = await analyzeAudioToFrames(ab2, MODELS[model]);
           setAudioFrames(result.frames);
           setAudioTriggers(result.triggerFrames);
+          setWaveformData(result.waveformData);
           if (result.bpm > 60) setBpm(Math.max(60, Math.min(200, result.bpm)));
         } catch { /* fall back to generated frames */ }
         setAnalyzing(false);
@@ -551,10 +672,19 @@ function BuilderInner() {
       frameData = generateFrames(style, intensity, bpm, frames, def);
     }
     const fseq = buildFseq(channels, frames, Math.round(1000 / FPS), frameData);
+
+    // Validate FSEQ before packaging
+    const validation = validateFseq(fseq, channels, audioFile?.type);
+    setFseqValidation(validation);
+
     const zip = new JSZip();
     const folder = zip.folder('LightShow')!;
     folder.file('lightshow.fseq', fseq);
-    if (audioFile) folder.file('lightshow.wav', await audioFile.arrayBuffer());
+    // Only include audio if it's WAV — Tesla ignores non-WAV audio
+    if (audioFile) {
+      const isWav = audioFile.type === 'audio/wav' || audioFile.type === 'audio/x-wav';
+      folder.file('lightshow.wav', await audioFile.arrayBuffer(), { comment: isWav ? '' : 'WARNING: convert to WAV for Tesla audio playback' });
+    }
     folder.file('show_config.json', JSON.stringify({ name, tesla_model: model, style, intensity, bpm }, null, 2));
     const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
     const url = URL.createObjectURL(blob);
@@ -575,13 +705,10 @@ function BuilderInner() {
     <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
       {/* Nav */}
       <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 2rem', borderBottom: '1px solid var(--border)', background: 'rgba(10,10,15,0.9)', backdropFilter: 'blur(12px)', position: 'sticky', top: 0, zIndex: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--muted)', fontSize: 13 }}>← Dashboard</Link>
-          <div style={{ width: 1, height: 16, background: 'var(--border)' }} />
-          <input
-            value={name} onChange={e => setName(e.target.value)}
-            style={{ background: 'none', border: 'none', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15, color: 'var(--text)', minWidth: 0, outline: 'none' }}
-          />
+        <div className="builder-nav-title">
+          <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--muted)', fontSize: 13, whiteSpace: 'nowrap' }}>← Dashboard</Link>
+          <div style={{ width: 1, height: 16, background: 'var(--border)', flexShrink: 0 }} />
+          <input value={name} onChange={e => setName(e.target.value)} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {uploading && <span style={{ fontSize: 12, color: 'var(--muted)' }}>Uploading audio…</span>}
@@ -591,9 +718,9 @@ function BuilderInner() {
         </div>
       </nav>
 
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '280px 1fr', gap: 0, minHeight: 0 }}>
+      <div className="builder-grid">
         {/* ── Left panel ─────────────────────────────────────────────────── */}
-        <aside style={{ borderRight: '1px solid var(--border)', padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <aside className="builder-sidebar" style={{ borderRight: '1px solid var(--border)', padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* Audio */}
           <div>
             <div className="label">Audio file</div>
@@ -665,7 +792,7 @@ function BuilderInner() {
             <div className="label">Tesla model</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {TESLA_MODELS.map(m => (
-                <button key={m.value} onClick={() => { setModel(m.value); setAudioFrames(null); setAudioTriggers(new Set()); setCustomBlocks({}); }}
+                <button key={m.value} onClick={() => { setModel(m.value); setAudioFrames(null); setAudioTriggers(new Set()); setWaveformData(null); setCustomBlocks({}); }}
                   style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: `1px solid ${model === m.value ? 'var(--red)' : 'var(--border)'}`, background: model === m.value ? 'var(--red-glow)' : 'var(--bg3)', color: model === m.value ? 'var(--text)' : 'var(--muted)', fontSize: 13, textAlign: 'left', cursor: 'pointer', transition: 'all .15s' }}>
                   {m.label}
                 </button>
@@ -732,10 +859,10 @@ function BuilderInner() {
         </aside>
 
         {/* ── Main area ──────────────────────────────────────────────────── */}
-        <main style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
+        <main className="builder-main" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
           {/* 3D Scene */}
           <div style={{ position: 'relative' }}>
-            <div style={{ height: 420, borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: `1px solid ${previewing ? 'rgba(0,232,135,0.25)' : 'var(--border)'}`, transition: 'border-color .3s' }}>
+            <div className="builder-scene-h" style={{ borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: `1px solid ${previewing ? 'rgba(0,232,135,0.25)' : 'var(--border)'}`, transition: 'border-color .3s' }}>
               <TeslaScene
                 teslaModel={model}
                 style={style}
@@ -757,7 +884,7 @@ function BuilderInner() {
           </div>
 
           {/* Stats bar */}
-          <div style={{ display: 'flex', gap: '1rem', padding: '1rem', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
+          <div className="builder-stats" style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
             {[
               { label: 'Model', value: TESLA_MODELS.find(m => m.value === model)?.label },
               { label: 'Style', value: STYLES.find(s => s.value === style)?.label },
@@ -839,6 +966,27 @@ function BuilderInner() {
               onToggleBeat={onToggleBeat}
             />
           </div>
+
+          {/* FSEQ Validation panel — shown after export */}
+          {fseqValidation && (
+            <div style={{ padding: '1rem', background: fseqValidation.ok ? 'rgba(0,232,135,0.05)' : 'rgba(232,64,74,0.05)', border: `1px solid ${fseqValidation.ok ? 'rgba(0,232,135,0.2)' : 'rgba(232,64,74,0.3)'}`, borderRadius: 'var(--radius-lg)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontWeight: 600, fontSize: 13, color: fseqValidation.ok ? 'var(--green)' : '#ff8a8a' }}>
+                {fseqValidation.ok ? '✓ FSEQ valid — ready for Tesla' : '⚠ FSEQ issues found'}
+                <button onClick={() => setFseqValidation(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>✕</button>
+              </div>
+              {fseqValidation.errors.map((e, i) => (
+                <div key={i} style={{ fontSize: 11, color: '#ff8a8a', marginBottom: 3 }}>✗ {e}</div>
+              ))}
+              {fseqValidation.warnings.map((w, i) => (
+                <div key={i} style={{ fontSize: 11, color: '#ff8c00', marginBottom: 3 }}>⚠ {w}</div>
+              ))}
+              <div style={{ display: 'flex', gap: 12, marginTop: fseqValidation.warnings.length || fseqValidation.errors.length ? 8 : 0, flexWrap: 'wrap' }}>
+                {fseqValidation.info.map((inf, i) => (
+                  <span key={i} style={{ fontSize: 10, color: 'var(--muted)', background: 'var(--bg3)', padding: '2px 8px', borderRadius: 12 }}>{inf}</span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Export instructions */}
           <div style={{ padding: '1rem', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', fontSize: 13, color: 'var(--muted)' }}>

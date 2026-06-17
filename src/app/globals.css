@@ -41,3 +41,19 @@ input,select,textarea{font-family:var(--font-body);outline:none}
 .fade-up{animation:fadeUp .3s ease forwards}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 .pulse{animation:pulse 2s ease infinite}
+
+/* ── Builder responsive layout ─────────────────────────────────────────── */
+.builder-grid{flex:1;display:grid;grid-template-columns:280px 1fr;gap:0;min-height:0}
+.builder-scene-h{height:420px}
+.builder-stats{display:flex;gap:1rem;padding:1rem;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg)}
+.builder-nav-title{display:flex;align-items:center;gap:16px}
+.builder-nav-title input{background:none;border:none;font-family:var(--font-display);font-weight:600;font-size:15px;color:var(--text);min-width:0;outline:none}
+@media(max-width:768px){
+  .builder-grid{grid-template-columns:1fr;grid-template-rows:auto auto}
+  .builder-sidebar{border-right:none!important;border-bottom:1px solid var(--border);order:2;max-height:50vh;overflow-y:auto}
+  .builder-main{order:1}
+  .builder-scene-h{height:240px}
+  .builder-stats{overflow-x:auto;flex-wrap:nowrap;gap:.75rem;padding:.75rem}
+  .builder-stats>div{flex:0 0 auto;min-width:72px}
+  .builder-nav-title input{max-width:140px;font-size:13px}
+}

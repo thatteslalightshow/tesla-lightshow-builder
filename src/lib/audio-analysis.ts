@@ -4,6 +4,9 @@ export interface AudioAnalysisResult {
   frames: Uint8Array[]
   triggerFrames: Set<number>
   bpm: number
+  // Normalized amplitude envelope at 100fps (10ms windows) for waveform display.
+  // Index 0 = start of song. Length = floor(duration * 100).
+  waveformData: Float32Array
 }
 
 // Render audio through a biquad filter into a Float32Array
@@ -126,5 +129,18 @@ export async function analyzeAudioToFrames(
     return frame
   })
 
-  return { frames, triggerFrames, bpm }
+  // High-res amplitude envelope for the waveform display.
+  // Computed directly from the raw channel data — no extra OfflineAudioContext needed.
+  const WF_FPS = 100
+  const wfFrameSize = Math.floor(audioBuffer.sampleRate / WF_FPS)
+  const rawCh = audioBuffer.getChannelData(0)
+  const wfTotal = Math.floor(audioBuffer.length / wfFrameSize)
+  const wfRaw: number[] = []
+  for (let f = 0; f < wfTotal; f++) {
+    wfRaw.push(rms(rawCh, f * wfFrameSize, wfFrameSize))
+  }
+  const wfNorm = percentileNorm(wfRaw)
+  const waveformData = new Float32Array(wfNorm)
+
+  return { frames, triggerFrames, bpm, waveformData }
 }

@@ -593,15 +593,20 @@ export default function TeslaScene({
         gltfScene.position.y = -robustFloor;
         gltfScene.position.z = -centre.z;
 
-        // ── Step 5: apply PBR materials ───────────────────────────────────────────
+        // ── Step 5: keep original GLTF materials, enable shadows + env reflections
         gltfScene.traverse(child => {
           if (!(child instanceof THREE.Mesh)) return;
-          const n = child.name.toLowerCase();
-          if (n.includes('glass') || n.includes('window') || n.includes('wind')) child.material = GLASS();
-          else if (n.includes('wheel') || n.includes('tyre') || n.includes('tire')) child.material = RUBBER;
-          else if (n.includes('rim') || n.includes('alloy')) child.material = RIM;
-          else child.material = bMat;
-          child.castShadow = true; child.receiveShadow = true;
+          child.castShadow = true;
+          child.receiveShadow = true;
+          // scene.environment (PMREMGenerator) auto-supplies envMap to Standard/Physical
+          // materials — force a needsUpdate so it's picked up immediately.
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach(m => {
+            if (m instanceof THREE.MeshStandardMaterial) {
+              m.envMapIntensity = 1.2;
+              m.needsUpdate = true;
+            }
+          });
         });
 
         // ── Step 6: rescale light zone Z positions to actual model width ─────────

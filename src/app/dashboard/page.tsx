@@ -81,6 +81,7 @@ export default function DashboardPage() {
           <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 14 }}>LightShow Builder</span>
         </Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Link href="/gallery" className="btn btn-ghost btn-sm">Gallery</Link>
           <span style={{ fontSize: 13, color: 'var(--muted)' }}>{email}</span>
           <button onClick={signOut} className="btn btn-ghost btn-sm">Sign out</button>
         </div>

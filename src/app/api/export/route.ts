@@ -1,7 +1,8 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
-import { getAdminClient, getSignedDownloadUrl, type ShowStyle } from '@/lib/supabase'
+import { getAdminClient, getSignedDownloadUrl, type ShowStyle, type TeslaModel } from '@/lib/supabase'
+import { getChannelCount } from '@/lib/tesla-channels'
 import JSZip from 'jszip'
 
 function buildFseq(channels: number, frames: number, stepMs: number, frameData: Uint8Array[]): Uint8Array {
@@ -85,7 +86,7 @@ export async function POST(req: Request) {
   const FPS = 20
   const durationSec = audioRecord?.duration_sec ?? show.duration_sec ?? 30
   const frames = Math.round(durationSec * FPS)
-  const channels = 48
+  const channels = getChannelCount(show.tesla_model as TeslaModel)
   const bpm = show.bpm ?? 120
   const frameData = generateFrames(show.style, show.intensity, bpm, frames, channels)
   const fseq = buildFseq(channels, frames, Math.round(1000 / FPS), frameData)
