@@ -527,9 +527,16 @@ export default function TeslaScene({
     // ── Car body: try GLTF, fall back to procedural ──────────────────────────
     const bMat = bodyMat(teslaModel === 'cybertruck' ? 0.92 : 0.78);
 
-    // Procedural body group — shown immediately; removed if GLTF loads
+    // Procedural group — shown immediately, entirely removed when GLTF loads.
+    // ALL procedural geometry goes here so nothing leaks into the HD model scene.
     const proceduralGroup = new THREE.Group();
     buildProceduralCar(proceduralGroup, teslaModel, p, halfW, groundY, bMat);
+    animsRef.current = buildDoors(teslaModel, halfW, groundY, bMat, proceduralGroup);
+    addWindows(teslaModel, halfW, proceduralGroup);
+    const mY = teslaModel === 'cybertruck' ? 1.22 : (p.bodyL > 5 ? 0.88 : 0.84);
+    const mX = p.bodyL / 2 - 1.35;
+    addMirror(proceduralGroup, mX, mY, -halfW, -1, bMat);
+    addMirror(proceduralGroup, mX, mY,  halfW,  1, bMat);
     scene.add(proceduralGroup);
     setGltfStatus('loading');
 
@@ -564,11 +571,26 @@ export default function TeslaScene({
         const scale = p.bodyL / size.x;
         gltfScene.scale.setScalar(scale);
 
-        // ── Step 4: re-measure, then center and floor ─────────────────────────────
+        // ── Step 4: robust floor — exclude extreme outlier geometry ──────────────
+        // Some Sketchfab models include ground-plane or undercarriage reference
+        // meshes far below the car body. Collect each mesh's world-space min-Y,
+        // sort them, and use the 5th-percentile value (skipping the bottom 5% of
+        // meshes) so those outlier panels don't inflate position.y.
         box = new THREE.Box3().setFromObject(gltfScene);
         const centre = box.getCenter(new THREE.Vector3());
+        const meshBottoms: number[] = [];
+        gltfScene.traverse(child => {
+          if (child instanceof THREE.Mesh) {
+            const mb = new THREE.Box3().setFromObject(child);
+            if (mb.min.y < mb.max.y) meshBottoms.push(mb.min.y);
+          }
+        });
+        meshBottoms.sort((a, b) => a - b);
+        const skipN = Math.max(1, Math.floor(meshBottoms.length * 0.05));
+        const robustFloor = meshBottoms[skipN] ?? box.min.y;
+        console.log(`[GLTF ${teslaModel}] meshes=${meshBottoms.length} floor=${robustFloor.toFixed(3)} (raw min=${box.min.y.toFixed(3)}) size=${size.x.toFixed(2)}x${size.y.toFixed(2)}x${size.z.toFixed(2)}`);
         gltfScene.position.x = -centre.x;
-        gltfScene.position.y = -box.min.y;
+        gltfScene.position.y = -robustFloor;
         gltfScene.position.z = -centre.z;
 
         // ── Step 5: apply PBR materials ───────────────────────────────────────────
@@ -593,18 +615,6 @@ export default function TeslaScene({
         setGltfStatus('procedural');
       },
     );
-
-    // ── Doors ─────────────────────────────────────────────────────────────────
-    animsRef.current = buildDoors(teslaModel, halfW, groundY, bMat, scene);
-
-    // ── Windows ───────────────────────────────────────────────────────────────
-    addWindows(teslaModel, halfW, scene);
-
-    // ── Mirrors ───────────────────────────────────────────────────────────────
-    const mY = teslaModel === 'cybertruck' ? 1.22 : (p.bodyL > 5 ? 0.88 : 0.84);
-    const mX = p.bodyL / 2 - 1.35;
-    addMirror(scene, mX, mY, -halfW, -1, bMat);
-    addMirror(scene, mX, mY,  halfW,  1, bMat);
 
     // ── Light zones ───────────────────────────────────────────────────────────
     const { lightObjs, zoneHitboxes } = buildLightZones(def, scene);
