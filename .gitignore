@@ -24,6 +24,10 @@
 .DS_Store
 *.pem
 
+# temp/test files (may contain session tokens)
+.tmp/
+test-results/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
