@@ -329,9 +329,47 @@ function addWindows(model: TeslaModel, halfW: number, scene: THREE.Object3D) {
   }
 }
 
+// ─── Glow sprite texture (one canvas per unique color) ───────────────────────
+const _glowCache = new Map<number, THREE.Texture>();
+function makeGlowTexture(hexColor: number): THREE.Texture {
+  if (_glowCache.has(hexColor)) return _glowCache.get(hexColor)!;
+  const SIZE = 128;
+  const c = document.createElement('canvas');
+  c.width = c.height = SIZE;
+  const ctx = c.getContext('2d')!;
+  const r = (hexColor >> 16) & 255, g = (hexColor >> 8) & 255, b = hexColor & 255;
+  const grad = ctx.createRadialGradient(SIZE/2, SIZE/2, 0, SIZE/2, SIZE/2, SIZE/2);
+  grad.addColorStop(0,   `rgba(255,255,255,1)`);
+  grad.addColorStop(0.12, `rgba(${r},${g},${b},0.95)`);
+  grad.addColorStop(0.35, `rgba(${r},${g},${b},0.55)`);
+  grad.addColorStop(0.65, `rgba(${r},${g},${b},0.18)`);
+  grad.addColorStop(1,   `rgba(${r},${g},${b},0)`);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, SIZE, SIZE);
+  const tex = new THREE.CanvasTexture(c);
+  _glowCache.set(hexColor, tex);
+  return tex;
+}
+
+function glowSpriteSize(type: string): number {
+  switch (type) {
+    case 'headlight': return 0.58;
+    case 'highbeam':  return 0.44;
+    case 'drl':       return 0.38;
+    case 'tail':      return 0.55;
+    case 'brake':     return 0.44;
+    case 'turn_front': case 'turn_rear': return 0.36;
+    case 'fog':       return 0.30;
+    case 'interior':  return 0.62;
+    case 'strip':     return 0.45;
+    case 'reverse':   return 0.32;
+    default:          return 0.38;
+  }
+}
+
 // ─── Light zone meshes ────────────────────────────────────────────────────────
 function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
-  const out: { mesh: THREE.Mesh; pl: THREE.PointLight; ch: number; label: string }[] = [];
+  const out: { mesh: THREE.Mesh; pl: THREE.PointLight; sprite: THREE.Sprite; spriteBase: number; ch: number; label: string }[] = [];
   const zoneHitboxes: THREE.Mesh[] = [];
 
   def.zones.forEach(zone => {
@@ -417,11 +455,25 @@ function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
     scene.add(mesh);
     zoneHitboxes.push(mesh);
 
-    const pl = new THREE.PointLight(zone.color, 0, 2.0);
+    const pl = new THREE.PointLight(zone.color, 0, 2.8);
     pl.position.set(x, y, z);
     scene.add(pl);
 
-    out.push({ mesh, pl, ch: zone.channel, label: zone.label });
+    // Sprite-based lens glow — draws a camera-facing radial gradient at the light position
+    const spriteMat = new THREE.SpriteMaterial({
+      map: makeGlowTexture(zone.color),
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+    const sprite = new THREE.Sprite(spriteMat);
+    const base = glowSpriteSize(zone.type);
+    sprite.scale.setScalar(base);
+    sprite.position.set(x, y, z);
+    scene.add(sprite);
+
+    out.push({ mesh, pl, sprite, spriteBase: base, ch: zone.channel, label: zone.label });
   });
 
   return { lightObjs: out, zoneHitboxes };
@@ -617,9 +669,10 @@ export default function TeslaScene({
         const expectedHalfZ = p.bodyW / 2;
         const zFactor = actualHalfZ / expectedHalfZ;
         if (Math.abs(zFactor - 1) > 0.05) {
-          lightObjsRef.current.forEach(({ mesh, pl }) => {
-            mesh.position.z *= zFactor;
-            pl.position.z  *= zFactor;
+          lightObjsRef.current.forEach(({ mesh, pl, sprite }) => {
+            mesh.position.z   *= zFactor;
+            pl.position.z     *= zFactor;
+            sprite.position.z *= zFactor;
           });
         }
 
@@ -686,8 +739,12 @@ export default function TeslaScene({
           }
           if (autoDoorCounter > 0) autoDoorCounter--;
 
-          lightObjs.forEach(({ pl, ch }) => {
-            pl.intensity = (frame[ch] / 255) * 2.8;
+          lightObjs.forEach(({ pl, sprite, spriteBase, ch }) => {
+            const brightness = frame[ch] / 255;
+            pl.intensity = brightness * 3.2;
+            sprite.material.opacity = brightness * 0.82;
+            const s = spriteBase * (0.55 + brightness * 0.8);
+            sprite.scale.setScalar(s);
           });
         }
       }

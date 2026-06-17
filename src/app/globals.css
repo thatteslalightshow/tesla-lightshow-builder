@@ -38,6 +38,7 @@ input,select,textarea{font-family:var(--font-body);outline:none}
 .badge-red{background:rgba(232,64,74,0.15);color:#ff8a8a}
 .badge-green{background:rgba(0,232,135,0.12);color:var(--green)}
 @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .fade-up{animation:fadeUp .3s ease forwards}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 .pulse{animation:pulse 2s ease infinite}
