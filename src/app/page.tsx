@@ -36,28 +36,64 @@ function Particles() {
   return <canvas ref={ref} style={{ position:'fixed', inset:0, pointerEvents:'none', zIndex:0 }} />;
 }
 
-// ─── Bottom-of-hero light bar equalizer ──────────────────────────────────────
-function LightEq() {
-  const BARS = 48;
-  return (
-    <div style={{ width:'100%', display:'flex', gap:3, alignItems:'flex-end', height:48, padding:'0 2px' }}>
-      {Array.from({ length: BARS }, (_, i) => (
-        <div key={i} style={{ flex:1, borderRadius:1, background:'rgba(255,255,255,0.15)',
-          animation:`eq ${(.6 + Math.random()*1.2).toFixed(2)}s ease-in-out ${(Math.random()*.8).toFixed(2)}s infinite alternate`,
-          minHeight:4,
-        }} />
-      ))}
-      <style>{`
-        @keyframes eq {
-          from { height: 4px; opacity:.15; }
-          to   { height: ${Math.floor(Math.random()*100)+20}%; opacity:.8; }
+// ─── Oscilloscope waveform ────────────────────────────────────────────────────
+function HeroWave() {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const c = ref.current; if (!c) return;
+    const ctx = c.getContext('2d'); if (!ctx) return;
+    let t = 0, raf: number;
+    const resize = () => { c.width = c.offsetWidth * window.devicePixelRatio; c.height = c.offsetHeight * window.devicePixelRatio; ctx.scale(window.devicePixelRatio, window.devicePixelRatio); };
+    resize();
+    const W = () => c.offsetWidth, H = () => c.offsetHeight;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      t += 0.008;
+      ctx.clearRect(0, 0, c.width, c.height);
+      const w = W(), h = H(), mid = h * 0.5;
+
+      // Three layered waves — different speeds and amplitudes
+      const waves = [
+        { freq: 0.0055, amp: 0.30, speed: 1.0,  alpha: 0.07, width: 1   },
+        { freq: 0.0088, amp: 0.18, speed: 1.6,  alpha: 0.05, width: 1   },
+        { freq: 0.0032, amp: 0.22, speed: 0.65, alpha: 0.06, width: 1   },
+        { freq: 0.0062, amp: 0.26, speed: 1.0,  alpha: 0.13, width: 1.5 }, // primary
+      ];
+
+      waves.forEach(({ freq, amp, speed, alpha, width }) => {
+        ctx.beginPath();
+        for (let x = 0; x <= w; x += 1.5) {
+          const y = mid
+            + Math.sin(x * freq + t * speed) * amp * h
+            + Math.sin(x * freq * 2.1 + t * speed * 0.7) * amp * 0.28 * h;
+          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
         }
-        ${Array.from({length:48},(_,i)=>`
-          .eq-bar-${i} { animation-duration: ${(.55+i*.018).toFixed(2)}s; animation-delay: ${(i*.012).toFixed(2)}s; }
-        `).join('')}
-      `}</style>
-    </div>
-  );
+        ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+        ctx.lineWidth = width;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+      });
+
+      // Faint fill below primary wave
+      ctx.beginPath();
+      for (let x = 0; x <= w; x += 1.5) {
+        const y = mid
+          + Math.sin(x * 0.0062 + t) * 0.26 * h
+          + Math.sin(x * 0.013 + t * 0.7) * 0.072 * h;
+        x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+      const grad = ctx.createLinearGradient(0, mid, 0, h);
+      grad.addColorStop(0, 'rgba(255,255,255,0.03)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = grad;
+      ctx.fill();
+    };
+    tick();
+    window.addEventListener('resize', resize);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); };
+  }, []);
+  return <canvas ref={ref} style={{ position:'absolute', bottom:0, left:0, width:'100%', height:88, pointerEvents:'none', display:'block' }} />;
 }
 
 // ─── Scroll-reveal hook ───────────────────────────────────────────────────────
@@ -163,18 +199,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Light equalizer — 48 channels animated */}
-        <div style={{ position:'absolute', bottom:0, left:0, right:0, padding:'0 0' }}>
-          <div style={{ width:'100%', display:'flex', gap:2, alignItems:'flex-end', height:64, overflow:'hidden' }}>
-            {Array.from({ length: 80 }, (_, i) => (
-              <div key={i} style={{
-                flex:1, background:`hsl(${i*4},85%,62%)`, borderRadius:'2px 2px 0 0', opacity:.25,
-                animation:`lbar ${(.5 + (i%7)*.18).toFixed(2)}s ease-in-out ${((i%11)*.07).toFixed(2)}s infinite alternate`,
-              }} />
-            ))}
-          </div>
-          <div style={{ height:1, background:'linear-gradient(90deg, transparent, rgba(255,255,255,0.1) 20%, rgba(255,255,255,0.1) 80%, transparent)' }} />
-        </div>
+        <HeroWave />
       </section>
 
       {/* ── STATS ────────────────────────────────────────────────────────── */}
@@ -320,10 +345,6 @@ export default function Home() {
       </footer>
 
       <style>{`
-        @keyframes lbar {
-          from { height: 4px; opacity: .15; }
-          to   { height: 56px; opacity: .4; }
-        }
         @media (max-width: 768px) {
           nav { padding: 0 1.25rem !important; }
           nav a[href="/gallery"], nav a[href="/pricing"], nav a[href="/auth"]:not([href*="signup"]) { display: none; }
