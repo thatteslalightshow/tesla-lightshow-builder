@@ -540,26 +540,43 @@ export default function TeslaScene({
         gltfScene.position.x = -centre.x * scale;
         gltfScene.position.y = -box.min.y * scale;
         gltfScene.position.z = -centre.z * scale;
-        // Apply PBR materials: detect by mesh + material name, keep originals for unknown
+        // Enhance GLTF materials: upgrade to MeshPhysical for better reflections,
+        // keep original colors/textures. Only override meshes we can positively identify.
         gltfScene.traverse(child => {
           if (!(child instanceof THREE.Mesh)) return;
           child.castShadow = true; child.receiveShadow = true;
-          const mat = Array.isArray(child.material) ? child.material[0] : child.material;
-          const nm = ((child.name || '') + ' ' + ((mat as THREE.Material)?.name || '')).toLowerCase();
 
-          if (/glass|window|wind|windscreen|windshield|visor/.test(nm)) {
-            child.material = makeGlass();
-          } else if (/tyre|tire|rubber/.test(nm)) {
-            child.material = RUBBER;
-          } else if (/\brim\b|alloy|wheel_hub|wheelrim/.test(nm)) {
-            child.material = RIM;
-          } else if (/chrome|trim|badge|molding/.test(nm)) {
-            child.material = CHROME;
-          } else if (/seat|leather|fabric|carpet|steer|dash|console/.test(nm)) {
-            // keep original interior material
+          const applyToMat = (m: THREE.Material): THREE.Material => {
+            const nm = ((child.name || '') + ' ' + (m.name || '')).toLowerCase();
+            if (/glass|window|wind|windscreen|windshield|visor/.test(nm)) return makeGlass();
+            if (/tyre|tire|rubber/.test(nm)) return RUBBER;
+            if (/\brim\b|alloy|wheel_hub|wheelrim/.test(nm)) return RIM;
+            if (/chrome|trim|badge|molding/.test(nm)) return CHROME;
+            // Paint_Color material name (Model X explicitly names body panels)
+            if (/paint_color/.test(nm)) return bMat;
+            // Keep all other original GLTF materials, but upgrade to MeshPhysical
+            // so clearcoat + env reflections improve appearance without losing textures.
+            if (m instanceof THREE.MeshPhysicalMaterial) {
+              m.clearcoat = Math.max(m.clearcoat, 0.6);
+              m.clearcoatRoughness = Math.min(m.clearcoatRoughness, 0.1);
+              m.envMapIntensity = Math.max(m.envMapIntensity, 1.2);
+              return m;
+            }
+            if (m instanceof THREE.MeshStandardMaterial) {
+              const p = new THREE.MeshPhysicalMaterial();
+              p.copy(m);
+              p.clearcoat = 0.7;
+              p.clearcoatRoughness = 0.08;
+              p.envMapIntensity = 1.4;
+              return p;
+            }
+            return m;
+          };
+
+          if (Array.isArray(child.material)) {
+            child.material = child.material.map(applyToMat);
           } else {
-            // body panels and unknown surfaces: apply paint
-            child.material = bMat;
+            child.material = applyToMat(child.material);
           }
         });
         // Replace procedural with GLTF
