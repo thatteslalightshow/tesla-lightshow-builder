@@ -541,16 +541,37 @@ export default function TeslaScene({
       GLTF_PATHS[teslaModel],
       (gltf: { scene: THREE.Group }) => {
         const gltfScene = gltf.scene;
-        // Scale and centre
-        const box = new THREE.Box3().setFromObject(gltfScene);
-        const size = box.getSize(new THREE.Vector3());
-        const centre = box.getCenter(new THREE.Vector3());
+
+        // ── Step 1: measure as-loaded (GLTFLoader has already applied node transforms) ──
+        let box = new THREE.Box3().setFromObject(gltfScene);
+        let size = box.getSize(new THREE.Vector3());
+
+        // ── Step 2: orient so the car's long axis = +X (front) ──────────────────
+        // Most Sketchfab car models export with their length along Z (front at ±Z).
+        // A -90° Y rotation maps the car's -Z end to +X (our forward direction).
+        // This is confirmed correct for model3 / modelY (baked -90°X node rotation
+        // leaves front at -Z). For modelX / cybertruck we also apply it based on
+        // bounding-box analysis (flat rear panel sits at +Z_max).
+        // modelS is the exception: its long axis is already X in the GLB file.
+        if (size.z > size.x * 1.1) {
+          gltfScene.rotation.y = -Math.PI / 2;
+          // Re-measure after rotation so scale uses the true car length
+          box = new THREE.Box3().setFromObject(gltfScene);
+          size = box.getSize(new THREE.Vector3());
+        }
+
+        // ── Step 3: scale so car length (X after orientation fix) = bodyL ────────
         const scale = p.bodyL / size.x;
         gltfScene.scale.setScalar(scale);
-        gltfScene.position.x = -centre.x * scale;
-        gltfScene.position.y = -box.min.y * scale;
-        gltfScene.position.z = -centre.z * scale;
-        // Apply PBR materials
+
+        // ── Step 4: re-measure, then center and floor ─────────────────────────────
+        box = new THREE.Box3().setFromObject(gltfScene);
+        const centre = box.getCenter(new THREE.Vector3());
+        gltfScene.position.x = -centre.x;
+        gltfScene.position.y = -box.min.y;
+        gltfScene.position.z = -centre.z;
+
+        // ── Step 5: apply PBR materials ───────────────────────────────────────────
         gltfScene.traverse(child => {
           if (!(child instanceof THREE.Mesh)) return;
           const n = child.name.toLowerCase();
@@ -560,6 +581,7 @@ export default function TeslaScene({
           else child.material = bMat;
           child.castShadow = true; child.receiveShadow = true;
         });
+
         // Replace procedural with GLTF
         scene.remove(proceduralGroup);
         scene.add(gltfScene);
