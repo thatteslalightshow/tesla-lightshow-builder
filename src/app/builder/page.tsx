@@ -17,19 +17,6 @@ const TESLA_MODELS: { value: TeslaModel; label: string }[] = [
   { value: 'cybertruck', label: 'Cybertruck' },
 ];
 
-const PAINT_OPTIONS = [
-  { color: 0xf0efeb, label: 'Pearl White'      },
-  { color: 0x4a4d5f, label: 'Midnight Silver'  },
-  { color: 0x183861, label: 'Deep Blue'         },
-  { color: 0xcc1f1f, label: 'Multi-Coat Red'   },
-  { color: 0x131418, label: 'Obsidian Black'   },
-  { color: 0x8a8fa3, label: 'Quicksilver'      },
-];
-
-const DEFAULT_PAINT: Record<string, number> = {
-  model3: 0xcc1f1f, modelY: 0xf0efeb, modelS: 0x4a4d5f, modelX: 0x183861, cybertruck: 0xb8bfc8,
-};
-
 const STYLES: { value: ShowStyle; label: string; desc: string }[] = [
   { value: 'energetic', label: 'Energetic', desc: 'Fast flashes synced to beats' },
   { value: 'wave', label: 'Wave', desc: 'Smooth rolling light waves' },
@@ -218,7 +205,6 @@ function BuilderInner() {
   const [model, setModel] = useState<TeslaModel>('model3');
   function changeModel(m: TeslaModel) {
     setModel(m);
-    setPaintColor(DEFAULT_PAINT[m]);
     setAudioFrames(null);
     setAudioTriggers(new Set());
   }
@@ -252,7 +238,6 @@ function BuilderInner() {
   const [analyzing, setAnalyzing] = useState(false);
   const [audioFrames, setAudioFrames] = useState<Uint8Array[] | null>(null);
   const [audioTriggers, setAudioTriggers] = useState<Set<number>>(new Set());
-  const [paintColor, setPaintColor] = useState<number>(DEFAULT_PAINT['model3']);
   const [previewBeat, setPreviewBeat] = useState<number | null>(null);
   const [previewProgress, setPreviewProgress] = useState(0);
 
@@ -561,29 +546,6 @@ function BuilderInner() {
             </div>
           </div>
 
-          {/* Paint color */}
-          {model !== 'cybertruck' && (
-            <div>
-              <div className="label">Paint color</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {PAINT_OPTIONS.map(p => (
-                  <button
-                    key={p.color}
-                    title={p.label}
-                    onClick={() => setPaintColor(p.color)}
-                    style={{
-                      width: 26, height: 26, borderRadius: '50%', border: `2px solid ${paintColor === p.color ? 'var(--text)' : 'transparent'}`,
-                      background: `#${p.color.toString(16).padStart(6, '0')}`,
-                      cursor: 'pointer', padding: 0,
-                      boxShadow: paintColor === p.color ? '0 0 0 1px var(--border)' : 'none',
-                      transition: 'border-color .15s',
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Style */}
           <div>
             <div className="label">Animation style</div>
@@ -650,7 +612,7 @@ function BuilderInner() {
               <TeslaScene
                 teslaModel={model} style={style} intensity={intensity} bpm={bpm}
                 previewBeat={previewBeat} customFrames={audioFrames}
-                paintColor={paintColor} audioTriggerFrames={audioTriggers}
+                audioTriggerFrames={audioTriggers}
               />
             </div>
 
