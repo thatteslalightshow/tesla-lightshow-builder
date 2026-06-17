@@ -4,18 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import JSZip from 'jszip';
 import { supabase, validateAudioFile, type TeslaModel, type ShowStyle } from '@/lib/supabase';
-import dynamic from 'next/dynamic';
-import TeslaScene2D from '@/components/TeslaScene2D';
-
-const TeslaScene = dynamic(() => import('@/components/TeslaScene'), {
-  ssr: false,
-  loading: () => (
-    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0a0f', color: 'rgba(255,255,255,0.3)', fontSize: 13, gap: 10 }}>
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ animation: 'spin 1s linear infinite' }}><circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeDasharray="20 8"/></svg>
-      Loading 3D model…
-    </div>
-  ),
-});
+import TeslaScene from '@/components/TeslaScene';
 import { MODELS, generateFrames, getChannelCount } from '@/lib/tesla-channels'
 import { analyzeAudioToFrames } from '@/lib/audio-analysis';
 import { validateFseq, type FseqValidation } from '@/lib/fseq';
@@ -446,8 +435,6 @@ function BuilderInner() {
   const [fseqValidation, setFseqValidation] = useState<FseqValidation | null>(null);
   const [exportCount, setExportCount] = useState(0);
   const [checkoutMsg, setCheckoutMsg] = useState(checkoutCancelled ? 'Payment cancelled — your show is still saved.' : '');
-
-  const [use3D, setUse3D] = useState(false);
 
   // ── Manual edit state ─────────────────────────────────────────────────────
   const [editMode, setEditMode] = useState(false);
@@ -936,47 +923,18 @@ function BuilderInner() {
 
         {/* ── Main area ──────────────────────────────────────────────────── */}
         <main className="builder-main" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
-          {/* Scene — 2D default, 3D on demand */}
+          {/* 3D Scene */}
           <div style={{ position: 'relative' }}>
-            {/* Toggle pill */}
-            <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 10, display: 'flex', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 20, padding: 3, gap: 2 }}>
-              {(['2D', '3D'] as const).map(mode => (
-                <button
-                  key={mode}
-                  onClick={() => setUse3D(mode === '3D')}
-                  style={{
-                    padding: '4px 13px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer', letterSpacing: '.05em', transition: 'background .18s, color .18s',
-                    background: (mode === '3D') === use3D ? 'var(--red)' : 'transparent',
-                    color:      (mode === '3D') === use3D ? '#fff' : 'rgba(255,255,255,0.45)',
-                  }}
-                >
-                  {mode}
-                </button>
-              ))}
-            </div>
-
             <div className="builder-scene-h" style={{ borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: `1px solid ${previewing ? 'rgba(0,232,135,0.25)' : 'var(--border)'}`, transition: 'border-color .3s' }}>
-              {use3D ? (
-                <TeslaScene
-                  teslaModel={model}
-                  style={style}
-                  intensity={intensity}
-                  bpm={bpm}
-                  previewBeat={previewBeat}
-                  customFrames={sceneFrames}
-                  audioTriggerFrames={audioTriggers}
-                />
-              ) : (
-                <TeslaScene2D
-                  teslaModel={model}
-                  style={style}
-                  intensity={intensity}
-                  bpm={bpm}
-                  previewBeat={previewBeat}
-                  customFrames={sceneFrames}
-                  audioTriggerFrames={audioTriggers}
-                />
-              )}
+              <TeslaScene
+                teslaModel={model}
+                style={style}
+                intensity={intensity}
+                bpm={bpm}
+                previewBeat={previewBeat}
+                customFrames={sceneFrames}
+                audioTriggerFrames={audioTriggers}
+              />
             </div>
 
             {/* Preview indicator overlay */}
