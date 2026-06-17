@@ -434,6 +434,7 @@ function BuilderInner() {
   // ── Export validation + payment state ────────────────────────────────────
   const [fseqValidation, setFseqValidation] = useState<FseqValidation | null>(null);
   const [exportCount, setExportCount] = useState(0);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [checkoutMsg, setCheckoutMsg] = useState(checkoutCancelled ? 'Payment cancelled — your show is still saved.' : '');
 
   // ── Manual edit state ─────────────────────────────────────────────────────
@@ -450,8 +451,12 @@ function BuilderInner() {
       if (editId) loadShow(editId);
       else if (remixToken) loadRemix(remixToken);
 
-      // Load export count to know if next export is free
-      const { count } = await supabase.from('exports').select('id', { count: 'exact', head: true }).eq('user_id', session.user.id);
+      // Load profile (admin flag + export count)
+      const [{ data: profile }, { count }] = await Promise.all([
+        supabase.from('profiles').select('is_admin').eq('id', session.user.id).single(),
+        supabase.from('exports').select('id', { count: 'exact', head: true }).eq('user_id', session.user.id),
+      ]);
+      if (profile?.is_admin) setIsAdmin(true);
       setExportCount(count ?? 0);
 
       // Returning from Stripe success — verify payment then auto-export
@@ -687,8 +692,8 @@ function BuilderInner() {
       if (!showId) { setSaveMsg('Save failed — please try again.'); setExporting(false); return; }
     }
 
-    // After first free export, redirect to Stripe Checkout
-    if (exportCount > 0 && showId) {
+    // After first free export, redirect to Stripe Checkout (admins always free)
+    if (exportCount > 0 && showId && !isAdmin) {
       const res = await fetch('/api/stripe/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ show_id: showId }) });
       if (res.ok) {
         const { url } = await res.json();
@@ -772,10 +777,10 @@ function BuilderInner() {
           <button onClick={save} disabled={saving || uploading} className="btn btn-ghost btn-sm">{saving ? 'Saving…' : 'Save'}</button>
           <div style={{ position: 'relative' }}>
             <button onClick={exportZip} disabled={exporting || saving} className="btn btn-primary btn-sm">
-              {exporting ? 'Exporting…' : exportCount === 0 ? '⬇ Export ZIP — Free' : '⬇ Export ZIP — $2.99'}
+              {exporting ? 'Exporting…' : (isAdmin || exportCount === 0) ? '⬇ Export ZIP — Free' : '⬇ Export ZIP — $2.99'}
             </button>
-            {exportCount === 0 && (
-              <span style={{ position: 'absolute', top: -8, right: -8, background: 'var(--green)', color: '#000', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8, whiteSpace: 'nowrap' }}>FREE</span>
+            {(isAdmin || exportCount === 0) && (
+              <span style={{ position: 'absolute', top: -8, right: -8, background: isAdmin ? 'var(--red)' : 'var(--green)', color: '#fff', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8, whiteSpace: 'nowrap' }}>{isAdmin ? 'ADMIN' : 'FREE'}</span>
             )}
           </div>
         </div>
