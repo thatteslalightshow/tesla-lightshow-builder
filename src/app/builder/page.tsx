@@ -390,6 +390,8 @@ function BuilderInner() {
   const searchParams = useSearchParams();
   const editId = searchParams.get('id');
   const remixToken = searchParams.get('remix');
+  const checkoutSession = searchParams.get('checkout_session');
+  const checkoutCancelled = searchParams.get('checkout_cancelled');
 
   // ── Auth & show state ─────────────────────────────────────────────────────
   const [authed, setAuthed] = useState(false);
@@ -429,8 +431,10 @@ function BuilderInner() {
   const [audioTriggers, setAudioTriggers] = useState<Set<number>>(new Set());
   const [waveformData, setWaveformData] = useState<Float32Array | null>(null);
 
-  // ── Export validation state ───────────────────────────────────────────────
+  // ── Export validation + payment state ────────────────────────────────────
   const [fseqValidation, setFseqValidation] = useState<FseqValidation | null>(null);
+  const [exportCount, setExportCount] = useState(0);
+  const [checkoutMsg, setCheckoutMsg] = useState(checkoutCancelled ? 'Payment cancelled — your show is still saved.' : '');
 
   // ── Manual edit state ─────────────────────────────────────────────────────
   const [editMode, setEditMode] = useState(false);
@@ -439,18 +443,44 @@ function BuilderInner() {
 
   // ── Auth check ────────────────────────────────────────────────────────────
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) { router.replace('/auth'); return; }
       setAuthed(true);
       setUserId(session.user.id);
       if (editId) loadShow(editId);
       else if (remixToken) loadRemix(remixToken);
+
+      // Load export count to know if next export is free
+      const { count } = await supabase.from('exports').select('id', { count: 'exact', head: true }).eq('user_id', session.user.id);
+      setExportCount(count ?? 0);
+
+      // Returning from Stripe success — verify payment then auto-export
+      if (checkoutSession && editId) {
+        setCheckoutMsg('Verifying payment…');
+        const res = await fetch(`/api/stripe/verify?session_id=${checkoutSession}`);
+        if (res.ok) {
+          setCheckoutMsg('Payment confirmed! Generating your export…');
+          // Trigger the server-side export (show is already saved)
+          const expRes = await fetch('/api/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ show_id: editId }) });
+          if (expRes.ok) {
+            const { url, filename } = await expRes.json();
+            const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+            setCheckoutMsg('✓ Download started!');
+            setExportCount(c => c + 1);
+            setTimeout(() => setCheckoutMsg(''), 5000);
+          } else {
+            setCheckoutMsg('Export failed — please try the Export button again.');
+          }
+        } else {
+          setCheckoutMsg('Could not verify payment. Contact support if you were charged.');
+        }
+      }
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || !session) router.replace('/auth');
     });
     return () => subscription.unsubscribe();
-  }, [router, editId, remixToken]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [router, editId, remixToken, checkoutSession]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadShow(id: string) {
     const { data } = await supabase.from('shows').select('*').eq('id', id).single();
@@ -622,7 +652,7 @@ function BuilderInner() {
     }
   }
 
-  async function save() {
+  async function save(): Promise<string | null> {
     setSaving(true); setSaveMsg('');
     const payload = { user_id: userId, name, tesla_model: model, style, intensity, bpm, is_public: isPublic, updated_at: new Date().toISOString() };
     let showId = savedShowId;
@@ -640,22 +670,47 @@ function BuilderInner() {
       }
     }
     setSaving(false);
-    if (error) { setSaveMsg(`Error: ${error.message}`); setTimeout(() => setSaveMsg(''), 4000); return; }
+    if (error) { setSaveMsg(`Error: ${error.message}`); setTimeout(() => setSaveMsg(''), 4000); return null; }
     setSaveMsg('Saved!'); setTimeout(() => setSaveMsg(''), 3000);
     if (audioFile && !audioUploaded && showId) await uploadAudio(showId, audioFile);
+    return showId;
   }
 
   async function exportZip() {
     setExporting(true);
-    if (savedShowId) {
+    setCheckoutMsg('');
+
+    // If the show isn't saved yet, save it first so Stripe can reference it
+    let showId = savedShowId;
+    if (!showId) {
+      showId = await save();
+      if (!showId) { setSaveMsg('Save failed — please try again.'); setExporting(false); return; }
+    }
+
+    // After first free export, redirect to Stripe Checkout
+    if (exportCount > 0 && showId) {
+      const res = await fetch('/api/stripe/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ show_id: showId }) });
+      if (res.ok) {
+        const { url } = await res.json();
+        window.location.href = url;
+      } else {
+        setSaveMsg('Could not start checkout. Please try again.');
+        setExporting(false);
+      }
+      return;
+    }
+
+    // Free export path (or server-side export if already saved)
+    if (showId) {
       try {
-        const res = await fetch('/api/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ show_id: savedShowId }) });
+        const res = await fetch('/api/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ show_id: showId }) });
         if (res.ok) {
           const { url, filename } = await res.json();
           const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+          setExportCount(c => c + 1);
           setExporting(false); return;
         }
-      } catch { /* fall through */ }
+      } catch { /* fall through to client-side export */ }
     }
     const FPS = 20;
     const frames = 600;
@@ -712,9 +767,17 @@ function BuilderInner() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {uploading && <span style={{ fontSize: 12, color: 'var(--muted)' }}>Uploading audio…</span>}
-          {saveMsg && <span style={{ fontSize: 12, color: saveMsg.startsWith('Error') || saveMsg.startsWith('Audio') ? '#ff8a8a' : 'var(--green)' }}>{saveMsg}</span>}
+          {checkoutMsg && <span style={{ fontSize: 12, color: checkoutMsg.startsWith('✓') ? 'var(--green)' : checkoutMsg.startsWith('Could') || checkoutMsg.startsWith('Payment cancelled') ? '#ff8a8a' : 'var(--muted)' }}>{checkoutMsg}</span>}
+          {!checkoutMsg && saveMsg && <span style={{ fontSize: 12, color: saveMsg.startsWith('Error') || saveMsg.startsWith('Audio') ? '#ff8a8a' : 'var(--green)' }}>{saveMsg}</span>}
           <button onClick={save} disabled={saving || uploading} className="btn btn-ghost btn-sm">{saving ? 'Saving…' : 'Save'}</button>
-          <button onClick={exportZip} disabled={exporting || saving} className="btn btn-primary btn-sm">{exporting ? 'Exporting…' : '⬇ Export ZIP'}</button>
+          <div style={{ position: 'relative' }}>
+            <button onClick={exportZip} disabled={exporting || saving} className="btn btn-primary btn-sm">
+              {exporting ? 'Exporting…' : exportCount === 0 ? '⬇ Export ZIP — Free' : '⬇ Export ZIP — $2.99'}
+            </button>
+            {exportCount === 0 && (
+              <span style={{ position: 'absolute', top: -8, right: -8, background: 'var(--green)', color: '#000', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8, whiteSpace: 'nowrap' }}>FREE</span>
+            )}
+          </div>
         </div>
       </nav>
 
