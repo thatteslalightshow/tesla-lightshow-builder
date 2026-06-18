@@ -5,7 +5,20 @@ import Link from 'next/link';
 import JSZip from 'jszip';
 import { supabase, validateAudioFile, type TeslaModel, type ShowStyle } from '@/lib/supabase';
 import TeslaScene from '@/components/TeslaScene';
-import { MODELS, generateFrames, getChannelCount, buildTimelineRows, type TimelineRow } from '@/lib/tesla-channels'
+import { MODELS, generateFrames, getChannelCount, buildTimelineRows, CLOSURE_CMD, CLOSURE_LIMITS, type TimelineRow, type ClosureCommand, type ClosureFamily } from '@/lib/tesla-channels'
+
+// Closure command UI metadata
+const CMD_CYCLE: ClosureCommand[] = ['open', 'close', 'dance', 'stop'];
+const CMD_STYLE: Record<ClosureCommand, { letter: string; fg: string; bg: string }> = {
+  idle:  { letter: '',  fg: 'transparent', bg: 'transparent' },
+  open:  { letter: 'O', fg: '#00e887', bg: 'rgba(0,232,135,0.22)' },
+  close: { letter: 'C', fg: '#4a90e8', bg: 'rgba(74,144,232,0.22)' },
+  dance: { letter: 'D', fg: '#ff4aa0', bg: 'rgba(255,74,160,0.22)' },
+  stop:  { letter: 'S', fg: '#e8404a', bg: 'rgba(232,64,74,0.22)' },
+};
+const DANCE_SUPPORTED: Set<ClosureFamily> = new Set(['liftgate', 'charge_port', 'windows', 'falcon_doors']);
+
+type ClosureBlocks = Record<number, Record<number, ClosureCommand>>;
 import { analyzeAudioToFrames } from '@/lib/audio-analysis';
 import { validateFseq, type FseqValidation } from '@/lib/fseq';
 import { parseId3, titleFromFilename } from '@/lib/id3';
@@ -96,6 +109,7 @@ function customBlocksToFrames(
   beats: number,
   bpm: number,
   channelCount: number,
+  closureBlocks?: ClosureBlocks,
 ): Uint8Array[] {
   const FPS = 50;
   const fpb = (60 / bpm) * FPS;
@@ -109,7 +123,41 @@ function customBlocksToFrames(
       for (let f = start; f < end; f++) frames[f][ch] = 255;
     });
   });
+  // Overlay closure command bytes (Open/Close/Dance/Stop) on their channels
+  if (closureBlocks) {
+    Object.entries(closureBlocks).forEach(([chStr, lane]) => {
+      const ch = Number(chStr);
+      Object.entries(lane).forEach(([beatStr, cmd]) => {
+        const beatIdx = Number(beatStr);
+        const start = Math.floor(beatIdx * fpb);
+        const end = Math.min(totalFrames, Math.ceil((beatIdx + 1) * fpb));
+        const val = CLOSURE_CMD[cmd];
+        for (let f = start; f < end; f++) frames[f][ch] = val;
+      });
+    });
+  }
   return frames;
+}
+
+// Per-closure actuation-limit + dance-support validation (item 4)
+function validateClosures(
+  closureBlocks: ClosureBlocks,
+  zones: { channel: number; label: string; closure?: ClosureFamily }[],
+): string[] {
+  const warnings: string[] = [];
+  Object.entries(closureBlocks).forEach(([chStr, lane]) => {
+    const ch = Number(chStr);
+    const zone = zones.find(z => z.channel === ch);
+    if (!zone?.closure) return;
+    const cmds = Object.values(lane);
+    const actuations = cmds.filter(c => c === 'open' || c === 'close' || c === 'dance').length;
+    const limit = CLOSURE_LIMITS[zone.closure];
+    if (actuations > limit) warnings.push(`${zone.label}: ${actuations} commands exceed Tesla's limit of ${limit} per show.`);
+    if (cmds.includes('dance') && !DANCE_SUPPORTED.has(zone.closure)) {
+      warnings.push(`${zone.label} can't Dance — use Open/Close instead.`);
+    }
+  });
+  return warnings;
 }
 
 // ─── Timeline component ───────────────────────────────────────────────────────
@@ -126,11 +174,14 @@ interface TimelineProps {
   symmetry?: boolean;
   customBlocks?: Record<number, Set<number>>;
   onToggleBeat?: (channel: number, beat: number) => void;
+  closureBlocks?: ClosureBlocks;
+  onClosureCommand?: (channel: number, beat: number) => void;
 }
 
 function Timeline({
   model, bpm, style, intensity, playheadFraction,
   audioFrames, audioTriggers, waveformData, editMode, symmetry, customBlocks, onToggleBeat,
+  closureBlocks, onClosureCommand,
 }: TimelineProps) {
   const def = MODELS[model];
   const zones = def.zones;
@@ -239,9 +290,10 @@ function Timeline({
   })();
 
   // ── Display frames ─────────────────────────────────────────────────────────
-  const hasCustom = customBlocks && Object.keys(customBlocks).length > 0;
+  const hasCustom = (customBlocks && Object.keys(customBlocks).length > 0)
+    || (closureBlocks && Object.keys(closureBlocks).length > 0);
   const displayFrames: Uint8Array[] = (() => {
-    if (hasCustom) return customBlocksToFrames(customBlocks!, BEATS, bpm, def.channelCount);
+    if (hasCustom) return customBlocksToFrames(customBlocks ?? {}, BEATS, bpm, def.channelCount, closureBlocks);
     if (audioFrames) return audioFrames;
     return generateFrames(style, intensity, bpm, BEATS, def);
   })();
@@ -294,15 +346,14 @@ function Timeline({
                 </div>
               );
             }
-            // ── Closure leaf (preview only) ──
+            // ── Closure leaf label ──
             if (row.closure) {
               return (
                 <div key={row.id} style={{ height: ROW_H, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 5, paddingLeft: row.depth * 10 + 8, paddingRight: 8, overflow: 'hidden' }}>
-                  <span style={{ width: 7, height: 7, borderRadius: 2, background: 'rgba(255,255,255,0.18)', flexShrink: 0 }} />
-                  <span style={{ color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: isMobile ? 9 : 10 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 2, background: '#9d6bff', flexShrink: 0, boxShadow: '0 0 4px #9d6bff' }} />
+                  <span style={{ color: 'rgba(255,255,255,0.5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: isMobile ? 9 : 10 }}>
                     {row.label}
                   </span>
-                  <span style={{ fontSize: 7, fontWeight: 700, color: 'rgba(255,180,80,0.8)', background: 'rgba(255,180,80,0.12)', padding: '1px 4px', borderRadius: 6, flexShrink: 0, letterSpacing: '.04em' }}>SOON</span>
                 </div>
               );
             }
@@ -405,13 +456,36 @@ function Timeline({
                 }} />
               );
             }
-            // Closure preview row (not yet paintable)
+            // Closure command lane — click a cell to cycle Open→Close→Dance→Stop→clear
             if (row.closure) {
+              const cch = row.channel!;
+              const lane = closureBlocks?.[cch] ?? {};
               return (
-                <div key={row.id} style={{
-                  height: ROW_H, marginBottom: 2, width: contentW, borderRadius: 3,
-                  background: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.02) 0 6px, rgba(255,255,255,0.04) 6px 12px)',
-                }} />
+                <div key={row.id} style={{ height: ROW_H, marginBottom: 2, display: 'flex', gap: 1, width: contentW }}>
+                  {Array.from({ length: BEATS }, (_, beatIdx) => {
+                    const cmd = lane[beatIdx];
+                    const cs = cmd ? CMD_STYLE[cmd] : null;
+                    const isMeasure = beatIdx % 4 === 0;
+                    return (
+                      <div
+                        key={beatIdx}
+                        onClick={() => onClosureCommand?.(cch, beatIdx)}
+                        title="Click to cycle Open / Close / Dance / Stop"
+                        style={{
+                          width: CELL_W ?? undefined, flex: CELL_W ? 'none' : 1, height: '100%',
+                          borderRadius: isMobile ? 5 : 2, cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: isMobile ? 11 : 9, fontWeight: 700,
+                          color: cs ? cs.fg : 'transparent',
+                          background: cs ? cs.bg : isMeasure ? 'rgba(157,107,255,0.06)' : 'rgba(157,107,255,0.03)',
+                          border: cs ? `1px solid ${cs.fg}` : 'none',
+                        }}
+                      >
+                        {cs?.letter}
+                      </div>
+                    );
+                  })}
+                </div>
               );
             }
             const channel = row.channel!;
@@ -578,6 +652,25 @@ function BuilderInner() {
   const [editMode, setEditMode] = useState(false);
   const [symmetry, setSymmetry] = useState(true);
   const [customBlocks, setCustomBlocks] = useState<Record<number, Set<number>>>({});
+  const [closureBlocks, setClosureBlocks] = useState<ClosureBlocks>({});
+
+  // Cycle a closure command: empty → Open → Close → Dance → Stop → empty
+  function onClosureCommand(channel: number, beatIdx: number) {
+    setClosureBlocks(prev => {
+      const next = { ...prev };
+      const lane = { ...(next[channel] ?? {}) };
+      const cur = lane[beatIdx];
+      const idx = cur ? CMD_CYCLE.indexOf(cur) : -1;
+      if (idx >= CMD_CYCLE.length - 1) delete lane[beatIdx];
+      else lane[beatIdx] = CMD_CYCLE[idx + 1];
+      if (Object.keys(lane).length) next[channel] = lane; else delete next[channel];
+      return next;
+    });
+  }
+  const closureWarnings = useMemo(
+    () => validateClosures(closureBlocks, MODELS[model].zones),
+    [closureBlocks, model]
+  );
 
   // ── Auth check ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -675,9 +768,9 @@ function BuilderInner() {
   }
 
   // Frames fed to the 3D scene: custom blocks > audio > null (uses internal generateFrames)
-  const hasCustom = Object.keys(customBlocks).length > 0;
+  const hasCustom = Object.keys(customBlocks).length > 0 || Object.keys(closureBlocks).length > 0;
   const sceneFrames: Uint8Array[] | null = hasCustom
-    ? customBlocksToFrames(customBlocks, VISIBLE_BEATS, bpm, getChannelCount(model))
+    ? customBlocksToFrames(customBlocks, VISIBLE_BEATS, bpm, getChannelCount(model), closureBlocks)
     : audioFrames;
 
   // ── Audio file selection ──────────────────────────────────────────────────
@@ -884,7 +977,7 @@ function BuilderInner() {
     const def = MODELS[model];
     let frameData: Uint8Array[];
     if (hasCustom) {
-      const pattern = customBlocksToFrames(customBlocks, VISIBLE_BEATS, bpm, channels);
+      const pattern = customBlocksToFrames(customBlocks, VISIBLE_BEATS, bpm, channels, closureBlocks);
       frameData = Array.from({ length: frames }, (_, f) => pattern[f % pattern.length]);
     } else if (audioFrames) {
       frameData = audioFrames.slice(0, frames);
@@ -1053,7 +1146,7 @@ function BuilderInner() {
             <div className="label">Tesla model</div>
             <div className="builder-models">
               {TESLA_MODELS.map(m => (
-                <button key={m.value} onClick={() => { setModel(m.value); setAudioFrames(null); setAudioTriggers(new Set()); setWaveformData(null); setCustomBlocks({}); }}
+                <button key={m.value} onClick={() => { setModel(m.value); setAudioFrames(null); setAudioTriggers(new Set()); setWaveformData(null); setCustomBlocks({}); setClosureBlocks({}); }}
                   style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: `1px solid ${model === m.value ? 'var(--red)' : 'var(--border)'}`, background: model === m.value ? 'var(--red-glow)' : 'var(--bg3)', color: model === m.value ? 'var(--text)' : 'var(--muted)', fontSize: 13, textAlign: 'left', cursor: 'pointer', transition: 'all .15s' }}>
                   {m.label}
                 </button>
@@ -1209,7 +1302,7 @@ function BuilderInner() {
                 {/* Clear edits button */}
                 {hasCustom && (
                   <button
-                    onClick={() => setCustomBlocks({})}
+                    onClick={() => { setCustomBlocks({}); setClosureBlocks({}); }}
                     style={{
                       padding: '4px 10px', borderRadius: 12, fontSize: 10, fontWeight: 600,
                       background: 'rgba(255,80,80,0.08)', border: '1px solid rgba(255,80,80,0.25)',
@@ -1248,8 +1341,35 @@ function BuilderInner() {
               symmetry={symmetry}
               customBlocks={customBlocks}
               onToggleBeat={onToggleBeat}
+              closureBlocks={closureBlocks}
+              onClosureCommand={onClosureCommand}
             />
           </div>
+
+          {/* Closures: command legend + live limit validation */}
+          {Object.keys(closureBlocks).length > 0 && (
+            <div style={{ padding: '0.85rem 1rem', background: 'rgba(157,107,255,0.05)', border: '1px solid rgba(157,107,255,0.2)', borderRadius: 'var(--radius-lg)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 11, color: 'var(--muted)' }}>
+                <span style={{ fontWeight: 700, color: '#b48cff', letterSpacing: '.04em' }}>CLOSURES</span>
+                {(['open', 'close', 'dance', 'stop'] as const).map(c => (
+                  <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 14, height: 14, borderRadius: 3, background: CMD_STYLE[c].bg, border: `1px solid ${CMD_STYLE[c].fg}`, color: CMD_STYLE[c].fg, fontSize: 9, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{CMD_STYLE[c].letter}</span>
+                    {c.charAt(0).toUpperCase() + c.slice(1)}
+                  </span>
+                ))}
+                <span style={{ color: 'var(--muted2)' }}>· click a cell to cycle</span>
+              </div>
+              {closureWarnings.length > 0 ? (
+                closureWarnings.map((w, i) => (
+                  <div key={i} style={{ fontSize: 12, color: '#ff8a8a', display: 'flex', gap: 6 }}>
+                    <span>⚠</span><span>{w}</span>
+                  </div>
+                ))
+              ) : (
+                <div style={{ fontSize: 12, color: 'var(--green)' }}>✓ Closure commands within Tesla limits</div>
+              )}
+            </div>
+          )}
 
           {/* FSEQ Validation panel — shown after export */}
           {fseqValidation && (
