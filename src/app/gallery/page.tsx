@@ -23,11 +23,10 @@ interface ShowRow {
   share_token: string
   view_count: number | null
   like_count: number | null
-  song_title: string | null
-  song_artist: string | null
+  song_title?: string | null
+  song_artist?: string | null
   created_at: string
   profiles: MaybeArr<{ display_name: string | null; is_admin: boolean | null }>
-  audio_files: MaybeArr<{ original_name: string | null }>
 }
 
 function first<T>(v: MaybeArr<T>): T | null {
@@ -42,10 +41,11 @@ function titleFromFile(name: string): string {
 export default async function GalleryPage() {
   const admin = getAdminClient()
 
-  // Prefer the full select with engagement + song metadata. If a migration
-  // hasn't been run yet, fall back to base columns so the gallery never breaks.
-  const FULL = 'id, name, tesla_model, style, intensity, bpm, share_token, view_count, like_count, song_title, song_artist, created_at, profiles(display_name, is_admin), audio_files(original_name)'
-  const BASE = 'id, name, tesla_model, style, intensity, bpm, share_token, created_at, profiles(display_name)'
+  // is_admin (for the OFFICIAL badge) lives on profiles and always exists, so
+  // it's in both selects. Only song_title/song_artist depend on the newer
+  // migration — if that hasn't run, FULL errors and we fall back to BASE.
+  const FULL = 'id, name, tesla_model, style, intensity, bpm, share_token, view_count, like_count, song_title, song_artist, created_at, profiles(display_name, is_admin)'
+  const BASE = 'id, name, tesla_model, style, intensity, bpm, share_token, created_at, profiles(display_name, is_admin)'
 
   let rows: ShowRow[] = []
   const full = await admin
@@ -60,12 +60,25 @@ export default async function GalleryPage() {
   } else {
     rows = (full.data ?? []) as ShowRow[]
   }
+
+  // Fetch audio filenames separately (a fallback title for shows with no
+  // song_title yet). Kept out of the main query so an embed quirk can't break it.
+  const audioByShow = new Map<string, string>()
+  const ids = rows.map(r => r.id)
+  if (ids.length) {
+    const { data: audios } = await admin
+      .from('audio_files').select('show_id, original_name').in('show_id', ids)
+    for (const a of (audios ?? []) as { show_id: string; original_name: string | null }[]) {
+      if (a.original_name && !audioByShow.has(a.show_id)) audioByShow.set(a.show_id, a.original_name)
+    }
+  }
+
   const shows: GalleryShow[] = rows.map(r => {
     const profile = first(r.profiles)
-    const audio = first(r.audio_files)
     const isOfficial = profile?.is_admin === true
+    const fileName = audioByShow.get(r.id)
     const title = r.song_title?.trim()
-      || (audio?.original_name ? titleFromFile(audio.original_name) : '')
+      || (fileName ? titleFromFile(fileName) : '')
       || r.name
     return {
       id: r.id, name: r.name, tesla_model: r.tesla_model, style: r.style,
