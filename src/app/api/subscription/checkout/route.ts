@@ -1,7 +1,6 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
+import { getAuthedUser } from '@/lib/auth'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-05-27.dahlia' })
 
@@ -30,9 +29,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 })
   }
 
-  const supabase = createRouteHandlerClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const user = await getAuthedUser(req)
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let body: { plan?: 'monthly' | 'yearly' }
   try { body = await req.json() }
@@ -46,13 +44,13 @@ export async function POST(req: Request) {
   const checkoutSession = await stripe.checkout.sessions.create({
     mode: 'subscription',
     line_items: [{ price: priceId, quantity: 1 }],
-    metadata: { user_id: session.user.id },
-    customer_email: session.user.email ?? undefined,
+    metadata: { user_id: user.id },
+    customer_email: user.email ?? undefined,
     success_url: `${origin}/dashboard?subscription_success=1`,
     cancel_url: `${origin}/dashboard?subscription_cancelled=1`,
     allow_promotion_codes: true,
     subscription_data: {
-      metadata: { user_id: session.user.id },
+      metadata: { user_id: user.id },
     },
   })
 

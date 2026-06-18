@@ -28,6 +28,12 @@ const RATE_LIMITS: Record<string, number> = {
   '/api/export':   10,
 }
 
+// Routes that authenticate themselves (signature / token) and must NOT be
+// gated by the cookie-session check in middleware.
+const PUBLIC_API_ROUTES = new Set([
+  '/api/stripe/webhook', // verified via Stripe signature
+])
+
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>()
 
 function edgeRateLimit(key: string, max: number): boolean {
@@ -71,14 +77,33 @@ export async function middleware(req: NextRequest) {
     if (origin && !allowedOrigins.includes(origin)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
-    const supabase = createMiddlewareClient({ req, res })
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    // Self-authenticating routes (e.g. Stripe webhook) skip the session gate.
+    if (PUBLIC_API_ROUTES.has(req.nextUrl.pathname)) {
+      return res
     }
+
+    // Two accepted transports:
+    //   • Bearer token  → mobile app; the route handler validates it.
+    //   • Cookie session → web app; validated here.
+    const authHeader = req.headers.get('authorization')
+    const hasBearer = !!authHeader?.toLowerCase().startsWith('bearer ')
+
+    let rateKey: string
+    if (hasBearer) {
+      rateKey = authHeader!.slice(7).trim()
+    } else {
+      const supabase = createMiddlewareClient({ req, res })
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      rateKey = session.user.id
+    }
+
     const routeLimit = RATE_LIMITS[req.nextUrl.pathname]
     if (routeLimit) {
-      const key = `${session.user.id}:${req.nextUrl.pathname}`
+      const key = `${rateKey}:${req.nextUrl.pathname}`
       if (!edgeRateLimit(key, routeLimit)) {
         return NextResponse.json(
           { error: 'Rate limit exceeded. Try again in an hour.' },

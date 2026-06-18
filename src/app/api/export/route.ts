@@ -1,7 +1,6 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { getAdminClient, getSignedDownloadUrl, type ShowStyle, type TeslaModel } from '@/lib/supabase'
+import { getAuthedUser } from '@/lib/auth'
 import { getChannelCount } from '@/lib/tesla-channels'
 import { sendExportDownload } from '@/lib/email'
 import JSZip from 'jszip'
@@ -54,9 +53,8 @@ function generateFrames(style: ShowStyle, intensity: number, bpm: number, frames
 }
 
 export async function POST(req: Request) {
-  const supabase = createRouteHandlerClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const user = await getAuthedUser(req)
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let body: { show_id: string; deliver_by_email?: boolean }
   try { body = await req.json() }
@@ -72,10 +70,10 @@ export async function POST(req: Request) {
     { data: subscription },
     { data: purchase },
   ] = await Promise.all([
-    admin.from('profiles').select('is_admin').eq('id', session.user.id).single(),
-    admin.from('exports').select('id', { count: 'exact', head: true }).eq('user_id', session.user.id),
-    admin.from('subscriptions').select('status').eq('user_id', session.user.id).in('status', ['active', 'trialing']).maybeSingle(),
-    admin.from('show_purchases').select('id').eq('user_id', session.user.id).eq('show_id', body.show_id).maybeSingle(),
+    admin.from('profiles').select('is_admin').eq('id', user.id).single(),
+    admin.from('exports').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+    admin.from('subscriptions').select('status').eq('user_id', user.id).in('status', ['active', 'trialing']).maybeSingle(),
+    admin.from('show_purchases').select('id').eq('user_id', user.id).eq('show_id', body.show_id).maybeSingle(),
   ])
 
   const isAdmin = profile?.is_admin === true
@@ -89,7 +87,7 @@ export async function POST(req: Request) {
 
   // ── Load show ─────────────────────────────────────────────────────────────
   const { data: show, error: showErr } = await admin
-    .from('shows').select('*').eq('id', body.show_id).eq('user_id', session.user.id).single()
+    .from('shows').select('*').eq('id', body.show_id).eq('user_id', user.id).single()
   if (showErr || !show) return NextResponse.json({ error: 'Show not found' }, { status: 404 })
 
   // ── Load audio ────────────────────────────────────────────────────────────
@@ -127,7 +125,7 @@ export async function POST(req: Request) {
   const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
 
   // ── Upload ZIP ────────────────────────────────────────────────────────────
-  const zipPath = `${session.user.id}/${body.show_id}/${Date.now()}.zip`
+  const zipPath = `${user.id}/${body.show_id}/${Date.now()}.zip`
   const { error: zipUploadErr } = await admin.storage
     .from('fseq-exports').upload(zipPath, zipBuffer, { contentType: 'application/zip' })
   if (zipUploadErr) return NextResponse.json({ error: zipUploadErr.message }, { status: 500 })
@@ -135,7 +133,7 @@ export async function POST(req: Request) {
   // ── Record export ─────────────────────────────────────────────────────────
   const { data: exportRecord } = await admin
     .from('exports').insert({
-      user_id: session.user.id, show_id: body.show_id,
+      user_id: user.id, show_id: body.show_id,
       audio_file_id: audioRecord?.id ?? null,
       zip_path: zipPath, file_size_bytes: zipBuffer.byteLength,
     }).select().single()
@@ -145,9 +143,9 @@ export async function POST(req: Request) {
   const expirySec = deliverByEmail ? EMAIL_EXPIRY_SEC : DIRECT_EXPIRY_SEC
   const signedUrl = await getSignedDownloadUrl('fseq-exports', zipPath, expirySec)
 
-  if (deliverByEmail && session.user.email) {
+  if (deliverByEmail && user.email) {
     await sendExportDownload({
-      to: session.user.email,
+      to: user.email,
       showName: show.name,
       model: MODEL_LABELS[show.tesla_model] ?? 'Tesla',
       downloadUrl: signedUrl,

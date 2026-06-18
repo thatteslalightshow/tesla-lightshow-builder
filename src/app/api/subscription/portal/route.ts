@@ -1,8 +1,7 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { getAdminClient } from '@/lib/supabase'
+import { getAuthedUser } from '@/lib/auth'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-05-27.dahlia' })
 
@@ -11,15 +10,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 })
   }
 
-  const supabase = createRouteHandlerClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const user = await getAuthedUser(req)
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const admin = getAdminClient()
   const { data: sub } = await admin
     .from('subscriptions')
     .select('stripe_customer_id')
-    .eq('user_id', session.user.id)
+    .eq('user_id', user.id)
     .maybeSingle()
 
   if (!sub?.stripe_customer_id) {
