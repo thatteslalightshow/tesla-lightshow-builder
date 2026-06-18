@@ -26,14 +26,26 @@ interface ShowRow {
 
 export default async function GalleryPage() {
   const admin = getAdminClient()
-  const { data, error } = await admin
-    .from('shows')
-    .select('id, name, tesla_model, style, intensity, bpm, share_token, view_count, like_count, created_at, profiles(display_name)')
-    .eq('is_public', true)
-    .order('created_at', { ascending: false })
-    .limit(200)
 
-  const rows: ShowRow[] = (error ? [] : data ?? []) as ShowRow[]
+  // Prefer the full select with engagement counts. If the engagement
+  // migration hasn't been run yet, those columns won't exist — fall back
+  // to the base columns so the gallery never breaks.
+  const FULL = 'id, name, tesla_model, style, intensity, bpm, share_token, view_count, like_count, created_at, profiles(display_name)'
+  const BASE = 'id, name, tesla_model, style, intensity, bpm, share_token, created_at, profiles(display_name)'
+
+  let rows: ShowRow[] = []
+  const full = await admin
+    .from('shows').select(FULL)
+    .eq('is_public', true).order('created_at', { ascending: false }).limit(200)
+
+  if (full.error) {
+    const base = await admin
+      .from('shows').select(BASE)
+      .eq('is_public', true).order('created_at', { ascending: false }).limit(200)
+    rows = (base.error ? [] : base.data ?? []) as ShowRow[]
+  } else {
+    rows = (full.data ?? []) as ShowRow[]
+  }
   const shows: GalleryShow[] = rows.map(r => {
     const profileEntry = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles
     return {
