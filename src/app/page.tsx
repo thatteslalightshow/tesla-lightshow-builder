@@ -334,6 +334,39 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ── APPS IN DEVELOPMENT ──────────────────────────────────────────── */}
+      <section style={{ position:'relative', zIndex:1, borderTop:'1px solid rgba(255,255,255,0.06)', padding:'5rem 2rem', textAlign:'center' }}>
+        <div style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'5px 14px', borderRadius:20, border:'1px solid rgba(255,255,255,0.12)', fontSize:11, fontWeight:600, letterSpacing:'.12em', color:'rgba(255,255,255,0.45)', textTransform:'uppercase', marginBottom:'1.5rem' }}>
+          <span style={{ width:6, height:6, borderRadius:'50%', background:'#ff8c00', display:'inline-block', boxShadow:'0 0 6px #ff8c00' }} />
+          In development
+        </div>
+        <h2 style={{ fontFamily:'var(--font-display)', fontSize:'clamp(1.8rem,5vw,3rem)', fontWeight:700, letterSpacing:'-1.5px', marginBottom:'1rem' }}>
+          Coming to your pocket
+        </h2>
+        <p style={{ fontSize:15, color:'rgba(255,255,255,0.4)', maxWidth:480, margin:'0 auto 2.5rem', lineHeight:1.7 }}>
+          Native iOS and Android apps are on the way — build shows, preview in 3D, and get your export emailed straight to you.
+          For now, everything works right here in your browser, on any device.
+        </p>
+        <div style={{ display:'flex', gap:14, justifyContent:'center', flexWrap:'wrap' }}>
+          {/* App Store — coming soon */}
+          <div style={{ display:'inline-flex', alignItems:'center', gap:10, padding:'10px 20px', borderRadius:12, background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.1)', opacity:.8 }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="rgba(255,255,255,0.75)" aria-hidden="true"><path d="M17.05 12.04c-.03-2.9 2.37-4.3 2.48-4.36-1.35-1.98-3.46-2.25-4.2-2.28-1.79-.18-3.5 1.05-4.4 1.05-.91 0-2.31-1.03-3.8-1-1.95.03-3.76 1.13-4.76 2.88-2.03 3.52-.52 8.74 1.45 11.6.96 1.4 2.1 2.97 3.6 2.91 1.44-.06 1.99-.93 3.74-.93 1.73 0 2.23.93 3.76.9 1.55-.03 2.53-1.42 3.48-2.83 1.1-1.62 1.55-3.19 1.57-3.27-.03-.02-3.01-1.16-3.04-4.59zM14.2 4.66c.8-.96 1.33-2.3 1.18-3.63-1.15.05-2.53.77-3.35 1.73-.74.85-1.38 2.21-1.21 3.51 1.28.1 2.59-.65 3.38-1.61z"/></svg>
+            <div style={{ textAlign:'left' }}>
+              <div style={{ fontSize:9, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:'.08em' }}>Coming soon to</div>
+              <div style={{ fontSize:15, fontWeight:600, color:'rgba(255,255,255,0.8)' }}>App Store</div>
+            </div>
+          </div>
+          {/* Google Play — coming soon */}
+          <div style={{ display:'inline-flex', alignItems:'center', gap:10, padding:'10px 20px', borderRadius:12, background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.1)', opacity:.8 }}>
+            <svg width="20" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.6 1.8c-.3.32-.48.82-.48 1.47v17.46c0 .65.18 1.15.48 1.47l.06.06L13.4 12.1v-.2L3.66 1.74l-.06.06z" fill="#4ac0ff"/><path d="M16.7 15.4l-3.3-3.3v-.2l3.3-3.3.08.04 3.9 2.22c1.12.63 1.12 1.67 0 2.31l-3.9 2.22-.08.01z" fill="#ffc94a"/><path d="M16.78 15.36L13.4 12 3.6 21.66c.37.39.98.44 1.67.05l11.51-6.35z" fill="#f4423e"/><path d="M16.78 8.64L5.27 2.29c-.69-.39-1.3-.34-1.67.05L13.4 12l3.38-3.36z" fill="#00d885"/></svg>
+            <div style={{ textAlign:'left' }}>
+              <div style={{ fontSize:9, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:'.08em' }}>Coming soon to</div>
+              <div style={{ fontSize:15, fontWeight:600, color:'rgba(255,255,255,0.8)' }}>Google Play</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── CREATOR STRIP ────────────────────────────────────────────────── */}
       <section style={{ position:'relative', zIndex:1, borderTop:'1px solid rgba(255,255,255,0.06)', padding:'4rem 2.5rem', display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center', gap:'1.25rem' }}>
         <div style={{ fontSize:11, fontWeight:600, letterSpacing:'.15em', color:'rgba(255,255,255,0.2)', textTransform:'uppercase' }}>Created by</div>
