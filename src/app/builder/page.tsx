@@ -135,27 +135,67 @@ function Timeline({
 }: TimelineProps) {
   const def = MODELS[model];
   const zones = def.zones;
-  const LABEL_W = 112;
-  const ROW_H = 22;
-  const HEADER_H = 24;
+
+  // ── Mobile-aware sizing ────────────────────────────────────────────────────
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  const LABEL_W  = isMobile ? 72  : 112;
+  const ROW_H    = isMobile ? 40  : 22;
+  const HEADER_H = isMobile ? 28  : 24;
+  const CELL_W   = isMobile ? 38  : null; // null → flex:1 on desktop
   const BEATS = VISIBLE_BEATS;
   const FPS = 20;
   const fpb = (60 / bpm) * FPS;
 
+  // ── Drag-to-paint ──────────────────────────────────────────────────────────
+  const dragging = useRef<{ erasing: boolean; lastBeat: number } | null>(null);
+
+  function getBeatAtClientX(rowEl: HTMLDivElement, clientX: number) {
+    const rect = rowEl.getBoundingClientRect();
+    const totalW = CELL_W ? BEATS * CELL_W : rect.width;
+    const frac = (clientX - rect.left) / totalW;
+    return Math.max(0, Math.min(BEATS - 1, Math.floor(frac * BEATS)));
+  }
+
+  function handleRowPointerDown(ch: number, e: React.PointerEvent<HTMLDivElement>) {
+    if (!editMode || !onToggleBeat) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const beat = getBeatAtClientX(e.currentTarget, e.clientX);
+    const isActive = !!(customBlocks?.[ch]?.has(beat));
+    dragging.current = { erasing: isActive, lastBeat: beat };
+    onToggleBeat(ch, beat);
+    e.preventDefault();
+  }
+
+  function handleRowPointerMove(ch: number, e: React.PointerEvent<HTMLDivElement>) {
+    if (!dragging.current || !editMode || !onToggleBeat) return;
+    const beat = getBeatAtClientX(e.currentTarget, e.clientX);
+    if (beat === dragging.current.lastBeat) return;
+    dragging.current.lastBeat = beat;
+    const isActive = !!(customBlocks?.[ch]?.has(beat));
+    if (dragging.current.erasing && isActive) onToggleBeat(ch, beat);
+    else if (!dragging.current.erasing && !isActive) onToggleBeat(ch, beat);
+  }
+
+  function handleRowPointerUp() { dragging.current = null; }
+
   // ── Waveform SVG path ──────────────────────────────────────────────────────
-  // Build a mirrored amplitude envelope SVG covering the visible beat window.
-  const WF_FPS = 100; // waveformData is at 100fps (10ms windows)
+  const WF_FPS = 100;
   const VW = 1000, VH = 56, MID = VH / 2;
   const wfPath = (() => {
     if (!waveformData || waveformData.length === 0) return null;
     const visibleSecs = BEATS / bpm * 60;
     const visibleN = Math.min(Math.ceil(visibleSecs * WF_FPS), waveformData.length);
     const step = VW / Math.max(visibleN - 1, 1);
-    // Top edge (left → right)
     const top = Array.from({ length: visibleN }, (_, i) =>
       `${(i * step).toFixed(1)},${(MID - waveformData[i] * MID * 0.88).toFixed(1)}`
     );
-    // Bottom edge (right → left, mirrored)
     const bot = Array.from({ length: visibleN }, (_, i) => {
       const j = visibleN - 1 - i;
       return `${(j * step).toFixed(1)},${(MID + waveformData[j] * MID * 0.88).toFixed(1)}`;
@@ -163,16 +203,13 @@ function Timeline({
     return `M 0,${MID} L ${top.join(' L ')} L ${VW},${MID} L ${bot.join(' L ')} Z`;
   })();
 
-  // Beat trigger positions as fractions of the visible window
   const triggerFracs = (() => {
     if (!audioTriggers || !waveformData) return [];
     const visibleFrames = BEATS * fpb;
-    return [...audioTriggers]
-      .filter(f => f < visibleFrames)
-      .map(f => f / visibleFrames);
+    return [...audioTriggers].filter(f => f < visibleFrames).map(f => f / visibleFrames);
   })();
 
-  // Frames to render in preview mode
+  // ── Display frames ─────────────────────────────────────────────────────────
   const hasCustom = customBlocks && Object.keys(customBlocks).length > 0;
   const displayFrames: Uint8Array[] = (() => {
     if (hasCustom) return customBlocksToFrames(customBlocks!, BEATS, bpm, def.channelCount);
@@ -180,169 +217,179 @@ function Timeline({
     return generateFrames(style, intensity, bpm, BEATS, def);
   })();
 
+  // Shared content width for scrollable column on mobile
+  const contentW = CELL_W ? BEATS * CELL_W : undefined;
+
   return (
     <div style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 11 }}>
+      {/*
+        Split layout: fixed label column (never scrolls) +
+        scrollable content column (scrolls horizontally on mobile).
+        Labels always visible; beat cells overflow horizontally on narrow screens.
+      */}
+      <div style={{ display: 'flex', alignItems: 'stretch' }}>
 
-      {/* ── Waveform row ──────────────────────────────────────────────────── */}
-      {wfPath && (
-        <div style={{ display: 'flex', height: VH, marginBottom: 8, alignItems: 'stretch' }}>
-          {/* Label */}
-          <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', paddingRight: 8 }}>
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.06em', color: 'rgba(255,255,255,0.28)', textTransform: 'uppercase' }}>Waveform</span>
-          </div>
-          {/* SVG waveform */}
-          <div style={{ flex: 1, position: 'relative', borderRadius: 4, overflow: 'hidden', background: 'rgba(0,0,0,0.25)' }}>
-            <svg
-              viewBox={`0 0 ${VW} ${VH}`}
-              preserveAspectRatio="none"
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
-            >
-              <defs>
-                <linearGradient id="wfGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="rgba(0,200,110,0.18)" />
-                  <stop offset="50%" stopColor="rgba(0,232,135,0.55)" />
-                  <stop offset="100%" stopColor="rgba(0,200,110,0.18)" />
-                </linearGradient>
-              </defs>
-              {/* Waveform fill */}
-              <path d={wfPath} fill="url(#wfGrad)" />
-              {/* Centre line */}
-              <line x1="0" y1={MID} x2={VW} y2={MID} stroke="rgba(0,232,135,0.18)" strokeWidth="0.5" />
-              {/* Measure grid lines */}
-              {Array.from({ length: BEATS + 1 }, (_, b) => (
-                <line key={b}
-                  x1={(b / BEATS * VW).toFixed(1)} y1="0"
-                  x2={(b / BEATS * VW).toFixed(1)} y2={VH}
-                  stroke={b % 4 === 0 ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)'}
-                  strokeWidth="0.8"
-                />
-              ))}
-              {/* Beat trigger spikes (orange) */}
-              {triggerFracs.map((frac, i) => (
-                <line key={i}
-                  x1={(frac * VW).toFixed(1)} y1="0"
-                  x2={(frac * VW).toFixed(1)} y2={VH}
-                  stroke="rgba(255,140,0,0.55)" strokeWidth="1.2"
-                />
-              ))}
-              {/* Playhead */}
-              {playheadFraction !== null && (
-                <line
-                  x1={(playheadFraction * VW).toFixed(1)} y1="0"
-                  x2={(playheadFraction * VW).toFixed(1)} y2={VH}
-                  stroke="rgba(255,255,255,0.9)" strokeWidth="1.5"
-                />
-              )}
-            </svg>
-            {/* Beat number labels inside waveform for edit mode */}
-            {editMode && Array.from({ length: BEATS / 4 }, (_, m) => (
-              <div key={m} style={{
-                position: 'absolute', left: ((m * 4) / BEATS * 100) + '%',
-                top: 3, paddingLeft: 4, fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none',
-              }}>
-                bar {m + 1}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Beat ruler */}
-      <div style={{ display: 'flex', height: HEADER_H, alignItems: 'flex-end', marginBottom: 4 }}>
-        <div style={{ width: LABEL_W, flexShrink: 0 }} />
-        {editMode ? (
-          // Edit mode: evenly-spaced beat numbers
-          <div style={{ flex: 1, display: 'flex' }}>
-            {Array.from({ length: BEATS }, (_, b) => (
-              <div key={b} style={{ flex: 1, textAlign: 'center', fontSize: 8, color: b % 4 === 0 ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.18)', paddingBottom: 3, borderBottom: `1px solid ${b % 4 === 0 ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.05)'}` }}>
-                {b + 1}
-              </div>
-            ))}
-          </div>
-        ) : (
-          // Preview mode: time ruler
-          <div style={{ flex: 1, position: 'relative', height: HEADER_H }}>
-            {Array.from({ length: BEATS + 1 }, (_, b) => {
-              const isMeasure = b % 4 === 0;
-              const isAudioBeat = audioTriggers?.has(Math.floor(b * fpb));
-              return (
-                <div key={b} style={{
-                  position: 'absolute',
-                  left: (b / BEATS * 100) + '%',
-                  top: 0, bottom: 0,
-                  borderLeft: `1px solid ${isAudioBeat ? 'rgba(255,140,0,0.45)' : isMeasure ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.06)'}`,
-                  paddingLeft: 3,
-                  display: 'flex', alignItems: 'flex-end', paddingBottom: 3,
-                }}>
-                  {isMeasure && (
-                    <span style={{ color: 'rgba(255,255,255,0.38)', fontSize: 9, whiteSpace: 'nowrap' }}>
-                      {(b / bpm * 60).toFixed(1)}s
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Zone rows */}
-      {zones.map(zone => {
-        const [r, g, b] = hexToRgb(zone.color);
-        const colorStr = `rgb(${r},${g},${b})`;
-        const activeBeats = customBlocks?.[zone.channel] ?? new Set<number>();
-
-        if (editMode) {
-          return (
-            <div key={zone.channel} style={{ display: 'flex', height: ROW_H, marginBottom: 2, alignItems: 'stretch' }}>
-              <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5, paddingRight: 8, overflow: 'hidden' }}>
+        {/* ── Fixed label column ─────────────────────────────────────────── */}
+        <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+          {wfPath && <div style={{ height: VH + 8, display: 'flex', alignItems: 'center', paddingRight: 8 }}>
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.06em', color: 'rgba(255,255,255,0.28)', textTransform: 'uppercase' }}>
+              {isMobile ? 'Wave' : 'Waveform'}
+            </span>
+          </div>}
+          <div style={{ height: HEADER_H + 4, flexShrink: 0 }} />
+          {zones.map(zone => {
+            const [r, g, b] = hexToRgb(zone.color);
+            const colorStr = `rgb(${r},${g},${b})`;
+            const shortLabel = zone.label
+              .replace('Front Left ', 'FL ')
+              .replace('Front Right ', 'FR ')
+              .replace('Rear Left ', 'RL ')
+              .replace('Rear Right ', 'RR ')
+              .replace('Interior ', 'Int ')
+              .replace('License ', 'Lic ');
+            return (
+              <div key={zone.channel} style={{ height: ROW_H, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 5, paddingRight: 8, overflow: 'hidden' }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: colorStr, flexShrink: 0, boxShadow: `0 0 4px ${colorStr}` }} />
-                <span style={{ color: 'rgba(255,255,255,0.45)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 10 }}>
-                  {zone.label}
+                <span style={{ color: 'rgba(255,255,255,0.45)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: isMobile ? 9 : 10 }}>
+                  {isMobile ? shortLabel : zone.label}
                 </span>
               </div>
-              <div style={{ flex: 1, display: 'flex', gap: 1 }}>
-                {Array.from({ length: BEATS }, (_, beatIdx) => {
-                  const isActive = activeBeats.has(beatIdx);
-                  const isMeasure = beatIdx % 4 === 0;
+            );
+          })}
+        </div>
+
+        {/* ── Scrollable content column ──────────────────────────────────── */}
+        <div style={{ flex: 1, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+
+          {/* Waveform SVG */}
+          {wfPath && (
+            <div style={{ height: VH, marginBottom: 8, position: 'relative', borderRadius: 4, overflow: 'hidden', background: 'rgba(0,0,0,0.25)', minWidth: contentW }}>
+              <svg viewBox={`0 0 ${VW} ${VH}`} preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+                <defs>
+                  <linearGradient id="wfGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="rgba(0,200,110,0.18)" />
+                    <stop offset="50%" stopColor="rgba(0,232,135,0.55)" />
+                    <stop offset="100%" stopColor="rgba(0,200,110,0.18)" />
+                  </linearGradient>
+                </defs>
+                <path d={wfPath} fill="url(#wfGrad)" />
+                <line x1="0" y1={MID} x2={VW} y2={MID} stroke="rgba(0,232,135,0.18)" strokeWidth="0.5" />
+                {Array.from({ length: BEATS + 1 }, (_, b) => (
+                  <line key={b} x1={(b / BEATS * VW).toFixed(1)} y1="0" x2={(b / BEATS * VW).toFixed(1)} y2={VH}
+                    stroke={b % 4 === 0 ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)'} strokeWidth="0.8" />
+                ))}
+                {triggerFracs.map((frac, i) => (
+                  <line key={i} x1={(frac * VW).toFixed(1)} y1="0" x2={(frac * VW).toFixed(1)} y2={VH}
+                    stroke="rgba(255,140,0,0.55)" strokeWidth="1.2" />
+                ))}
+                {playheadFraction !== null && (
+                  <line x1={(playheadFraction * VW).toFixed(1)} y1="0" x2={(playheadFraction * VW).toFixed(1)} y2={VH}
+                    stroke="rgba(255,255,255,0.9)" strokeWidth="1.5" />
+                )}
+              </svg>
+              {editMode && Array.from({ length: BEATS / 4 }, (_, m) => (
+                <div key={m} style={{ position: 'absolute', left: ((m * 4) / BEATS * 100) + '%', top: 3, paddingLeft: 4, fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>
+                  bar {m + 1}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Beat ruler */}
+          <div style={{ marginBottom: 4 }}>
+            {editMode ? (
+              <div style={{ display: 'flex', width: contentW, height: HEADER_H, alignItems: 'flex-end' }}>
+                {Array.from({ length: BEATS }, (_, b) => (
+                  <div key={b} style={{
+                    width: CELL_W ?? undefined, flex: CELL_W ? 'none' : 1,
+                    textAlign: 'center', fontSize: 8,
+                    color: b % 4 === 0 ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.18)',
+                    paddingBottom: 3,
+                    borderBottom: `1px solid ${b % 4 === 0 ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.05)'}`,
+                  }}>
+                    {b + 1}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ position: 'relative', width: contentW, height: HEADER_H }}>
+                {Array.from({ length: BEATS + 1 }, (_, b) => {
+                  const isMeasure = b % 4 === 0;
+                  const isAudioBeat = audioTriggers?.has(Math.floor(b * fpb));
                   return (
-                    <div
-                      key={beatIdx}
-                      onClick={() => onToggleBeat?.(zone.channel, beatIdx)}
-                      title={`${zone.label} · beat ${beatIdx + 1}`}
-                      style={{
-                        flex: 1, height: '100%', cursor: 'pointer', borderRadius: 2,
-                        background: isActive ? `rgba(${r},${g},${b},0.88)` : isMeasure ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.03)',
-                        borderLeft: isMeasure && beatIdx > 0 ? '1px solid rgba(255,255,255,0.10)' : 'none',
-                        boxShadow: isActive ? `0 0 6px rgba(${r},${g},${b},0.5)` : 'none',
-                        transition: 'background .08s',
-                      }}
-                    />
+                    <div key={b} style={{
+                      position: 'absolute', left: (b / BEATS * 100) + '%',
+                      top: 0, bottom: 0,
+                      borderLeft: `1px solid ${isAudioBeat ? 'rgba(255,140,0,0.45)' : isMeasure ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.06)'}`,
+                      paddingLeft: 3, display: 'flex', alignItems: 'flex-end', paddingBottom: 3,
+                    }}>
+                      {isMeasure && <span style={{ color: 'rgba(255,255,255,0.38)', fontSize: 9, whiteSpace: 'nowrap' }}>{(b / bpm * 60).toFixed(1)}s</span>}
+                    </div>
                   );
                 })}
               </div>
-            </div>
-          );
-        }
+            )}
+          </div>
 
-        // Preview mode
-        return (
-          <div key={zone.channel} style={{ display: 'flex', height: ROW_H, marginBottom: 2, alignItems: 'stretch' }}>
-            <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5, paddingRight: 8, overflow: 'hidden' }}>
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: colorStr, flexShrink: 0, boxShadow: `0 0 4px ${colorStr}` }} />
-              <span style={{ color: 'rgba(255,255,255,0.48)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 10 }}>
-                {zone.label}
-              </span>
-            </div>
-            <div style={{ flex: 1, position: 'relative', background: 'rgba(255,255,255,0.025)', borderRadius: 3, overflow: 'hidden' }}>
-              {displayFrames.map((frame, fi) => {
-                const val = frame[zone.channel] / 255;
-                if (val < 0.02) return null;
-                return (
-                  <div key={fi} style={{
-                    position: 'absolute',
-                    left: (fi / displayFrames.length * 100) + '%',
-                    width: (100 / displayFrames.length) + '%',
+          {/* Zone rows */}
+          {zones.map(zone => {
+            const [r, g, b] = hexToRgb(zone.color);
+            const activeBeats = customBlocks?.[zone.channel] ?? new Set<number>();
+
+            if (editMode) {
+              return (
+                <div
+                  key={zone.channel}
+                  style={{
+                    height: ROW_H, marginBottom: 2,
+                    display: 'flex', gap: 1,
+                    width: contentW, cursor: 'crosshair',
+                    userSelect: 'none',
+                    // touchAction:none lets us handle pointer events without browser scroll interference
+                    touchAction: 'none',
+                  }}
+                  onPointerDown={e => handleRowPointerDown(zone.channel, e)}
+                  onPointerMove={e => handleRowPointerMove(zone.channel, e)}
+                  onPointerUp={handleRowPointerUp}
+                  onPointerCancel={handleRowPointerUp}
+                >
+                  {Array.from({ length: BEATS }, (_, beatIdx) => {
+                    const isActive = activeBeats.has(beatIdx);
+                    const isMeasure = beatIdx % 4 === 0;
+                    return (
+                      <div
+                        key={beatIdx}
+                        style={{
+                          width: CELL_W ?? undefined, flex: CELL_W ? 'none' : 1,
+                          height: '100%',
+                          borderRadius: isMobile ? 5 : 2,
+                          background: isActive ? `rgba(${r},${g},${b},0.88)` : isMeasure ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.03)',
+                          borderLeft: isMeasure && beatIdx > 0 ? '1px solid rgba(255,255,255,0.10)' : 'none',
+                          boxShadow: isActive ? `0 0 6px rgba(${r},${g},${b},0.5)` : 'none',
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              );
+            }
+
+            // Preview mode
+            return (
+              <div key={zone.channel} style={{
+                height: ROW_H, marginBottom: 2,
+                position: 'relative',
+                background: 'rgba(255,255,255,0.025)', borderRadius: 3, overflow: 'hidden',
+                width: contentW,
+              }}>
+                {displayFrames.map((frame, fi) => {
+                  const val = frame[zone.channel] / 255;
+                  if (val < 0.02) return null;
+                  return (
+                    <div key={fi} style={{
+                      position: 'absolute',
+                      left: (fi / displayFrames.length * 100) + '%',
+                      width: (100 / displayFrames.length) + '%',
                     top: 0, bottom: 0,
                     background: `rgba(${r},${g},${b},${val * 0.85})`,
                   }} />
@@ -368,13 +415,16 @@ function Timeline({
                 }} />
               )}
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
 
-      <div style={{ display: 'flex', gap: 16, marginTop: 10, paddingLeft: LABEL_W, fontSize: 9, color: 'rgba(255,255,255,0.24)' }}>
+        </div>{/* end scrollable column */}
+      </div>{/* end split layout */}
+
+      {/* Footer hint */}
+      <div style={{ display: 'flex', gap: 16, marginTop: 10, paddingLeft: LABEL_W, fontSize: 9, color: 'rgba(255,255,255,0.24)', flexWrap: 'wrap' }}>
         {editMode
-          ? <span>Click beats to toggle · {BEATS} beats ({(BEATS / bpm * 60).toFixed(1)}s loop)</span>
+          ? <span>{isMobile ? 'Tap or drag to paint beats · swipe ruler to scroll' : 'Click or drag to paint · hold to erase'} · {BEATS} beats ({(BEATS / bpm * 60).toFixed(1)}s)</span>
           : <><span>|— 4 beats ——|</span><span>{bpm} BPM · {BEATS} beats</span></>
         }
         {audioFrames && !editMode && <span style={{ color: 'rgba(255,140,0,0.7)' }}>♪ audio-synced</span>}
