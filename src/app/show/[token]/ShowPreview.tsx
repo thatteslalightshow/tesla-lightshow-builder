@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import type { Show } from '@/lib/supabase';
 import TeslaScene from '@/components/TeslaScene';
+import SocialLinks from '@/components/SocialLinks';
 
 const MODEL_LABELS: Record<string, string> = {
   model3: 'Model 3', modelY: 'Model Y', modelS: 'Model S',
@@ -124,6 +125,7 @@ export default function ShowPreview({ show, audioUrl, audioName }: Props) {
             Build your own →
           </Link>
         </div>
+
       </nav>
 
       {/* Main */}
@@ -242,31 +244,56 @@ export default function ShowPreview({ show, audioUrl, audioName }: Props) {
           </div>
         )}
 
+        {/* Share strip */}
+        <div style={{ marginTop: '2rem', padding: '1.5rem 1.75rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '.08em', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', marginBottom: 12 }}>Share this show</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button onClick={copyLink} style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.65)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+              {copied ? '✓ Copied!' : 'Copy link'}
+            </button>
+            <a
+              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Check out this Tesla light show! 🚗⚡ Built with @ThatTeslaLightShow`)}&url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`}
+              target="_blank" rel="noopener noreferrer"
+              style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.65)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              Post on X
+            </a>
+            <a
+              href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`}
+              target="_blank" rel="noopener noreferrer"
+              style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.65)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>
+              Share on Facebook
+            </a>
+          </div>
+        </div>
+
         {/* CTA strip */}
-        <div style={{ marginTop: '2.5rem', padding: '1.75rem 2rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+        <div style={{ marginTop: '1rem', padding: '1.75rem 2rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Build your own light show</div>
             <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>
               Upload any song · sync 48 channels · export to USB · first show free
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            <button onClick={copyLink} style={{ padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', cursor: 'pointer' }}>
-              {copied ? '✓ Copied!' : '↑ Share this show'}
-            </button>
-            <Link href="/auth?mode=signup" style={{ padding: '9px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: '#e8404a', color: '#fff', letterSpacing: '-.1px', boxShadow: '0 0 30px rgba(232,64,74,0.25)' }}>
-              Start building →
-            </Link>
-          </div>
+          <Link href="/auth?mode=signup" style={{ padding: '10px 22px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: '#e8404a', color: '#fff', letterSpacing: '-.1px', boxShadow: '0 0 30px rgba(232,64,74,0.25)', flexShrink: 0 }}>
+            Start building →
+          </Link>
         </div>
 
       </div>
 
       {/* Footer */}
-      <footer style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '1.25rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)' }}>Made with LightShow Builder</span>
-        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.15)', fontWeight: 600, letterSpacing: '.04em' }}>@thatteslalightshow</span>
-        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.15)' }}>Not affiliated with Tesla, Inc.</span>
+      <footer style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '1.25rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)' }}>Made with LightShow Builder</span>
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.15)', fontWeight: 600, letterSpacing: '.04em' }}>· @ThatTeslaLightShow</span>
+        </div>
+        <SocialLinks gap={4} size={26} />
+        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.12)' }}>Not affiliated with Tesla, Inc.</span>
       </footer>
     </div>
   );

@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import SocialLinks from '@/components/SocialLinks';
 
 // ─── Ambient particle field ───────────────────────────────────────────────────
 function Particles() {
@@ -333,15 +334,31 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ── CREATOR STRIP ────────────────────────────────────────────────── */}
+      <section style={{ position:'relative', zIndex:1, borderTop:'1px solid rgba(255,255,255,0.06)', padding:'4rem 2.5rem', display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center', gap:'1.25rem' }}>
+        <div style={{ fontSize:11, fontWeight:600, letterSpacing:'.15em', color:'rgba(255,255,255,0.2)', textTransform:'uppercase' }}>Created by</div>
+        <div style={{ fontFamily:'var(--font-display)', fontSize:'clamp(1.4rem,4vw,2rem)', fontWeight:700, letterSpacing:'-1px', lineHeight:1 }}>
+          @ThatTeslaLightShow
+        </div>
+        <div style={{ fontSize:14, color:'rgba(255,255,255,0.35)', maxWidth:460, lineHeight:1.7 }}>
+          Building the best Tesla light show tools for the community.
+          Follow along for tutorials, featured shows, and inspiration.
+        </div>
+        <SocialLinks gap={8} size={38} style={{ marginTop:4 }} />
+      </section>
+
       {/* ── FOOTER ───────────────────────────────────────────────────────── */}
-      <footer style={{ position:'relative', zIndex:1, borderTop:'1px solid rgba(255,255,255,0.06)', padding:'2rem 2.5rem', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:12 }}>
+      <footer style={{ position:'relative', zIndex:1, borderTop:'1px solid rgba(255,255,255,0.06)', padding:'1.5rem 2.5rem', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:12 }}>
         <div style={{ fontFamily:'var(--font-display)', fontWeight:600, fontSize:13, color:'rgba(255,255,255,0.4)' }}>LightShow Builder</div>
         <div style={{ display:'flex', gap:24, fontSize:13, color:'rgba(255,255,255,0.25)' }}>
           <Link href="/gallery" onMouseEnter={e=>(e.currentTarget.style.color='rgba(255,255,255,0.6)')} onMouseLeave={e=>(e.currentTarget.style.color='rgba(255,255,255,0.25)')}>Gallery</Link>
           <Link href="/pricing" onMouseEnter={e=>(e.currentTarget.style.color='rgba(255,255,255,0.6)')} onMouseLeave={e=>(e.currentTarget.style.color='rgba(255,255,255,0.25)')}>Pricing</Link>
           <Link href="/auth" onMouseEnter={e=>(e.currentTarget.style.color='rgba(255,255,255,0.6)')} onMouseLeave={e=>(e.currentTarget.style.color='rgba(255,255,255,0.25)')}>Sign in</Link>
         </div>
-        <div style={{ fontSize:12, color:'rgba(255,255,255,0.15)' }}>Not affiliated with Tesla, Inc.</div>
+        <div style={{ display:'flex', alignItems:'center', gap:16 }}>
+          <SocialLinks gap={4} size={28} />
+          <div style={{ fontSize:12, color:'rgba(255,255,255,0.15)' }}>Not affiliated with Tesla, Inc.</div>
+        </div>
       </footer>
 
       <style>{`

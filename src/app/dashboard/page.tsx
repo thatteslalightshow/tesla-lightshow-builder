@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase, type Show } from '@/lib/supabase';
+import SocialLinks from '@/components/SocialLinks';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -175,6 +176,10 @@ export default function DashboardPage() {
           </div>
         )}
       </main>
+      <footer style={{ borderTop: '1px solid var(--border)', padding: '1.25rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+        <span style={{ fontSize: 12, color: 'var(--muted2)' }}>LightShow Builder · @ThatTeslaLightShow</span>
+        <SocialLinks gap={4} size={26} />
+      </footer>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import SocialLinks from '@/components/SocialLinks'
 
 export const metadata: Metadata = {
   title: 'Pricing — Tesla LightShow Builder',
@@ -165,8 +166,9 @@ export default function PricingPage() {
         </div>
       </main>
 
-      <footer style={{ borderTop: '1px solid var(--border)', padding: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+      <footer style={{ borderTop: '1px solid var(--border)', padding: '1.5rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <Link href="/" style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 13 }}>← LightShow Builder</Link>
+        <SocialLinks gap={4} size={28} />
         <p style={{ fontSize: 12, color: 'var(--muted2)', margin: 0 }}>Not affiliated with Tesla, Inc.</p>
       </footer>
     </div>

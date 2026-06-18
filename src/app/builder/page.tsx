@@ -436,6 +436,7 @@ function BuilderInner() {
   const [exportCount, setExportCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
   const [checkoutMsg, setCheckoutMsg] = useState(checkoutCancelled ? 'Payment cancelled — your show is still saved.' : '');
+  const [showSharePrompt, setShowSharePrompt] = useState(false);
 
   // ── Manual edit state ─────────────────────────────────────────────────────
   const [editMode, setEditMode] = useState(false);
@@ -752,6 +753,7 @@ function BuilderInner() {
     a.download = `${name.replace(/\s+/g, '_')}_lightshow.zip`; a.click();
     URL.revokeObjectURL(url);
     setExporting(false);
+    setShowSharePrompt(true);
   }
 
   // ── Cleanup on unmount ────────────────────────────────────────────────────
@@ -1097,6 +1099,26 @@ function BuilderInner() {
           </div>
         </main>
       </div>
+
+      {/* Post-export share prompt */}
+      {showSharePrompt && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 100, background: 'rgba(10,10,15,0.96)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 14, padding: '1.25rem 1.5rem', maxWidth: 440, width: 'calc(100vw - 3rem)', backdropFilter: 'blur(16px)', boxShadow: '0 8px 40px rgba(0,0,0,0.6)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14, marginBottom: 3 }}>Show downloaded!</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
+                When you post the video, tag <strong style={{ color: 'rgba(255,255,255,0.7)' }}>@ThatTeslaLightShow</strong> on TikTok or Instagram — we love to feature community shows!
+              </div>
+            </div>
+            <button onClick={() => setShowSharePrompt(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 18, lineHeight: 1, flexShrink: 0, paddingTop: 1 }}>×</button>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <a href="https://tiktok.com/@ThatTeslaLightshow" target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: '8px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.65)', textAlign: 'center', textDecoration: 'none' }}>TikTok</a>
+            <a href="https://instagram.com/ThatTeslaLightshow" target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: '8px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.65)', textAlign: 'center', textDecoration: 'none' }}>Instagram</a>
+            <a href="https://x.com/ThatTeslaLightshow" target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: '8px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.65)', textAlign: 'center', textDecoration: 'none' }}>X</a>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
