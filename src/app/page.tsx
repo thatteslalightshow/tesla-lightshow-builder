@@ -363,12 +363,35 @@ export default function Home() {
 
       <style>{`
         @media (max-width: 768px) {
+          /* Nav: tighten padding, hide secondary links */
           nav { padding: 0 1.25rem !important; }
           nav a[href="/gallery"], nav a[href="/pricing"], nav a[href="/auth"]:not([href*="signup"]) { display: none; }
-        }
-        @media (max-width: 640px) {
+
+          /* Hero: reduce top padding so content isn't buried under fixed nav */
+          section:first-of-type { padding-top: 5rem !important; }
+
+          /* Stats row: 2x2 grid */
           div[style*="grid-template-columns: repeat(4"] { grid-template-columns: repeat(2,1fr) !important; }
+
+          /* Pricing: stack cards */
           div[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
+
+          /* How-it-works steps: tighter grid */
+          div[style*="grid-template-columns: 64px 1fr"] { grid-template-columns: 40px 1fr !important; gap: 1rem !important; }
+
+          /* CTA buttons: stack on tiny screens */
+          div[style*="justifyContent: 'center'"][style*="flexWrap: 'wrap'"] { flex-direction: column; align-items: stretch; }
+
+          /* Creator strip: tighter padding */
+          section[style*="4rem 2.5rem"] { padding: 2.5rem 1.25rem !important; }
+
+          /* Footer: stack */
+          footer { flex-direction: column; align-items: flex-start !important; gap: 14px !important; padding: 1.5rem 1.25rem !important; }
+        }
+
+        @media (max-width: 480px) {
+          /* Features grid: single column */
+          div[style*="minmax(280px,1fr)"] { grid-template-columns: 1fr !important; }
         }
       `}</style>
     </div>

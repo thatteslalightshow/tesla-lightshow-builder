@@ -43,18 +43,57 @@ input,select,textarea{font-family:var(--font-body);outline:none}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 .pulse{animation:pulse 2s ease infinite}
 
+/* ── Responsive utilities ───────────────────────────────────────────────── */
+.mobile-only{display:none!important}
+.desktop-only{display:inline!important}
+
 /* ── Builder responsive layout ─────────────────────────────────────────── */
 .builder-grid{flex:1;display:grid;grid-template-columns:280px 1fr;gap:0;min-height:0}
 .builder-scene-h{height:420px}
 .builder-stats{display:flex;gap:1rem;padding:1rem;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg)}
 .builder-nav-title{display:flex;align-items:center;gap:16px}
 .builder-nav-title input{background:none;border:none;font-family:var(--font-display);font-weight:600;font-size:15px;color:var(--text);min-width:0;outline:none}
+/* model/style rows stay vertical on desktop */
+.builder-models{display:flex;flex-direction:column;gap:4px}
+.builder-styles{display:flex;flex-direction:column;gap:4px}
+
 @media(max-width:768px){
-  .builder-grid{grid-template-columns:1fr;grid-template-rows:auto auto}
-  .builder-sidebar{border-right:none!important;border-bottom:1px solid var(--border);order:2;max-height:50vh;overflow-y:auto}
-  .builder-main{order:1}
-  .builder-scene-h{height:240px}
+  /* builder two-column → single column, scene first */
+  .builder-grid{grid-template-columns:1fr}
+  .builder-sidebar{border-right:none!important;border-top:1px solid var(--border);order:2;max-height:none;padding:1rem!important}
+  .builder-main{order:1;padding:1rem!important}
+  .builder-scene-h{height:260px}
+
+  /* stats bar scrolls horizontally */
   .builder-stats{overflow-x:auto;flex-wrap:nowrap;gap:.75rem;padding:.75rem}
-  .builder-stats>div{flex:0 0 auto;min-width:72px}
-  .builder-nav-title input{max-width:140px;font-size:13px}
+  .builder-stats>div{flex:0 0 auto;min-width:68px}
+
+  /* nav title tightens */
+  .builder-nav-title{gap:8px}
+  .builder-nav-title input{max-width:110px;font-size:13px}
+
+  /* hide verbose nav elements */
+  .builder-status-msg{display:none!important}
+  .builder-admin-link{display:none!important}
+
+  /* export button: show short label only */
+  .desktop-only{display:none!important}
+  .mobile-only{display:inline!important}
+
+  /* model & style buttons scroll horizontally */
+  .builder-models{flex-direction:row;overflow-x:auto;padding-bottom:4px;gap:6px}
+  .builder-models button{flex:0 0 auto!important}
+  .builder-styles{flex-direction:row;overflow-x:auto;padding-bottom:4px;gap:6px;flex-wrap:nowrap}
+  .builder-styles button{flex:0 0 auto!important;min-width:110px}
+
+  /* timeline scrolls horizontally */
+  .builder-timeline{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .builder-timeline-header{flex-wrap:wrap!important;gap:6px!important}
+
+  /* dashboard nav — hide email */
+  .dash-nav-email{display:none!important}
+
+  /* show preview share strip stacks */
+  .preview-share-strip{flex-direction:column!important;align-items:stretch!important}
+  .preview-share-strip a,.preview-share-strip button{justify-content:center!important}
 }

@@ -773,18 +773,23 @@ function BuilderInner() {
           <input value={name} onChange={e => setName(e.target.value)} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {uploading && <span style={{ fontSize: 12, color: 'var(--muted)' }}>Uploading audio…</span>}
-          {checkoutMsg && <span style={{ fontSize: 12, color: checkoutMsg.startsWith('✓') ? 'var(--green)' : checkoutMsg.startsWith('Could') || checkoutMsg.startsWith('Payment cancelled') ? '#ff8a8a' : 'var(--muted)' }}>{checkoutMsg}</span>}
-          {!checkoutMsg && saveMsg && <span style={{ fontSize: 12, color: saveMsg.startsWith('Error') || saveMsg.startsWith('Audio') ? '#ff8a8a' : 'var(--green)' }}>{saveMsg}</span>}
+          {uploading && <span className="builder-status-msg" style={{ fontSize: 12, color: 'var(--muted)' }}>Uploading audio…</span>}
+          {checkoutMsg && <span className="builder-status-msg" style={{ fontSize: 12, color: checkoutMsg.startsWith('✓') ? 'var(--green)' : checkoutMsg.startsWith('Could') || checkoutMsg.startsWith('Payment cancelled') ? '#ff8a8a' : 'var(--muted)' }}>{checkoutMsg}</span>}
+          {!checkoutMsg && saveMsg && <span className="builder-status-msg" style={{ fontSize: 12, color: saveMsg.startsWith('Error') || saveMsg.startsWith('Audio') ? '#ff8a8a' : 'var(--green)' }}>{saveMsg}</span>}
           {isAdmin && (
-            <Link href="/admin" style={{ padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, background: 'rgba(232,64,74,0.12)', border: '1px solid rgba(232,64,74,0.3)', color: 'var(--red)', letterSpacing: '.05em' }}>
+            <Link href="/admin" className="builder-admin-link" style={{ padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, background: 'rgba(232,64,74,0.12)', border: '1px solid rgba(232,64,74,0.3)', color: 'var(--red)', letterSpacing: '.05em' }}>
               Admin
             </Link>
           )}
-          <button onClick={save} disabled={saving || uploading} className="btn btn-ghost btn-sm">{saving ? 'Saving…' : 'Save'}</button>
+          <button onClick={save} disabled={saving || uploading} className="btn btn-ghost btn-sm">{saving ? '…' : 'Save'}</button>
           <div style={{ position: 'relative' }}>
             <button onClick={exportZip} disabled={exporting || saving} className="btn btn-primary btn-sm">
-              {exporting ? 'Exporting…' : (isAdmin || exportCount === 0) ? '⬇ Export ZIP — Free' : '⬇ Export ZIP — $2.99'}
+              {exporting ? 'Exporting…' : (
+                <>
+                  <span className="desktop-only">{(isAdmin || exportCount === 0) ? '⬇ Export ZIP — Free' : '⬇ Export ZIP — $2.99'}</span>
+                  <span className="mobile-only">⬇ Export</span>
+                </>
+              )}
             </button>
             {(isAdmin || exportCount === 0) && (
               <span style={{ position: 'absolute', top: -8, right: -8, background: isAdmin ? 'var(--red)' : 'var(--green)', color: '#fff', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8, whiteSpace: 'nowrap' }}>{isAdmin ? 'ADMIN' : 'FREE'}</span>
@@ -865,7 +870,7 @@ function BuilderInner() {
           {/* Tesla model */}
           <div>
             <div className="label">Tesla model</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div className="builder-models">
               {TESLA_MODELS.map(m => (
                 <button key={m.value} onClick={() => { setModel(m.value); setAudioFrames(null); setAudioTriggers(new Set()); setWaveformData(null); setCustomBlocks({}); }}
                   style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: `1px solid ${model === m.value ? 'var(--red)' : 'var(--border)'}`, background: model === m.value ? 'var(--red-glow)' : 'var(--bg3)', color: model === m.value ? 'var(--text)' : 'var(--muted)', fontSize: 13, textAlign: 'left', cursor: 'pointer', transition: 'all .15s' }}>
@@ -878,7 +883,7 @@ function BuilderInner() {
           {/* Style */}
           <div>
             <div className="label">Animation style</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div className="builder-styles">
               {STYLES.map(s => (
                 <button key={s.value} onClick={() => setStyle(s.value)}
                   style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: `1px solid ${style === s.value ? 'var(--red)' : 'var(--border)'}`, background: style === s.value ? 'var(--red-glow)' : 'var(--bg3)', textAlign: 'left', cursor: 'pointer', transition: 'all .15s' }}>
@@ -1000,8 +1005,8 @@ function BuilderInner() {
           </div>
 
           {/* Timeline */}
-          <div style={{ padding: '1.25rem 1.5rem', background: 'var(--bg2)', border: `1px solid ${previewing ? 'rgba(0,232,135,0.15)' : editMode ? 'rgba(255,140,0,0.2)' : 'var(--border)'}`, borderRadius: 'var(--radius-lg)', transition: 'border-color .3s' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', gap: 8, flexWrap: 'wrap' }}>
+          <div className="builder-timeline" style={{ padding: '1.25rem 1.5rem', background: 'var(--bg2)', border: `1px solid ${previewing ? 'rgba(0,232,135,0.15)' : editMode ? 'rgba(255,140,0,0.2)' : 'var(--border)'}`, borderRadius: 'var(--radius-lg)', transition: 'border-color .3s' }}>
+            <div className="builder-timeline-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', gap: 8, flexWrap: 'wrap' }}>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 13 }}>Light Channel Timeline</div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {previewing && <span style={{ fontSize: 10, color: 'var(--green)' }}>● synced to audio</span>}

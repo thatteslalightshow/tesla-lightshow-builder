@@ -111,7 +111,7 @@ export default function DashboardPage() {
               Admin
             </Link>
           )}
-          <span style={{ fontSize: 13, color: 'var(--muted)' }}>{email}</span>
+          <span className="dash-nav-email" style={{ fontSize: 13, color: 'var(--muted)' }}>{email}</span>
           <button onClick={signOut} className="btn btn-ghost btn-sm">Sign out</button>
         </div>
       </nav>
