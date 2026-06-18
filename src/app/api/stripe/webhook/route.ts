@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { getAdminClient } from '@/lib/supabase'
+import { sendExportReceipt } from '@/lib/email'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-05-27.dahlia' })
 
@@ -27,7 +28,8 @@ export async function POST(req: Request) {
 
     if (show_id && user_id && session.payment_status === 'paid') {
       const admin = getAdminClient()
-      // Record the purchase — table may not exist yet; ignore the error gracefully
+
+      // Record the purchase
       await admin.from('show_purchases').insert({
         user_id,
         show_id,
@@ -36,6 +38,29 @@ export async function POST(req: Request) {
         amount_cents: session.amount_total,
         created_at: new Date().toISOString(),
       }).then(() => null, () => null)
+
+      // Send receipt email
+      const email = session.customer_email
+      if (email) {
+        const origin = process.env.NEXT_PUBLIC_APP_URL ?? 'https://lightshowbuilder.com'
+        const { data: show } = await admin
+          .from('shows')
+          .select('name, tesla_model')
+          .eq('id', show_id)
+          .single()
+
+        const MODEL_LABELS: Record<string, string> = {
+          model3: 'Model 3', modelY: 'Model Y', modelS: 'Model S',
+          modelX: 'Model X', cybertruck: 'Cybertruck',
+        }
+
+        await sendExportReceipt({
+          to: email,
+          showName: show?.name ?? 'your show',
+          model: MODEL_LABELS[show?.tesla_model ?? ''] ?? 'Tesla',
+          builderUrl: `${origin}/builder?id=${show_id}&checkout_session=${session.id}`,
+        }).catch(() => null) // never block webhook response
+      }
     }
   }
 

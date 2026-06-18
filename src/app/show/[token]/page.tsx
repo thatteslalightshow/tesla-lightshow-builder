@@ -23,9 +23,24 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     modelX: 'Model X', cybertruck: 'Cybertruck',
   }
 
+  const url = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://lightshowbuilder.com'}/show/${params.token}`
+
   return {
     title: `${show.name} — Tesla LightShow Builder`,
-    description: `A ${show.style} light show for the ${modelLabel[show.tesla_model] ?? show.tesla_model}. Built with LightShow Builder.`,
+    description: `A ${show.style} light show for the ${modelLabel[show.tesla_model] ?? show.tesla_model}. Built with LightShow Builder by @ThatTeslaLightShow.`,
+    openGraph: {
+      title: show.name,
+      description: `${modelLabel[show.tesla_model] ?? show.tesla_model} · ${show.style} · Built with @ThatTeslaLightShow`,
+      url,
+      siteName: 'LightShow Builder',
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: show.name,
+      description: `${modelLabel[show.tesla_model] ?? show.tesla_model} · ${show.style} light show. Built with @ThatTeslaLightShow`,
+      site: '@ThatTeslaLightshow',
+    },
   }
 }
 

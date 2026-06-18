@@ -14,14 +14,24 @@ export default function DashboardPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [toggling, setToggling] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState('');
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const [userId, setUserId] = useState('');
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) { router.replace('/auth'); return; }
       setEmail(session.user.email ?? '');
+      setUserId(session.user.id);
       loadShows();
-      const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', session.user.id).single();
+      const { data: profile } = await supabase.from('profiles').select('is_admin, display_name').eq('id', session.user.id).single();
       if (profile?.is_admin) setIsAdmin(true);
+      const dn = profile?.display_name ?? '';
+      setDisplayName(dn);
+      setNameInput(dn);
+      if (!dn) setEditingName(true); // prompt on first visit
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || !session) router.replace('/auth');
@@ -70,6 +80,16 @@ export default function DashboardPage() {
     router.replace('/');
   }
 
+  async function saveDisplayName() {
+    const trimmed = nameInput.trim();
+    if (!trimmed || !userId) return;
+    setSavingName(true);
+    await supabase.from('profiles').update({ display_name: trimmed }).eq('id', userId);
+    setDisplayName(trimmed);
+    setEditingName(false);
+    setSavingName(false);
+  }
+
   const modelLabels: Record<string, string> = {
     model3: 'Model 3', modelY: 'Model Y', modelS: 'Model S', modelX: 'Model X', cybertruck: 'Cybertruck',
   };
@@ -97,10 +117,46 @@ export default function DashboardPage() {
       </nav>
 
       <main style={{ flex: 1, maxWidth: 900, width: '100%', margin: '0 auto', padding: '2.5rem 2rem' }}>
+        {/* Display name banner */}
+        {editingName && (
+          <div style={{ marginBottom: '1.5rem', padding: '1.25rem 1.5rem', background: 'rgba(232,64,74,0.06)', border: '1px solid rgba(232,64,74,0.2)', borderRadius: 'var(--radius-lg)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 14, marginBottom: 2 }}>
+                {displayName ? 'Change your display name' : 'Set your display name'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                This is shown on your public shows in the gallery
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+              <input
+                value={nameInput}
+                onChange={e => setNameInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') saveDisplayName(); if (e.key === 'Escape') setEditingName(false); }}
+                placeholder="e.g. TeslaFan42"
+                maxLength={32}
+                autoFocus
+                style={{ padding: '7px 12px', borderRadius: 7, fontSize: 13, background: 'var(--bg2)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none', width: 180 }}
+              />
+              <button onClick={saveDisplayName} disabled={savingName || !nameInput.trim()} className="btn btn-primary btn-sm">
+                {savingName ? '…' : 'Save'}
+              </button>
+              {displayName && <button onClick={() => setEditingName(false)} className="btn btn-ghost btn-sm">Cancel</button>}
+            </div>
+          </div>
+        )}
+
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
           <div>
             <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 700, marginBottom: '.25rem' }}>My Shows</h1>
-            <p style={{ fontSize: 13, color: 'var(--muted)' }}>{shows.length} show{shows.length !== 1 ? 's' : ''}</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0 }}>{shows.length} show{shows.length !== 1 ? 's' : ''}</p>
+              {displayName && !editingName && (
+                <button onClick={() => setEditingName(true)} style={{ fontSize: 12, color: 'var(--muted2)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+                  @{displayName}
+                </button>
+              )}
+            </div>
           </div>
           <Link href="/builder" className="btn btn-primary">+ New show</Link>
         </div>
