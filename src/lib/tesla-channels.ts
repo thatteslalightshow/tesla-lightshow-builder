@@ -311,3 +311,90 @@ export function groupedZones(modelDef: ModelDefinition): { group: ZoneGroup; zon
     .map(group => ({ group, zones: modelDef.zones.filter(z => zoneGroup(z) === group) }))
     .filter(g => g.zones.length > 0)
 }
+
+// ─── Closures (per official Tesla light-show spec) ──────────────────────────────
+// Shown in the timeline so users see what's controllable per vehicle. The actual
+// Open/Close/Dance command encoding + export is a separate build — see closures spec.
+export interface ClosureDef { id: string; label: string }
+
+export function modelClosures(model: TeslaModel): ClosureDef[] {
+  const common: ClosureDef[] = [
+    { id: 'windows',     label: 'Windows' },
+    { id: 'mirrors',     label: 'Mirrors' },
+    { id: 'charge_port', label: 'Charge Port' },
+  ]
+  switch (model) {
+    case 'model3':
+    case 'modelY':
+      return [...common, { id: 'liftgate', label: 'Trunk (powered only)' }]
+    case 'modelS':
+      return [...common, { id: 'liftgate', label: 'Trunk' }, { id: 'door_handles', label: 'Door Handles' }]
+    case 'modelX':
+      return [...common, { id: 'liftgate', label: 'Trunk' }, { id: 'front_doors', label: 'Front Doors' }, { id: 'falcon_doors', label: 'Falcon Doors' }]
+    case 'cybertruck':
+      return [...common, { id: 'liftgate', label: 'Frunk' }]
+  }
+}
+
+// ─── Flat timeline tree (Group → Side → channel, + Closures) ─────────────────────
+// One flat, depth-tagged list the timeline renders in both columns. Collapse is by
+// ancestry (a row hides if any ancestor id is collapsed).
+export interface TimelineRow {
+  kind: 'group' | 'subgroup' | 'leaf'
+  id: string
+  parentId: string | null
+  depth: number
+  label: string
+  channel?: number   // leaf lights only
+  color?: number     // leaf lights only
+  closure?: boolean  // leaf closures (not yet exportable)
+}
+
+function sideOf(z: LightZone): 'L' | 'R' | 'C' {
+  const zPos = z.position[2]            // Z: right(+) / left(-)
+  return zPos < -0.05 ? 'L' : zPos > 0.05 ? 'R' : 'C'
+}
+
+function strippedLabel(z: LightZone, group: ZoneGroup): string {
+  let label = z.label.replace(/\b(Left|Right)\b/g, '')          // side implied by subgroup
+  if (group === 'Front Lights' || group === 'Rear Lights') {
+    label = label.replace(/\b(Front|Rear)\b/g, '')              // front/rear implied by group
+  }
+  return label.replace(/\s{2,}/g, ' ').trim() || z.label
+}
+
+export function buildTimelineRows(modelDef: ModelDefinition): TimelineRow[] {
+  const rows: TimelineRow[] = []
+  const SIDES: { key: 'L' | 'R' | 'C'; label: string }[] = [
+    { key: 'L', label: 'Left' }, { key: 'R', label: 'Right' }, { key: 'C', label: 'Center' },
+  ]
+
+  for (const { group, zones } of groupedZones(modelDef)) {
+    const gid = `grp:${group}`
+    rows.push({ kind: 'group', id: gid, parentId: null, depth: 0, label: group })
+    for (const side of SIDES) {
+      const subZones = zones.filter(z => sideOf(z) === side.key)
+      if (!subZones.length) continue
+      // Single-sided groups (e.g. Center-only) skip the redundant subgroup header
+      const onlySide = SIDES.filter(s => zones.some(z => sideOf(z) === s.key)).length === 1
+      const sid = `${gid}:${side.key}`
+      if (!onlySide) rows.push({ kind: 'subgroup', id: sid, parentId: gid, depth: 1, label: side.label })
+      for (const z of subZones) {
+        rows.push({
+          kind: 'leaf', id: `z:${z.channel}`, parentId: onlySide ? gid : sid,
+          depth: onlySide ? 1 : 2, label: strippedLabel(z, group), channel: z.channel, color: z.color,
+        })
+      }
+    }
+  }
+
+  const closures = modelClosures(modelDef.model)
+  if (closures.length) {
+    const cid = 'grp:Closures'
+    rows.push({ kind: 'group', id: cid, parentId: null, depth: 0, label: 'Closures' })
+    for (const c of closures) {
+      rows.push({ kind: 'leaf', id: `c:${c.id}`, parentId: cid, depth: 1, label: c.label, closure: true })
+    }
+  }
+  return rows
+}
