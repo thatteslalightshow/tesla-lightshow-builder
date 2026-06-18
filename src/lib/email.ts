@@ -4,7 +4,7 @@ const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
 
-const FROM = 'LightShow Builder <noreply@thatteslalightshow.com>';
+const FROM = 'ThatTeslaLightshow <noreply@thatteslalightshow.com>';
 
 export async function sendExportReceipt({
   to,
@@ -40,7 +40,7 @@ export async function sendExportReceipt({
             <td>
               <div style="display:inline-flex;align-items:center;gap:10px;">
                 <div style="width:36px;height:36px;background:#e8404a;border-radius:9px;display:inline-block;"></div>
-                <span style="font-size:16px;font-weight:700;color:rgba(255,255,255,0.8);">LightShow Builder</span>
+                <span style="font-size:16px;font-weight:700;color:rgba(255,255,255,0.8);">ThatTeslaLightshow</span>
               </div>
             </td>
           </tr>
@@ -77,7 +77,7 @@ export async function sendExportReceipt({
           <tr>
             <td style="text-align:center;">
               <p style="font-size:12px;color:rgba(255,255,255,0.2);margin:0 0 4px;">
-                Made by <a href="https://tiktok.com/@ThatTeslaLightshow" style="color:rgba(255,255,255,0.3);">@ThatTeslaLightShow</a>
+                Made by <a href="https://tiktok.com/@ThatTeslaLightshow" style="color:rgba(255,255,255,0.3);">@ThatTeslaLightshow</a>
               </p>
               <p style="font-size:11px;color:rgba(255,255,255,0.12);margin:0;">Not affiliated with Tesla, Inc.</p>
             </td>
@@ -121,7 +121,7 @@ export async function sendExportDownload({
         <tr><td>
           <div style="display:inline-flex;align-items:center;gap:10px;">
             <div style="width:36px;height:36px;background:#e8404a;border-radius:9px;display:inline-block;"></div>
-            <span style="font-size:16px;font-weight:700;color:rgba(255,255,255,0.8);">LightShow Builder</span>
+            <span style="font-size:16px;font-weight:700;color:rgba(255,255,255,0.8);">ThatTeslaLightshow</span>
           </div>
         </td></tr>
       </table>
@@ -147,7 +147,7 @@ export async function sendExportDownload({
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr><td style="text-align:center;">
           <p style="font-size:12px;color:rgba(255,255,255,0.2);margin:0 0 4px;">
-            Made by <a href="https://tiktok.com/@ThatTeslaLightshow" style="color:rgba(255,255,255,0.3);">@ThatTeslaLightShow</a>
+            Made by <a href="https://tiktok.com/@ThatTeslaLightshow" style="color:rgba(255,255,255,0.3);">@ThatTeslaLightshow</a>
           </p>
           <p style="font-size:11px;color:rgba(255,255,255,0.12);margin:0;">Not affiliated with Tesla, Inc.</p>
         </td></tr>

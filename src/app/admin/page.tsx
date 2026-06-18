@@ -5,7 +5,7 @@ import { getAdminClient } from '@/lib/supabase'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 
-export const metadata: Metadata = { title: 'Admin — Tesla LightShow Builder' }
+export const metadata: Metadata = { title: 'Admin' }
 export const revalidate = 0
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -99,7 +99,7 @@ export default async function AdminPage() {
       {/* Nav */}
       <header style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2rem', height: 56, background: 'rgba(10,10,15,0.95)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <Link href="/" style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15 }}>LightShow Builder</Link>
+          <Link href="/" style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15 }}>ThatTeslaLightshow</Link>
           <span style={{ padding: '2px 10px', background: 'rgba(232,64,74,0.15)', border: '1px solid rgba(232,64,74,0.3)', borderRadius: 20, fontSize: 11, fontWeight: 700, color: 'var(--red)', letterSpacing: '.08em' }}>ADMIN</span>
         </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>

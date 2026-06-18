@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import SocialLinks from '@/components/SocialLinks'
+import BrandLogo from '@/components/BrandLogo'
 
 export const metadata: Metadata = {
-  title: 'Pricing — Tesla LightShow Builder',
+  title: 'Pricing',
   description: 'Build and preview Tesla light shows free. Pay $2.99 per export, or go unlimited with Creator at $4.99/mo.',
 }
 
@@ -76,10 +77,7 @@ export default function PricingPage() {
 
       {/* Nav */}
       <header style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2rem', height: 60, background: 'rgba(10,10,15,0.9)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)' }}>
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16 }}>
-          <div style={{ width: 30, height: 30, background: 'var(--red)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13, fontWeight: 700 }}>T</div>
-          LightShow <span style={{ color: 'var(--red)', marginLeft: 4 }}>Builder</span>
-        </Link>
+        <BrandLogo boxSize={30} />
         <div style={{ display: 'flex', gap: 8 }}>
           <Link href="/gallery" className="btn btn-ghost btn-sm">Gallery</Link>
           <Link href="/auth" className="btn btn-ghost btn-sm">Sign in</Link>
@@ -191,7 +189,7 @@ export default function PricingPage() {
       </main>
 
       <footer style={{ borderTop: '1px solid var(--border)', padding: '1.5rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-        <Link href="/" style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 13 }}>← LightShow Builder</Link>
+        <Link href="/" style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 13 }}>← ThatTeslaLightshow</Link>
         <SocialLinks gap={4} size={28} />
         <p style={{ fontSize: 12, color: 'var(--muted2)', margin: 0 }}>Not affiliated with Tesla, Inc.</p>
       </footer>

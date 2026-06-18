@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase, type Show } from '@/lib/supabase';
 import SocialLinks from '@/components/SocialLinks';
+import BrandLogo from '@/components/BrandLogo';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -116,10 +117,7 @@ export default function DashboardPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
       <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 2rem', borderBottom: '1px solid var(--border)', background: 'rgba(10,10,15,0.9)', backdropFilter: 'blur(12px)', position: 'sticky', top: 0, zIndex: 10 }}>
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 32, height: 32, background: 'var(--red)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14, color: '#fff', fontFamily: 'var(--font-display)' }}>T</div>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 14 }}>LightShow Builder</span>
-        </Link>
+        <BrandLogo />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Link href="/gallery" className="btn btn-ghost btn-sm">Gallery</Link>
           {isAdmin && (
@@ -310,7 +308,7 @@ export default function DashboardPage() {
         )}
       </main>
       <footer style={{ borderTop: '1px solid var(--border)', padding: '1.25rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-        <span style={{ fontSize: 12, color: 'var(--muted2)' }}>LightShow Builder · @ThatTeslaLightShow</span>
+        <span style={{ fontSize: 12, color: 'var(--muted2)' }}>ThatTeslaLightshow · @ThatTeslaLightshow</span>
         <SocialLinks gap={4} size={26} />
       </footer>
     </div>

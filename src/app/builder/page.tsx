@@ -1196,7 +1196,7 @@ function BuilderInner() {
             <div>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14, marginBottom: 3 }}>Show downloaded!</div>
               <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
-                When you post the video, tag <strong style={{ color: 'rgba(255,255,255,0.7)' }}>@ThatTeslaLightShow</strong> on TikTok or Instagram — we love to feature community shows!
+                When you post the video, tag <strong style={{ color: 'rgba(255,255,255,0.7)' }}>@ThatTeslaLightshow</strong> on TikTok or Instagram — we love to feature community shows!
               </div>
             </div>
             <button onClick={() => setShowSharePrompt(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 18, lineHeight: 1, flexShrink: 0, paddingTop: 1 }}>×</button>

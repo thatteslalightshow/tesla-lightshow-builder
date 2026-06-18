@@ -76,7 +76,7 @@ export default async function Image({ params }: { params: { token: string } }) {
               </div>
             </div>
             <span style={{ fontSize: 18, fontWeight: 600, color: 'rgba(255,255,255,0.6)', letterSpacing: '-0.3px' }}>
-              LightShow Builder
+              ThatTeslaLightshow
             </span>
           </div>
 
@@ -119,7 +119,7 @@ export default async function Image({ params }: { params: { token: string } }) {
         {/* Bottom bar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 16, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.04em' }}>
-            @ThatTeslaLightShow
+            @ThatTeslaLightshow
           </span>
           <div style={{
             padding: '10px 28px', borderRadius: 8,

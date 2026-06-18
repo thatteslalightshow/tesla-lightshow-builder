@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import SocialLinks from '@/components/SocialLinks';
+import BrandLogo from '@/components/BrandLogo';
 
 // ─── Ambient particle field ───────────────────────────────────────────────────
 function Particles() {
@@ -142,13 +143,7 @@ export default function Home() {
 
       {/* ── NAV ──────────────────────────────────────────────────────────── */}
       <nav style={{ position:'fixed', top:0, left:0, right:0, zIndex:50, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 2.5rem', height:56, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(20px)', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
-        <Link href="/" style={{ display:'flex', alignItems:'center', gap:10, fontFamily:'var(--font-display)', fontWeight:700, fontSize:15, letterSpacing:'-.3px' }}>
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-            <rect width="22" height="22" rx="6" fill="#e8404a"/>
-            <path d="M6 8h10M8 8v6M14 8v6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round"/>
-          </svg>
-          LightShow Builder
-        </Link>
+        <BrandLogo boxSize={30} />
         <div style={{ display:'flex', alignItems:'center', gap:4 }}>
           <Link href="/gallery" style={{ padding:'6px 14px', fontSize:13, color:'rgba(255,255,255,0.55)', transition:'color .15s' }}
             onMouseEnter={e=>(e.currentTarget.style.color='#fff')} onMouseLeave={e=>(e.currentTarget.style.color='rgba(255,255,255,0.55)')}>Gallery</Link>
@@ -388,7 +383,7 @@ export default function Home() {
       <section style={{ position:'relative', zIndex:1, borderTop:'1px solid rgba(255,255,255,0.06)', padding:'4rem 2.5rem', display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center', gap:'1.25rem' }}>
         <div style={{ fontSize:11, fontWeight:600, letterSpacing:'.15em', color:'rgba(255,255,255,0.2)', textTransform:'uppercase' }}>Created by</div>
         <div style={{ fontFamily:'var(--font-display)', fontSize:'clamp(1.4rem,4vw,2rem)', fontWeight:700, letterSpacing:'-1px', lineHeight:1 }}>
-          @ThatTeslaLightShow
+          @ThatTeslaLightshow
         </div>
         <div style={{ fontSize:14, color:'rgba(255,255,255,0.35)', maxWidth:460, lineHeight:1.7 }}>
           Building the best Tesla light show tools for the community.
@@ -399,7 +394,7 @@ export default function Home() {
 
       {/* ── FOOTER ───────────────────────────────────────────────────────── */}
       <footer style={{ position:'relative', zIndex:1, borderTop:'1px solid rgba(255,255,255,0.06)', padding:'1.5rem 2.5rem', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:12 }}>
-        <div style={{ fontFamily:'var(--font-display)', fontWeight:600, fontSize:13, color:'rgba(255,255,255,0.4)' }}>LightShow Builder</div>
+        <div style={{ fontFamily:'var(--font-display)', fontWeight:600, fontSize:13, color:'rgba(255,255,255,0.4)' }}>ThatTeslaLightshow</div>
         <div style={{ display:'flex', gap:24, fontSize:13, color:'rgba(255,255,255,0.25)' }}>
           <Link href="/gallery" onMouseEnter={e=>(e.currentTarget.style.color='rgba(255,255,255,0.6)')} onMouseLeave={e=>(e.currentTarget.style.color='rgba(255,255,255,0.25)')}>Gallery</Link>
           <Link href="/pricing" onMouseEnter={e=>(e.currentTarget.style.color='rgba(255,255,255,0.6)')} onMouseLeave={e=>(e.currentTarget.style.color='rgba(255,255,255,0.25)')}>Pricing</Link>

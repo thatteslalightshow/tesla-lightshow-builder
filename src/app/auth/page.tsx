@@ -3,6 +3,7 @@ import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import BrandLogo from '@/components/BrandLogo';
 
 function AuthForm() {
   const searchParams = useSearchParams();
@@ -47,10 +48,9 @@ function AuthForm() {
       justifyContent: 'center',
       padding: '2rem',
     }}>
-      <Link href="/" style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ width: 36, height: 36, background: 'var(--red)', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 16, color: '#fff', fontFamily: 'var(--font-display)' }}>T</div>
-        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15 }}>LightShow Builder</span>
-      </Link>
+      <div style={{ marginBottom: '2rem' }}>
+        <BrandLogo boxSize={36} />
+      </div>
 
       <div style={{
         width: '100%',

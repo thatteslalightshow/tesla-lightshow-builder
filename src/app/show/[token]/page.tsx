@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     .eq('is_public', true)
     .single()
 
-  if (!show) return { title: 'Tesla LightShow Builder' }
+  if (!show) return { title: 'Light Show' }
 
   const modelLabel: Record<string, string> = {
     model3: 'Model 3', modelY: 'Model Y', modelS: 'Model S',
@@ -26,19 +26,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const url = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://lightshowbuilder.com'}/show/${params.token}`
 
   return {
-    title: `${show.name} — Tesla LightShow Builder`,
-    description: `A ${show.style} light show for the ${modelLabel[show.tesla_model] ?? show.tesla_model}. Built with LightShow Builder by @ThatTeslaLightShow.`,
+    title: show.name,
+    description: `A ${show.style} light show for the ${modelLabel[show.tesla_model] ?? show.tesla_model}. Built with ThatTeslaLightshow.`,
     openGraph: {
       title: show.name,
-      description: `${modelLabel[show.tesla_model] ?? show.tesla_model} · ${show.style} · Built with @ThatTeslaLightShow`,
+      description: `${modelLabel[show.tesla_model] ?? show.tesla_model} · ${show.style} · Built with @ThatTeslaLightshow`,
       url,
-      siteName: 'LightShow Builder',
+      siteName: 'ThatTeslaLightshow',
       type: 'website',
     },
     twitter: {
       card: 'summary_large_image',
       title: show.name,
-      description: `${modelLabel[show.tesla_model] ?? show.tesla_model} · ${show.style} light show. Built with @ThatTeslaLightShow`,
+      description: `${modelLabel[show.tesla_model] ?? show.tesla_model} · ${show.style} light show. Built with @ThatTeslaLightshow`,
       site: '@ThatTeslaLightshow',
     },
   }
@@ -60,7 +60,7 @@ export default async function ShowPage({ params }: Props) {
         <div style={{ fontSize: '2.5rem' }}>🔒</div>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', fontWeight: 700 }}>This show is private</h1>
         <p style={{ fontSize: 13, color: 'var(--muted)' }}>The owner hasn&apos;t made this show public yet.</p>
-        <a href="/" className="btn btn-ghost btn-sm" style={{ marginTop: '0.5rem' }}>← Back to LightShow Builder</a>
+        <a href="/" className="btn btn-ghost btn-sm" style={{ marginTop: '0.5rem' }}>← Back to ThatTeslaLightshow</a>
       </div>
     )
   }

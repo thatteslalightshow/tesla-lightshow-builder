@@ -48,6 +48,8 @@ input,select,textarea{font-family:var(--font-body);outline:none}
 @keyframes ls-blip{0%,12%{opacity:var(--ls-peak,1)}13%,100%{opacity:.1}}
 @keyframes ls-strobe{0%,40%{opacity:.1}45%,55%{opacity:var(--ls-peak,1)}60%,100%{opacity:.1}}
 .gallery-card:hover{border-color:var(--red)!important;transform:translateY(-2px)}
+/* Brand tagline under the logo hides on small screens to avoid crowding the nav */
+@media(max-width:560px){.brand-tagline{display:none}}
 
 /* ── Responsive utilities ───────────────────────────────────────────────── */
 .mobile-only{display:none!important}

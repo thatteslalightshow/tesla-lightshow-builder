@@ -2,9 +2,10 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getAdminClient } from '@/lib/supabase'
 import GalleryClient, { type GalleryShow } from './GalleryClient'
+import BrandLogo from '@/components/BrandLogo'
 
 export const metadata: Metadata = {
-  title: 'Show Gallery — Tesla LightShow Builder',
+  title: 'Show Gallery',
   description: 'Browse community-created Tesla light shows. Preview, like, or remix any public show.',
 }
 
@@ -65,10 +66,7 @@ export default async function GalleryPage() {
         background: 'rgba(10,10,15,0.9)', backdropFilter: 'blur(12px)',
         position: 'sticky', top: 0, zIndex: 10,
       }}>
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 32, height: 32, background: 'var(--red)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14, color: '#fff', fontFamily: 'var(--font-display)' }}>T</div>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 14 }}>LightShow Builder</span>
-        </Link>
+        <BrandLogo />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Link href="/pricing" className="btn btn-ghost btn-sm">Pricing</Link>
           <Link href="/builder" className="btn btn-primary btn-sm">+ New Show</Link>

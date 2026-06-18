@@ -3,7 +3,10 @@ import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
-  title: "Tesla LightShow Builder",
+  title: {
+    default: "ThatTeslaLightshow — Tesla Light Show Builder",
+    template: "%s · ThatTeslaLightshow",
+  },
   description: "Build custom Tesla light shows synced to your music. Export ready for USB.",
 };
 

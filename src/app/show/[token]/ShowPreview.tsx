@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase, type Show } from '@/lib/supabase';
 import TeslaScene from '@/components/TeslaScene';
 import SocialLinks from '@/components/SocialLinks';
+import BrandLogo from '@/components/BrandLogo';
 
 const MODEL_LABELS: Record<string, string> = {
   model3: 'Model 3', modelY: 'Model Y', modelS: 'Model S',
@@ -156,13 +157,7 @@ export default function ShowPreview({ show, audioUrl, audioName }: Props) {
 
       {/* Nav */}
       <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2rem', height: 54, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(16px)', borderBottom: '1px solid rgba(255,255,255,0.07)', position: 'sticky', top: 0, zIndex: 50 }}>
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 9, fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14, letterSpacing: '-.2px' }}>
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-            <rect width="22" height="22" rx="6" fill="#e8404a"/>
-            <path d="M6 8h10M8 8v6M14 8v6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round"/>
-          </svg>
-          LightShow Builder
-        </Link>
+        <BrandLogo boxSize={30} />
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={copyLink} style={{ padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 600, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', transition: 'all .15s' }}>
             {copied ? '✓ Copied!' : '↑ Share'}
@@ -317,7 +312,7 @@ export default function ShowPreview({ show, audioUrl, audioName }: Props) {
               {copied ? '✓ Copied!' : 'Copy link'}
             </button>
             <a
-              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Check out this Tesla light show! 🚗⚡ Built with @ThatTeslaLightShow`)}&url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`}
+              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Check out this Tesla light show! 🚗⚡ Built with @ThatTeslaLightshow`)}&url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`}
               target="_blank" rel="noopener noreferrer"
               style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.65)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
             >
@@ -353,8 +348,8 @@ export default function ShowPreview({ show, audioUrl, audioName }: Props) {
       {/* Footer */}
       <footer style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '1.25rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)' }}>Made with LightShow Builder</span>
-          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.15)', fontWeight: 600, letterSpacing: '.04em' }}>· @ThatTeslaLightShow</span>
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)' }}>Made with ThatTeslaLightshow</span>
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.15)', fontWeight: 600, letterSpacing: '.04em' }}>· @ThatTeslaLightshow</span>
         </div>
         <SocialLinks gap={4} size={26} />
         <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.12)' }}>Not affiliated with Tesla, Inc.</span>
