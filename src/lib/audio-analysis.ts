@@ -46,7 +46,7 @@ export async function analyzeAudioToFrames(
   audioBuffer: AudioBuffer,
   modelDef: ModelDefinition,
 ): Promise<AudioAnalysisResult> {
-  const FPS = 20
+  const FPS = 50
   const frameSize = Math.floor(audioBuffer.sampleRate / FPS)
   const totalFrames = Math.floor(audioBuffer.length / frameSize)
   const { channelCount, zones } = modelDef

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAdminClient, getSignedDownloadUrl, type TeslaModel } from '@/lib/supabase'
 import { getAuthedUser } from '@/lib/auth'
-import { getChannelCount, generateFrames, MODELS } from '@/lib/tesla-channels'
+import { getChannelCount, generateFrames, MODELS, FPS, STEP_MS } from '@/lib/tesla-channels'
 import { sendExportDownload } from '@/lib/email'
 import JSZip from 'jszip'
 
@@ -82,13 +82,12 @@ export async function POST(req: Request) {
   }
 
   // ── Generate FSEQ ─────────────────────────────────────────────────────────
-  const FPS = 20
   const durationSec = audioRecord?.duration_sec ?? show.duration_sec ?? 30
   const frames = Math.round(durationSec * FPS)
   const channels = getChannelCount(show.tesla_model as TeslaModel)
   const bpm = show.bpm ?? 120
   const frameData = generateFrames(show.style, show.intensity, bpm, frames, MODELS[show.tesla_model as TeslaModel])
-  const fseq = buildFseq(channels, frames, Math.round(1000 / FPS), frameData)
+  const fseq = buildFseq(channels, frames, Math.round(STEP_MS), frameData)
 
   // ── Build ZIP ─────────────────────────────────────────────────────────────
   const zip = new JSZip()

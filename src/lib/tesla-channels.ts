@@ -4,6 +4,11 @@
 
 import type { TeslaModel, ShowStyle } from '@/lib/supabase'
 
+// Frame rate for all light shows. Tesla supports 15–100ms steps and recommends
+// 20ms (50fps) for smoothness — that's our target.
+export const FPS = 50
+export const STEP_MS = 1000 / FPS   // 20ms
+
 export type LightType =
   | 'headlight' | 'highbeam' | 'drl' | 'fog'
   | 'turn_front' | 'turn_rear' | 'tail' | 'brake'
@@ -218,7 +223,7 @@ export function generateFrames(
 ): Uint8Array[] {
   const { channelCount, zones } = modelDef
   const scale = intensity / 100
-  const beatsPerFrame = bpm / (60 * 20)   // assumes 20 fps
+  const beatsPerFrame = bpm / (60 * FPS)
 
   // Front(+x)/rear(-x) extent for position-driven styles (ripple, bounce)
   const maxX = Math.max(...zones.map(z => Math.abs(z.position[0]))) || 1

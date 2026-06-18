@@ -103,7 +103,7 @@ function customBlocksToFrames(
   bpm: number,
   channelCount: number,
 ): Uint8Array[] {
-  const FPS = 20;
+  const FPS = 50;
   const fpb = (60 / bpm) * FPS;
   const totalFrames = Math.ceil(beats * fpb);
   const frames: Uint8Array[] = Array.from({ length: totalFrames }, () => new Uint8Array(channelCount));
@@ -156,7 +156,7 @@ function Timeline({
   const HEADER_H = isMobile ? 28  : 24;
   const CELL_W   = isMobile ? 38  : null; // null → flex:1 on desktop
   const BEATS = VISIBLE_BEATS;
-  const FPS = 20;
+  const FPS = 50;
   const fpb = (60 / bpm) * FPS;
 
   // ── Collapsible channel tree (xLights-style: Group → Side → channel) ───────
@@ -883,13 +883,13 @@ function BuilderInner() {
         }
       } catch { /* fall through to client-side export */ }
     }
-    const FPS = 20;
-    const frames = 600;
+    const FPS = 50;
+    // Match the audio length when we have it; otherwise a 30s style loop.
+    const frames = audioFrames ? audioFrames.length : 30 * FPS;
     const channels = getChannelCount(model);
     const def = MODELS[model];
     let frameData: Uint8Array[];
     if (hasCustom) {
-      // Repeat the custom loop pattern to fill 30 seconds
       const pattern = customBlocksToFrames(customBlocks, VISIBLE_BEATS, bpm, channels);
       frameData = Array.from({ length: frames }, (_, f) => pattern[f % pattern.length]);
     } else if (audioFrames) {

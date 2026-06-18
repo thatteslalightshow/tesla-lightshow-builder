@@ -5,7 +5,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
-import { MODELS, generateFrames } from '@/lib/tesla-channels';
+import { MODELS, generateFrames, FPS } from '@/lib/tesla-channels';
 import type { TeslaModel, ShowStyle } from '@/lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -564,7 +564,7 @@ export default function TeslaScene({
     // ── Animation loop ────────────────────────────────────────────────────────
     let raf: number;
     let lastFrame = 0;
-    const FMS = 1000 / 20;
+    const FMS = 1000 / FPS;
 
     function animate(now: number) {
       raf = requestAnimationFrame(animate);
@@ -577,7 +577,7 @@ export default function TeslaScene({
           let frameIdx: number;
           const pb = previewBeatRef.current;
           if (pb !== null) {
-            frameIdx = Math.floor(pb * (FMS / 1000) * 20) % frames.length;
+            frameIdx = Math.floor(pb * (FMS / 1000) * FPS) % frames.length;
           } else {
             frameIdx = frameIdxRef.current % frames.length;
             frameIdxRef.current++;

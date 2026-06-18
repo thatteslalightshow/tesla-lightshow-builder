@@ -52,13 +52,15 @@ export function validateFseq(
   if (frames === 0) errors.push('Frame count is 0.')
   info.push(`${frames} frames`)
 
-  // Step time
+  // Step time — Tesla supports 15–100ms; 20ms (50fps) recommended
   const stepMs = view.getUint16(18, true)
   if (stepMs === 0) errors.push('Step time is 0 ms.')
-  if (stepMs !== 50) warnings.push(`Step time is ${stepMs} ms — Tesla expects 50 ms (20 fps).`)
+  else if (stepMs < 15 || stepMs > 100) warnings.push(`Step time ${stepMs} ms is outside Tesla's supported 15–100 ms range.`)
   const durationSec = (frames * stepMs) / 1000
   info.push(`${stepMs} ms/frame (${Math.round(1000 / stepMs)} fps)`)
   info.push(`~${durationSec.toFixed(1)}s duration`)
+  // Tesla's hard limit is 4 hours
+  if (durationSec > 4 * 3600) errors.push(`Show is ${(durationSec / 60).toFixed(0)} min — exceeds Tesla's 4-hour maximum.`)
 
   // Compression (Tesla requires uncompressed)
   const compressionType = u8[21]
