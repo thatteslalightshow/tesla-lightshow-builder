@@ -236,6 +236,44 @@ export function getChannelCount(_model: TeslaModel): number {
   return CHANNEL_COUNT
 }
 
+// Serialized manual-edit data persisted on a show (JSON-safe).
+export interface EditData {
+  customBlocks: Record<number, number[]>                       // light channel → beat indices (full = 255)
+  closureBlocks: Record<number, Record<number, ClosureCommand>> // closure channel → beat → command
+  beats: number                                                 // loop length in beats
+}
+
+export function hasEdits(ed?: EditData | null): boolean {
+  if (!ed) return false
+  return Object.keys(ed.customBlocks ?? {}).length > 0 || Object.keys(ed.closureBlocks ?? {}).length > 0
+}
+
+// Build a `beats`-long loop of frames from manual edit data (lights + closures).
+export function buildEditFrames(ed: EditData, bpm: number, channelCount: number): Uint8Array[] {
+  const fpb = (60 / bpm) * FPS
+  const total = Math.max(1, Math.ceil(ed.beats * fpb))
+  const frames = Array.from({ length: total }, () => new Uint8Array(channelCount))
+  const span = (beatIdx: number): [number, number] => [
+    Math.floor(beatIdx * fpb),
+    Math.min(total, Math.ceil((beatIdx + 1) * fpb)),
+  ]
+  for (const [chStr, beatList] of Object.entries(ed.customBlocks ?? {})) {
+    const ch = Number(chStr)
+    for (const beatIdx of beatList) {
+      const [s, e] = span(beatIdx)
+      for (let f = s; f < e; f++) frames[f][ch] = 255
+    }
+  }
+  for (const [chStr, lane] of Object.entries(ed.closureBlocks ?? {})) {
+    const ch = Number(chStr)
+    for (const [beatStr, cmd] of Object.entries(lane)) {
+      const [s, e] = span(Number(beatStr))
+      for (let f = s; f < e; f++) frames[f][ch] = CLOSURE_CMD[cmd]
+    }
+  }
+  return frames
+}
+
 // ─── Channel grouping (xLights-style model tree) ────────────────────────────────
 export type ZoneGroup = 'Front Lights' | 'Rear Lights' | 'Markers' | 'Closures'
 

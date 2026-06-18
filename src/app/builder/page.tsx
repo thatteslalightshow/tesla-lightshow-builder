@@ -727,6 +727,14 @@ function BuilderInner() {
     if (data.bpm) setBpm(data.bpm);
     setIsPublic(data.is_public); setShareToken(data.share_token);
     setSongTitle(data.song_title ?? ''); setSongArtist(data.song_artist ?? '');
+    // Restore manual edits (light beats + closure commands)
+    const ed = data.edit_data as { customBlocks?: Record<string, number[]>; closureBlocks?: ClosureBlocks } | null;
+    if (ed) {
+      setCustomBlocks(Object.fromEntries(Object.entries(ed.customBlocks ?? {}).map(([ch, arr]) => [Number(ch), new Set(arr)])));
+      setClosureBlocks(ed.closureBlocks ?? {});
+    } else {
+      setCustomBlocks({}); setClosureBlocks({});
+    }
     const { data: audio } = await supabase.from('audio_files').select('id').eq('show_id', id).limit(1);
     if (audio?.length) setAudioUploaded(true);
   }
@@ -903,20 +911,38 @@ function BuilderInner() {
 
   async function save(): Promise<string | null> {
     setSaving(true); setSaveMsg('');
-    const payload = { user_id: userId, name, tesla_model: model, style, intensity, bpm, is_public: isPublic, song_title: songTitle || null, song_artist: songArtist || null, updated_at: new Date().toISOString() };
+    const editData = (Object.keys(customBlocks).length || Object.keys(closureBlocks).length)
+      ? {
+          customBlocks: Object.fromEntries(Object.entries(customBlocks).map(([ch, set]) => [ch, [...set]])),
+          closureBlocks,
+          beats: VISIBLE_BEATS,
+        }
+      : null;
+    const fullPayload = { user_id: userId, name, tesla_model: model, style, intensity, bpm, is_public: isPublic, song_title: songTitle || null, song_artist: songArtist || null, edit_data: editData, updated_at: new Date().toISOString() };
     let showId = savedShowId;
     let error;
-    if (showId) {
-      ({ error } = await supabase.from('shows').update(payload).eq('id', showId));
-    } else {
+
+    // Save with edit_data; if that column doesn't exist yet (migration not run),
+    // retry without it so saving never breaks.
+    const trySave = async (payload: Record<string, unknown>) => {
+      if (showId) {
+        return (await supabase.from('shows').update(payload).eq('id', showId)).error;
+      }
       const { error: e, data } = await supabase.from('shows')
         .insert({ ...payload, is_public: false, share_token: crypto.randomUUID() })
         .select().single();
-      error = e;
       if (data) {
         showId = data.id; setSavedShowId(data.id); setShareToken(data.share_token);
         router.replace(`/builder?id=${data.id}`);
       }
+      return e;
+    };
+
+    error = await trySave(fullPayload);
+    if (error && /edit_data/.test(error.message)) {
+      const { edit_data: _omit, ...noEdit } = fullPayload;
+      void _omit;
+      error = await trySave(noEdit);
     }
     setSaving(false);
     if (error) { setSaveMsg(`Error: ${error.message}`); setTimeout(() => setSaveMsg(''), 4000); return null; }
