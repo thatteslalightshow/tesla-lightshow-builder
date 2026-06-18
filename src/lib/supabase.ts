@@ -27,6 +27,8 @@ export interface Show {
   duration_sec: number | null
   is_public:    boolean
   share_token:  string
+  view_count:   number
+  like_count:   number
   created_at:   string
   updated_at:   string
 }

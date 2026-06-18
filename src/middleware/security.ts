@@ -32,6 +32,7 @@ const RATE_LIMITS: Record<string, number> = {
 // gated by the cookie-session check in middleware.
 const PUBLIC_API_ROUTES = new Set([
   '/api/stripe/webhook', // verified via Stripe signature
+  '/api/shows/view',     // anonymous view counter (increment-only)
 ])
 
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>()

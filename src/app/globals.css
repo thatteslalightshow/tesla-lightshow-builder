@@ -43,6 +43,12 @@ input,select,textarea{font-family:var(--font-body);outline:none}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 .pulse{animation:pulse 2s ease infinite}
 
+/* LightStrip preview keyframes (peak brightness via --ls-peak) */
+@keyframes ls-pulse{0%,100%{opacity:.12}50%{opacity:var(--ls-peak,1)}}
+@keyframes ls-blip{0%,12%{opacity:var(--ls-peak,1)}13%,100%{opacity:.1}}
+@keyframes ls-strobe{0%,40%{opacity:.1}45%,55%{opacity:var(--ls-peak,1)}60%,100%{opacity:.1}}
+.gallery-card:hover{border-color:var(--red)!important;transform:translateY(-2px)}
+
 /* ── Responsive utilities ───────────────────────────────────────────────── */
 .mobile-only{display:none!important}
 .desktop-only{display:inline!important}
