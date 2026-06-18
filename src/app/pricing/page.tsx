@@ -4,32 +4,48 @@ import SocialLinks from '@/components/SocialLinks'
 
 export const metadata: Metadata = {
   title: 'Pricing — Tesla LightShow Builder',
-  description: 'Build and preview Tesla light shows for free. Pay $2.99 only when you export. No subscription, no commitment.',
+  description: 'Build and preview Tesla light shows free. Pay $2.99 per export, or go unlimited with Creator at $4.99/mo.',
 }
 
 const FREE_FEATURES = [
   'Build unlimited shows',
   'Full beat detection and analysis',
   'Manual per-channel editing',
-  'Left/right symmetry mode',
   'Live 3D preview on your Tesla model',
   'Share to the community gallery',
   '1 free USB export included',
 ]
 
-const PAID_FEATURES = [
+const PER_EXPORT_FEATURES = [
   'Everything in Free',
-  'Unlimited USB exports at $2.99 each',
+  'Export any show for $2.99',
   'Audio-synced FSEQ + WAV package',
   'FSEQ v2 validation report',
+  'Pay only when you export',
+  'No commitment',
+]
+
+const CREATOR_FEATURES = [
+  'Everything in Per export',
+  'Unlimited exports — no per-show fee',
+  'Email delivery of every export',
   'Remix any public community show',
   'Priority support',
+  'Cancel anytime',
 ]
 
 const FAQ = [
   {
     q: 'What does "free export" mean?',
-    a: 'Your very first USB export — the ZIP file that goes on your Tesla — is completely free. After that, each additional export is $2.99. You can preview, edit, and update your shows as many times as you want at no cost.',
+    a: 'Your very first USB export — the ZIP file that goes on your Tesla — is completely free. After that, you can either pay $2.99 per export or subscribe to Creator for unlimited exports.',
+  },
+  {
+    q: 'Should I pay per export or subscribe?',
+    a: 'If you only need a show or two, pay $2.99 per export — no commitment. If you create regularly (new shows for holidays, meetups, seasons), Creator at $4.99/mo pays for itself after two exports a month, and the annual plan ($39.99/yr) is the best value.',
+  },
+  {
+    q: 'Can I cancel the Creator subscription anytime?',
+    a: 'Yes. Manage or cancel anytime from your dashboard — you keep access through the end of your billing period. Any shows you already exported are yours to keep forever.',
   },
   {
     q: 'What Tesla models are supported?',
@@ -40,18 +56,19 @@ const FAQ = [
     a: 'No. Just a USB drive (exFAT formatted) and a Tesla with the light show feature enabled. We handle all the FSEQ file generation — you just plug in and go.',
   },
   {
-    q: 'What audio formats are supported?',
-    a: 'MP3 and WAV for beat detection. For audio to play from your Tesla during the show, the file must be WAV — we flag this before you export.',
-  },
-  {
-    q: 'Is there a subscription or monthly fee?',
-    a: 'No. You only pay when you export. There\'s no subscription, no monthly fee, and no commitment. Build and preview for free forever.',
-  },
-  {
     q: 'What is an FSEQ file?',
     a: 'FSEQ (xLights sequence format v2) is the file format Tesla uses to drive light shows. It contains per-frame brightness values for each of your car\'s 48 light channels at 20 frames per second.',
   },
 ]
+
+function Feature({ text }: { text: string }) {
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14 }}>
+      <span style={{ color: 'var(--green)', marginTop: 1, flexShrink: 0 }}>✓</span>
+      <span style={{ color: 'var(--muted)' }}>{text}</span>
+    </div>
+  )
+}
 
 export default function PricingPage() {
   return (
@@ -70,36 +87,31 @@ export default function PricingPage() {
         </div>
       </header>
 
-      <main style={{ maxWidth: 900, margin: '0 auto', padding: '5rem 2rem' }}>
+      <main style={{ maxWidth: 1040, margin: '0 auto', padding: '5rem 2rem' }}>
 
         {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
+        <div style={{ textAlign: 'center', marginBottom: '3.5rem' }}>
           <div style={{ display: 'inline-block', fontSize: 12, fontWeight: 700, letterSpacing: '.1em', color: 'var(--red)', textTransform: 'uppercase', marginBottom: 16 }}>Pricing</div>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(2rem, 5vw, 3rem)', fontWeight: 700, marginBottom: 16, lineHeight: 1.1 }}>
-            Build free.<br />Pay only when you export.
+            Build free.<br />Export your way.
           </h1>
-          <p style={{ color: 'var(--muted)', fontSize: '1rem', maxWidth: 480, margin: '0 auto', lineHeight: 1.7 }}>
-            No subscription. No monthly fee. Create, preview, and perfect your Tesla light show — then pay $2.99 to export when you&apos;re ready.
+          <p style={{ color: 'var(--muted)', fontSize: '1rem', maxWidth: 520, margin: '0 auto', lineHeight: 1.7 }}>
+            Create, preview, and perfect your Tesla light show for free. When you&apos;re ready to export, pay once at $2.99 — or go unlimited with Creator.
           </p>
         </div>
 
         {/* Pricing cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: '5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20, marginBottom: '4rem', alignItems: 'start' }}>
 
           {/* Free */}
-          <div style={{ padding: '2.5rem', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 20 }}>Free forever</div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, marginBottom: 8 }}>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: '3rem', fontWeight: 700, lineHeight: 1 }}>$0</span>
+          <div style={{ padding: '2rem', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 18 }}>Free</div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, marginBottom: 6 }}>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: '2.6rem', fontWeight: 700, lineHeight: 1 }}>$0</span>
             </div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: '2rem' }}>Includes your first export</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: '2rem' }}>
-              {FREE_FEATURES.map(f => (
-                <div key={f} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14 }}>
-                  <span style={{ color: 'var(--green)', marginTop: 1, flexShrink: 0 }}>✓</span>
-                  <span style={{ color: 'var(--muted)' }}>{f}</span>
-                </div>
-              ))}
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: '1.75rem' }}>Includes your first export</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: '1.75rem' }}>
+              {FREE_FEATURES.map(f => <Feature key={f} text={f} />)}
             </div>
             <Link href="/auth?mode=signup" className="btn btn-ghost btn-full" style={{ display: 'flex', justifyContent: 'center' }}>
               Get started free
@@ -107,24 +119,36 @@ export default function PricingPage() {
           </div>
 
           {/* Per export */}
-          <div style={{ padding: '2.5rem', background: 'var(--bg2)', border: '2px solid var(--red)', borderRadius: 'var(--radius-lg)', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #e8404a, #ff6b35)' }} />
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14, color: 'var(--red)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 20 }}>Per export</div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, marginBottom: 8 }}>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: '3rem', fontWeight: 700, lineHeight: 1 }}>$2.99</span>
+          <div style={{ padding: '2rem', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 18 }}>Per export</div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, marginBottom: 6 }}>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: '2.6rem', fontWeight: 700, lineHeight: 1 }}>$2.99</span>
               <span style={{ fontSize: 14, color: 'var(--muted)', paddingBottom: 6 }}>/ export</span>
             </div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: '2rem' }}>After your first free export</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: '2rem' }}>
-              {PAID_FEATURES.map(f => (
-                <div key={f} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14 }}>
-                  <span style={{ color: 'var(--green)', marginTop: 1, flexShrink: 0 }}>✓</span>
-                  <span style={{ color: 'var(--muted)' }}>{f}</span>
-                </div>
-              ))}
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: '1.75rem' }}>Pay as you go, no commitment</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: '1.75rem' }}>
+              {PER_EXPORT_FEATURES.map(f => <Feature key={f} text={f} />)}
+            </div>
+            <Link href="/auth?mode=signup" className="btn btn-ghost btn-full" style={{ display: 'flex', justifyContent: 'center' }}>
+              Start building →
+            </Link>
+          </div>
+
+          {/* Creator subscription */}
+          <div style={{ padding: '2rem', background: 'var(--bg2)', border: '2px solid var(--red)', borderRadius: 'var(--radius-lg)', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #e8404a, #ff6b35)' }} />
+            <div style={{ position: 'absolute', top: 14, right: 14, fontSize: 10, fontWeight: 700, letterSpacing: '.05em', color: '#fff', background: 'var(--red)', padding: '3px 8px', borderRadius: 10 }}>BEST VALUE</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, color: 'var(--red)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 18 }}>Creator</div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, marginBottom: 6 }}>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: '2.6rem', fontWeight: 700, lineHeight: 1 }}>$4.99</span>
+              <span style={{ fontSize: 14, color: 'var(--muted)', paddingBottom: 6 }}>/ month</span>
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: '1.75rem' }}>or $39.99/year — save 33%</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: '1.75rem' }}>
+              {CREATOR_FEATURES.map(f => <Feature key={f} text={f} />)}
             </div>
             <Link href="/auth?mode=signup" className="btn btn-primary btn-full" style={{ display: 'flex', justifyContent: 'center' }}>
-              Start building →
+              Go unlimited →
             </Link>
           </div>
         </div>
@@ -132,10 +156,10 @@ export default function PricingPage() {
         {/* Value prop callout */}
         <div style={{ padding: '2.5rem', background: 'rgba(232,64,74,0.06)', border: '1px solid rgba(232,64,74,0.2)', borderRadius: 'var(--radius-lg)', marginBottom: '5rem', textAlign: 'center' }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 700, marginBottom: 12 }}>
-            Less than a coffee. A light show that turns heads.
+            Start free. Upgrade only if you love it.
           </div>
-          <p style={{ color: 'var(--muted)', fontSize: 14, maxWidth: 500, margin: '0 auto', lineHeight: 1.7 }}>
-            A custom Tesla light show synced to your music plays at holiday gatherings, car meetups, and wherever you park. At $2.99, it costs less than a latte and lasts forever on your USB drive.
+          <p style={{ color: 'var(--muted)', fontSize: 14, maxWidth: 520, margin: '0 auto', lineHeight: 1.7 }}>
+            Every account gets a free export to try the whole flow end to end. Pay $2.99 for the occasional show, or subscribe to Creator once you&apos;re building regularly — two exports a month already beats per-export pricing.
           </p>
         </div>
 
@@ -144,7 +168,7 @@ export default function PricingPage() {
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 700, marginBottom: '2rem', textAlign: 'center' }}>
             Frequently asked questions
           </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 0 }}>
             {FAQ.map((item, i) => (
               <div key={i} style={{ padding: '1.5rem 0', borderBottom: '1px solid var(--border)' }}>
                 <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15, marginBottom: 8 }}>{item.q}</div>

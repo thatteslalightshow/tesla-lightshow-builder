@@ -269,9 +269,9 @@ export default function Home() {
           Simple. No surprises.
         </h2>
         <p style={{ fontSize:15, color:'rgba(255,255,255,0.35)', marginBottom:'3rem', lineHeight:1.7 }}>
-          Build and preview for free, forever. Pay once per export when you&apos;re ready to put it on your Tesla.
+          Build and preview for free, forever. Pay $2.99 per export, or go unlimited with Creator when you&apos;re building regularly.
         </p>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:1, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.06)', borderRadius:16, overflow:'hidden' }}>
+        <div className="home-pricing-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:1, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.06)', borderRadius:16, overflow:'hidden' }}>
           {/* Free */}
           <div style={{ padding:'2.5rem', background:'#000' }}>
             <div style={{ fontSize:12, fontWeight:600, letterSpacing:'.12em', color:'rgba(255,255,255,0.3)', textTransform:'uppercase', marginBottom:20 }}>Free</div>
@@ -289,12 +289,29 @@ export default function Home() {
             </Link>
           </div>
           {/* Per export */}
-          <div style={{ padding:'2.5rem', background:'#0a0000', position:'relative' }}>
-            <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,#e8404a,#ff6030)' }} />
-            <div style={{ fontSize:12, fontWeight:600, letterSpacing:'.12em', color:'#e8404a', textTransform:'uppercase', marginBottom:20 }}>Per Export</div>
+          <div style={{ padding:'2.5rem', background:'#000' }}>
+            <div style={{ fontSize:12, fontWeight:600, letterSpacing:'.12em', color:'rgba(255,255,255,0.3)', textTransform:'uppercase', marginBottom:20 }}>Per Export</div>
             <div style={{ fontFamily:'var(--font-display)', fontSize:'3.2rem', fontWeight:700, letterSpacing:'-2px', marginBottom:4 }}>$2.99</div>
             <div style={{ fontSize:13, color:'rgba(255,255,255,0.3)', marginBottom:'2rem', paddingBottom:'2rem', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>per USB download</div>
-            {['Everything in Free','Unlimited exports','FSEQ + WAV package','FSEQ validation report','Community gallery sharing'].map(f=>(
+            {['Everything in Free','Pay only when you export','FSEQ + WAV package','FSEQ validation report','No commitment'].map(f=>(
+              <div key={f} style={{ display:'flex', gap:10, fontSize:14, color:'rgba(255,255,255,0.5)', marginBottom:10, alignItems:'center' }}>
+                <span style={{ color:'#00e887', fontSize:12 }}>✓</span>{f}
+              </div>
+            ))}
+            <Link href="/auth?mode=signup" style={{ marginTop:'2rem', display:'flex', alignItems:'center', justifyContent:'center', padding:'12px', borderRadius:8, border:'1px solid rgba(255,255,255,0.12)', color:'rgba(255,255,255,0.6)', fontSize:14, transition:'all .15s' }}
+              onMouseEnter={e=>{ e.currentTarget.style.borderColor='rgba(255,255,255,0.3)'; e.currentTarget.style.color='#fff'; }}
+              onMouseLeave={e=>{ e.currentTarget.style.borderColor='rgba(255,255,255,0.12)'; e.currentTarget.style.color='rgba(255,255,255,0.6)'; }}>
+              Start building →
+            </Link>
+          </div>
+          {/* Creator subscription */}
+          <div style={{ padding:'2.5rem', background:'#0a0000', position:'relative' }}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,#e8404a,#ff6030)' }} />
+            <div style={{ position:'absolute', top:14, right:14, fontSize:9, fontWeight:700, letterSpacing:'.05em', color:'#fff', background:'#e8404a', padding:'3px 8px', borderRadius:10 }}>BEST VALUE</div>
+            <div style={{ fontSize:12, fontWeight:600, letterSpacing:'.12em', color:'#e8404a', textTransform:'uppercase', marginBottom:20 }}>Creator</div>
+            <div style={{ fontFamily:'var(--font-display)', fontSize:'3.2rem', fontWeight:700, letterSpacing:'-2px', marginBottom:4 }}>$4.99<span style={{ fontSize:'1rem', fontWeight:500, color:'rgba(255,255,255,0.3)', letterSpacing:0 }}>/mo</span></div>
+            <div style={{ fontSize:13, color:'rgba(255,255,255,0.3)', marginBottom:'2rem', paddingBottom:'2rem', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>or $39.99/yr — save 33%</div>
+            {['Everything in Per Export','Unlimited exports','Email delivery','Remix any public show','Cancel anytime'].map(f=>(
               <div key={f} style={{ display:'flex', gap:10, fontSize:14, color:'rgba(255,255,255,0.5)', marginBottom:10, alignItems:'center' }}>
                 <span style={{ color:'#00e887', fontSize:12 }}>✓</span>{f}
               </div>
@@ -302,7 +319,7 @@ export default function Home() {
             <Link href="/auth?mode=signup" style={{ marginTop:'2rem', display:'flex', alignItems:'center', justifyContent:'center', padding:'12px', borderRadius:8, background:'#e8404a', color:'#fff', fontSize:14, fontWeight:600, transition:'all .15s', boxShadow:'0 0 30px rgba(232,64,74,0.25)' }}
               onMouseEnter={e=>{ e.currentTarget.style.background='#c73038'; }}
               onMouseLeave={e=>{ e.currentTarget.style.background='#e8404a'; }}>
-              Start building →
+              Go unlimited →
             </Link>
           </div>
         </div>
@@ -408,6 +425,7 @@ export default function Home() {
 
           /* Pricing: stack cards */
           div[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
+          .home-pricing-grid { grid-template-columns: 1fr !important; }
 
           /* How-it-works steps: tighter grid */
           div[style*="grid-template-columns: 64px 1fr"] { grid-template-columns: 40px 1fr !important; gap: 1rem !important; }

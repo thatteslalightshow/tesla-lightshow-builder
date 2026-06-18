@@ -1,7 +1,8 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import type { Show } from '@/lib/supabase';
+import { supabase, type Show } from '@/lib/supabase';
 import TeslaScene from '@/components/TeslaScene';
 import SocialLinks from '@/components/SocialLinks';
 
@@ -32,9 +33,54 @@ export default function ShowPreview({ show, audioUrl, audioName }: Props) {
   const [copied, setCopied]           = useState(false);
   const [audioReady, setAudioReady]   = useState(false);
 
+  // Engagement
+  const router = useRouter();
+  const [viewCount, setViewCount] = useState(show.view_count ?? 0);
+  const [likeCount, setLikeCount] = useState(show.like_count ?? 0);
+  const [liked, setLiked]         = useState(false);
+  const [likeBusy, setLikeBusy]   = useState(false);
+  const [signedIn, setSignedIn]   = useState(false);
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rafRef   = useRef<number>(0);
   const bpm      = show.bpm ?? 120;
+
+  // Count a view once per page load, and load this user's like state
+  useEffect(() => {
+    fetch('/api/shows/view', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: show.share_token }),
+    }).then(() => setViewCount(c => c + 1)).catch(() => null);
+
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      setSignedIn(!!session);
+      const res = await fetch(`/api/shows/like?show_id=${show.id}`).catch(() => null);
+      if (res?.ok) {
+        const { liked, like_count } = await res.json();
+        setLiked(liked);
+        setLikeCount(like_count);
+      }
+    });
+  }, [show.id, show.share_token]);
+
+  async function toggleLike() {
+    if (!signedIn) { router.push('/auth?mode=signup'); return; }
+    if (likeBusy) return;
+    setLikeBusy(true);
+    // optimistic
+    setLiked(v => !v);
+    setLikeCount(c => c + (liked ? -1 : 1));
+    const res = await fetch('/api/shows/like', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ show_id: show.id }),
+    }).catch(() => null);
+    if (res?.ok) {
+      const { liked: serverLiked, like_count } = await res.json();
+      setLiked(serverLiked);
+      setLikeCount(like_count);
+    }
+    setLikeBusy(false);
+  }
 
   // Build audio element once
   useEffect(() => {
@@ -146,8 +192,26 @@ export default function ShowPreview({ show, audioUrl, audioName }: Props) {
               </span>
               {show.bpm && <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>{show.bpm} BPM</span>}
               {audioName && <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>♪ {audioName}</span>}
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>👁 {viewCount.toLocaleString()} views</span>
             </div>
           </div>
+
+          {/* Like button */}
+          <button
+            onClick={toggleLike}
+            disabled={likeBusy}
+            title={signedIn ? (liked ? 'Unlike' : 'Like this show') : 'Sign in to like'}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', borderRadius: 22,
+              background: liked ? 'rgba(232,64,74,0.14)' : 'rgba(255,255,255,0.05)',
+              border: `1px solid ${liked ? 'rgba(232,64,74,0.4)' : 'rgba(255,255,255,0.12)'}`,
+              color: liked ? '#ff8a8a' : 'rgba(255,255,255,0.7)', cursor: 'pointer',
+              fontSize: 14, fontWeight: 600, transition: 'all .15s', flexShrink: 0,
+            }}
+          >
+            <span style={{ fontSize: 16 }}>{liked ? '❤️' : '🤍'}</span>
+            {likeCount.toLocaleString()}
+          </button>
         </div>
 
         {/* Scene with play overlay + watermark */}
