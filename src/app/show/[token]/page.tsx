@@ -3,6 +3,9 @@ import type { Metadata } from 'next'
 import { getAdminClient } from '@/lib/supabase'
 import ShowPreview from './ShowPreview'
 
+// Render per-request so the view/like counts are always live, not cached.
+export const dynamic = 'force-dynamic'
+
 interface Props {
   params: { token: string }
 }
