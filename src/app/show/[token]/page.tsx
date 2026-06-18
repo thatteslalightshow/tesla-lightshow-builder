@@ -50,5 +50,19 @@ export default async function ShowPage({ params }: Props) {
     )
   }
 
-  return <ShowPreview show={show} />
+  // Fetch a signed audio URL (1-hour expiry) if this show has an audio file
+  let audioUrl: string | null = null
+  const { data: audioFile } = await admin
+    .from('audio_files')
+    .select('storage_path, original_name')
+    .eq('show_id', show.id)
+    .single()
+  if (audioFile?.storage_path) {
+    const { data: signed } = await admin.storage
+      .from('audio-files')
+      .createSignedUrl(audioFile.storage_path, 3600)
+    audioUrl = signed?.signedUrl ?? null
+  }
+
+  return <ShowPreview show={show} audioUrl={audioUrl} audioName={audioFile?.original_name ?? null} />
 }

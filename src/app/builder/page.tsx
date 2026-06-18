@@ -947,12 +947,36 @@ function BuilderInner() {
               />
             </div>
 
-            {/* Preview indicator overlay */}
+            {/* Big play overlay — only when audio is loaded and not yet previewing */}
+            {audioFile && !previewing && (
+              <button
+                onClick={startPreview}
+                style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, background: 'rgba(0,0,0,0.28)', border: 'none', cursor: 'pointer', transition: 'background .2s' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.15)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.28)')}
+              >
+                <div style={{ width: 58, height: 58, borderRadius: '50%', background: 'rgba(232,64,74,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 40px rgba(232,64,74,0.45)' }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.65)', letterSpacing: '.03em' }}>Preview with audio</span>
+              </button>
+            )}
+
+            {/* Live indicator while previewing */}
             {previewing && (
               <div style={{ position: 'absolute', top: 14, left: 14, display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', borderRadius: 20, padding: '5px 12px', border: '1px solid rgba(0,232,135,0.3)' }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--green)', display: 'inline-block', animation: 'pulse 1s infinite' }} />
-                <span style={{ fontSize: 11, color: 'var(--green)', fontWeight: 600 }}>LIVE PREVIEW — {audioFile?.name?.slice(0, 24) ?? 'audio'}</span>
+                <span style={{ fontSize: 11, color: 'var(--green)', fontWeight: 600 }}>LIVE — {audioFile?.name?.slice(0, 22) ?? 'audio'}</span>
               </div>
+            )}
+            {/* Stop button while previewing */}
+            {previewing && (
+              <button
+                onClick={stopPreview}
+                style={{ position: 'absolute', top: 14, right: 14, width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><rect width="10" height="10" rx="1.5"/></svg>
+              </button>
             )}
           </div>
 

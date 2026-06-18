@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import type { Show } from '@/lib/supabase';
 import TeslaScene from '@/components/TeslaScene';
@@ -8,13 +8,92 @@ const MODEL_LABELS: Record<string, string> = {
   model3: 'Model 3', modelY: 'Model Y', modelS: 'Model S',
   modelX: 'Model X', cybertruck: 'Cybertruck',
 }
-
 const STYLE_LABELS: Record<string, string> = {
   energetic: 'Energetic', wave: 'Wave', strobe: 'Strobe', chase: 'Chase',
 }
 
-export default function ShowPreview({ show }: { show: Show }) {
-  const [copied, setCopied] = useState(false);
+interface Props {
+  show: Show
+  audioUrl: string | null
+  audioName: string | null
+}
+
+function fmt(sec: number) {
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+export default function ShowPreview({ show, audioUrl, audioName }: Props) {
+  const [playing, setPlaying]         = useState(false);
+  const [duration, setDuration]       = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [previewBeat, setPreviewBeat] = useState<number | null>(null);
+  const [copied, setCopied]           = useState(false);
+  const [audioReady, setAudioReady]   = useState(false);
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const rafRef   = useRef<number>(0);
+  const bpm      = show.bpm ?? 120;
+
+  // Build audio element once
+  useEffect(() => {
+    if (!audioUrl) return;
+    const audio = new Audio(audioUrl);
+    audio.preload = 'metadata';
+    audioRef.current = audio;
+
+    audio.addEventListener('loadedmetadata', () => {
+      setDuration(audio.duration);
+      setAudioReady(true);
+    });
+    audio.addEventListener('ended', stop);
+
+    return () => {
+      audio.pause();
+      audio.src = '';
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, [audioUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const stop = useCallback(() => {
+    const audio = audioRef.current;
+    if (audio) { audio.pause(); audio.currentTime = 0; }
+    cancelAnimationFrame(rafRef.current);
+    setPlaying(false);
+    setCurrentTime(0);
+    setPreviewBeat(null);
+  }, []);
+
+  function togglePlay() {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (playing) {
+      audio.pause();
+      cancelAnimationFrame(rafRef.current);
+      setPlaying(false);
+      setPreviewBeat(null);
+    } else {
+      audio.play().catch(() => {});
+      setPlaying(true);
+      const tick = () => {
+        setCurrentTime(audio.currentTime);
+        setPreviewBeat((audio.currentTime / 60) * bpm);
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+    }
+  }
+
+  function seek(e: React.MouseEvent<HTMLDivElement>) {
+    const audio = audioRef.current;
+    if (!audio || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    audio.currentTime = frac * duration;
+    setCurrentTime(audio.currentTime);
+    setPreviewBeat((audio.currentTime / 60) * bpm);
+  }
 
   function copyLink() {
     navigator.clipboard.writeText(window.location.href).then(() => {
@@ -23,69 +102,172 @@ export default function ShowPreview({ show }: { show: Show }) {
     });
   }
 
+  const progress = duration ? currentTime / duration : 0;
+
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', background: '#000', color: '#fff', display: 'flex', flexDirection: 'column' }}>
+
       {/* Nav */}
-      <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 2rem', borderBottom: '1px solid var(--border)', background: 'rgba(10,10,15,0.9)', backdropFilter: 'blur(12px)' }}>
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 32, height: 32, background: 'var(--red)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14, color: '#fff', fontFamily: 'var(--font-display)' }}>T</div>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 14 }}>LightShow Builder</span>
+      <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2rem', height: 54, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(16px)', borderBottom: '1px solid rgba(255,255,255,0.07)', position: 'sticky', top: 0, zIndex: 50 }}>
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 9, fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14, letterSpacing: '-.2px' }}>
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <rect width="22" height="22" rx="6" fill="#e8404a"/>
+            <path d="M6 8h10M8 8v6M14 8v6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round"/>
+          </svg>
+          LightShow Builder
         </Link>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={copyLink} className="btn btn-ghost btn-sm">
-            {copied ? '✓ Copied!' : '🔗 Copy link'}
+          <button onClick={copyLink} style={{ padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 600, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', transition: 'all .15s' }}>
+            {copied ? '✓ Copied!' : '↑ Share'}
           </button>
-          <Link href="/auth?mode=signup" className="btn btn-primary btn-sm">Build your own →</Link>
+          <Link href="/auth?mode=signup" style={{ padding: '6px 16px', borderRadius: 7, fontSize: 12, fontWeight: 600, background: '#e8404a', color: '#fff', letterSpacing: '-.1px' }}>
+            Build your own →
+          </Link>
         </div>
       </nav>
 
-      {/* Hero info */}
-      <div style={{ padding: '2rem 2rem 1rem', maxWidth: 960, width: '100%', margin: '0 auto' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+      {/* Main */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', maxWidth: 1000, width: '100%', margin: '0 auto', padding: '2rem 2rem 3rem' }}>
+
+        {/* Title row */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
           <div>
-            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(1.5rem, 4vw, 2.25rem)', fontWeight: 700, letterSpacing: '-0.5px', marginBottom: '0.5rem' }}>
+            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(1.4rem, 4vw, 2rem)', fontWeight: 700, letterSpacing: '-0.5px', marginBottom: 8, lineHeight: 1.1 }}>
               {show.name}
             </h1>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <span className="badge badge-red">{STYLE_LABELS[show.style] ?? show.style}</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: 'var(--bg3)', color: 'var(--muted)', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: 'rgba(232,64,74,0.15)', border: '1px solid rgba(232,64,74,0.3)', color: '#ff8a8a' }}>
+                {STYLE_LABELS[show.style] ?? show.style}
+              </span>
+              <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.55)' }}>
                 {MODEL_LABELS[show.tesla_model] ?? show.tesla_model}
+              </span>
+              {show.bpm && <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>{show.bpm} BPM</span>}
+              {audioName && <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>♪ {audioName}</span>}
+            </div>
+          </div>
+        </div>
+
+        {/* Scene with play overlay + watermark */}
+        <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', border: `1px solid ${playing ? 'rgba(0,232,135,0.2)' : 'rgba(255,255,255,0.08)'}`, transition: 'border-color .4s', background: '#09090f' }}>
+          <div style={{ height: 'clamp(300px, 50vw, 500px)' }}>
+            <TeslaScene
+              teslaModel={show.tesla_model}
+              style={show.style}
+              intensity={show.intensity}
+              bpm={bpm}
+              previewBeat={previewBeat}
+            />
+          </div>
+
+          {/* Big play button overlay — shown when not playing */}
+          {audioUrl && !playing && (
+            <button
+              onClick={togglePlay}
+              style={{
+                position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12,
+                background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(2px)',
+                border: 'none', cursor: 'pointer', transition: 'background .2s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.22)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.35)')}
+            >
+              <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'rgba(232,64,74,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 48px rgba(232,64,74,0.5)', transition: 'transform .15s, box-shadow .15s' }}>
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.7)', letterSpacing: '.03em' }}>
+                {audioReady ? 'Play with audio' : 'Loading audio…'}
+              </span>
+            </button>
+          )}
+
+          {/* Live indicator when playing */}
+          {playing && (
+            <div style={{ position: 'absolute', top: 14, left: 14, display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', borderRadius: 20, padding: '5px 12px', border: '1px solid rgba(0,232,135,0.3)' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#00e887', display: 'inline-block', animation: 'pulse 1s infinite' }} />
+              <span style={{ fontSize: 11, color: '#00e887', fontWeight: 600, letterSpacing: '.05em' }}>LIVE</span>
+            </div>
+          )}
+
+          {/* Watermark */}
+          <div style={{ position: 'absolute', bottom: 12, right: 14, fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.22)', letterSpacing: '.04em', pointerEvents: 'none', userSelect: 'none', textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
+            @thatteslalightshow
+          </div>
+        </div>
+
+        {/* Audio controls */}
+        {audioUrl && (
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* Scrubber */}
+            <div
+              onClick={seek}
+              style={{ height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
+            >
+              <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${progress * 100}%`, background: playing ? '#00e887' : 'rgba(255,255,255,0.4)', borderRadius: 2, transition: playing ? 'none' : 'width .1s' }} />
+            </div>
+
+            {/* Controls row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <button
+                onClick={togglePlay}
+                style={{ width: 36, height: 36, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.15)', background: playing ? 'rgba(0,232,135,0.12)' : 'rgba(255,255,255,0.07)', color: playing ? '#00e887' : '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}
+              >
+                {playing
+                  ? <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><rect width="3.5" height="12" rx="1"/><rect x="7.5" width="3.5" height="12" rx="1"/></svg>
+                  : <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M2 1l9 5-9 5V1z"/></svg>
+                }
+              </button>
+              {playing && (
+                <button
+                  onClick={stop}
+                  style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><rect width="10" height="10" rx="1.5"/></svg>
+                </button>
+              )}
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', fontVariantNumeric: 'tabular-nums' }}>
+                {fmt(currentTime)} {duration ? `/ ${fmt(duration)}` : ''}
+              </span>
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: 'rgba(255,255,255,0.2)', letterSpacing: '.03em' }}>
+                {playing ? 'lights synced to audio' : ''}
               </span>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '1.5rem' }}>
-            {[
-              { label: 'BPM', value: show.bpm ?? '—' },
-              { label: 'Intensity', value: `${show.intensity}%` },
-              ...(show.duration_sec ? [{ label: 'Duration', value: `${Math.floor(show.duration_sec / 60)}:${String(Math.round(show.duration_sec % 60)).padStart(2, '0')}` }] : []),
-            ].map(s => (
-              <div key={s.label} style={{ textAlign: 'center' }}>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', fontWeight: 700, color: 'var(--text)' }}>{s.value}</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.5px' }}>{s.label}</div>
-              </div>
-            ))}
+        )}
+
+        {/* No audio state */}
+        {!audioUrl && (
+          <div style={{ marginTop: 10, fontSize: 12, color: 'rgba(255,255,255,0.25)', textAlign: 'center' }}>
+            No audio attached to this show
           </div>
-        </div>
-      </div>
+        )}
 
-      {/* 3D Preview */}
-      <div style={{ flex: 1, maxWidth: 960, width: '100%', margin: '0 auto', padding: '0 2rem 2rem' }}>
-        <div style={{ height: 460, borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border)' }}>
-          <TeslaScene teslaModel={show.tesla_model} style={show.style} intensity={show.intensity} bpm={show.bpm ?? 120} />
-        </div>
-
-        {/* CTA */}
-        <div style={{ marginTop: '2rem', padding: '1.5rem', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+        {/* CTA strip */}
+        <div style={{ marginTop: '2.5rem', padding: '1.75rem 2rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, marginBottom: '0.25rem' }}>Want to build your own?</div>
-            <div style={{ fontSize: 13, color: 'var(--muted)' }}>Upload any song, pick your Tesla model, and export in seconds.</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Build your own light show</div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>
+              Upload any song · sync 48 channels · export to USB · first show free
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={copyLink} className="btn btn-ghost btn-sm">{copied ? '✓ Copied!' : '🔗 Share'}</button>
-            <Link href="/auth?mode=signup" className="btn btn-primary">Build your own →</Link>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button onClick={copyLink} style={{ padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', cursor: 'pointer' }}>
+              {copied ? '✓ Copied!' : '↑ Share this show'}
+            </button>
+            <Link href="/auth?mode=signup" style={{ padding: '9px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: '#e8404a', color: '#fff', letterSpacing: '-.1px', boxShadow: '0 0 30px rgba(232,64,74,0.25)' }}>
+              Start building →
+            </Link>
           </div>
         </div>
+
       </div>
+
+      {/* Footer */}
+      <footer style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '1.25rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)' }}>Made with LightShow Builder</span>
+        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.15)', fontWeight: 600, letterSpacing: '.04em' }}>@thatteslalightshow</span>
+        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.15)' }}>Not affiliated with Tesla, Inc.</span>
+      </footer>
     </div>
   );
 }
