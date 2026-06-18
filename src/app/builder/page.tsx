@@ -5,7 +5,7 @@ import Link from 'next/link';
 import JSZip from 'jszip';
 import { supabase, validateAudioFile, type TeslaModel, type ShowStyle } from '@/lib/supabase';
 import TeslaScene from '@/components/TeslaScene';
-import { MODELS, generateFrames, getChannelCount } from '@/lib/tesla-channels'
+import { MODELS, generateFrames, getChannelCount, groupedZones, type ZoneGroup } from '@/lib/tesla-channels'
 import { analyzeAudioToFrames } from '@/lib/audio-analysis';
 import { validateFseq, type FseqValidation } from '@/lib/fseq';
 import { parseId3, titleFromFilename } from '@/lib/id3';
@@ -152,11 +152,28 @@ function Timeline({
 
   const LABEL_W  = isMobile ? 72  : 112;
   const ROW_H    = isMobile ? 40  : 22;
+  const GROUP_H  = isMobile ? 32  : 26;
   const HEADER_H = isMobile ? 28  : 24;
   const CELL_W   = isMobile ? 38  : null; // null → flex:1 on desktop
   const BEATS = VISIBLE_BEATS;
   const FPS = 20;
   const fpb = (60 / bpm) * FPS;
+
+  // ── Collapsible channel groups (xLights-style model tree) ──────────────────
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  function toggleGroup(g: ZoneGroup) {
+    setCollapsed(prev => {
+      const next = new Set(prev);
+      if (next.has(g)) next.delete(g); else next.add(g);
+      return next;
+    });
+  }
+  type TLRow = { kind: 'group'; group: ZoneGroup; count: number } | { kind: 'zone'; zone: typeof zones[number] };
+  const rows: TLRow[] = [];
+  for (const grp of groupedZones(def)) {
+    rows.push({ kind: 'group', group: grp.group, count: grp.zones.length });
+    if (!collapsed.has(grp.group)) for (const z of grp.zones) rows.push({ kind: 'zone', zone: z });
+  }
 
   // ── Drag-to-paint ──────────────────────────────────────────────────────────
   const dragging = useRef<{ erasing: boolean; lastBeat: number } | null>(null);
@@ -242,7 +259,28 @@ function Timeline({
             </span>
           </div>}
           <div style={{ height: HEADER_H + 4, flexShrink: 0 }} />
-          {zones.map(zone => {
+          {rows.map(row => {
+            if (row.kind === 'group') {
+              const isCollapsed = collapsed.has(row.group);
+              return (
+                <div
+                  key={`g-${row.group}`}
+                  onClick={() => toggleGroup(row.group)}
+                  style={{
+                    height: GROUP_H, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 5,
+                    paddingRight: 8, cursor: 'pointer', userSelect: 'none', overflow: 'hidden',
+                    borderBottom: '1px solid rgba(255,255,255,0.06)',
+                  }}
+                >
+                  <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', width: 9, flexShrink: 0, transition: 'transform .15s', transform: isCollapsed ? 'rotate(-90deg)' : 'none' }}>▾</span>
+                  <span style={{ fontSize: isMobile ? 9 : 10, fontWeight: 700, letterSpacing: '.04em', color: 'rgba(255,255,255,0.62)', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {isMobile ? row.group.replace(' Lights', '') : row.group}
+                  </span>
+                  <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.28)', flexShrink: 0 }}>{row.count}</span>
+                </div>
+              );
+            }
+            const zone = row.zone;
             const [r, g, b] = hexToRgb(zone.color);
             const colorStr = `rgb(${r},${g},${b})`;
             const shortLabel = zone.label
@@ -253,7 +291,7 @@ function Timeline({
               .replace('Interior ', 'Int ')
               .replace('License ', 'Lic ');
             return (
-              <div key={zone.channel} style={{ height: ROW_H, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 5, paddingRight: 8, overflow: 'hidden' }}>
+              <div key={`z-${zone.channel}`} style={{ height: ROW_H, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 5, paddingLeft: 12, paddingRight: 8, overflow: 'hidden' }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: colorStr, flexShrink: 0, boxShadow: `0 0 4px ${colorStr}` }} />
                 <span style={{ color: 'rgba(255,255,255,0.45)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: isMobile ? 9 : 10 }}>
                   {isMobile ? shortLabel : zone.label}
@@ -336,8 +374,18 @@ function Timeline({
             )}
           </div>
 
-          {/* Zone rows */}
-          {zones.map(zone => {
+          {/* Zone rows (grouped) */}
+          {rows.map(row => {
+            if (row.kind === 'group') {
+              return (
+                <div key={`g-${row.group}`} style={{
+                  height: GROUP_H, marginBottom: 2, width: contentW,
+                  borderBottom: '1px solid rgba(255,255,255,0.06)',
+                  background: 'linear-gradient(rgba(255,255,255,0.02), transparent)',
+                }} />
+              );
+            }
+            const zone = row.zone;
             const [r, g, b] = hexToRgb(zone.color);
             const activeBeats = customBlocks?.[zone.channel] ?? new Set<number>();
 

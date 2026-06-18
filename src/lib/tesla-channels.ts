@@ -287,3 +287,27 @@ export function generateFrames(
 export function getChannelCount(model: TeslaModel): number {
   return MODELS[model].channelCount
 }
+
+// ─── Channel grouping (xLights-style model tree) ────────────────────────────────
+// Buckets channels into collapsible groups for the timeline. Closure groups
+// (Windows, Doors) will slot in here once closures are implemented.
+export type ZoneGroup = 'Front Lights' | 'Rear Lights' | 'Interior' | 'Accents'
+
+export const ZONE_GROUP_ORDER: ZoneGroup[] = ['Front Lights', 'Rear Lights', 'Interior', 'Accents']
+
+export function zoneGroup(zone: LightZone): ZoneGroup {
+  if (zone.type === 'interior') return 'Interior'
+  if (zone.type === 'strip') {
+    if (zone.id.includes('front_bar')) return 'Front Lights'
+    if (zone.id.includes('rear_bar')) return 'Rear Lights'
+    return 'Accents'   // sills, undercarriage, bed strips
+  }
+  return zone.position[0] >= 0 ? 'Front Lights' : 'Rear Lights'
+}
+
+// Ordered groups for a model, each with its zones (empty groups omitted).
+export function groupedZones(modelDef: ModelDefinition): { group: ZoneGroup; zones: LightZone[] }[] {
+  return ZONE_GROUP_ORDER
+    .map(group => ({ group, zones: modelDef.zones.filter(z => zoneGroup(z) === group) }))
+    .filter(g => g.zones.length > 0)
+}
