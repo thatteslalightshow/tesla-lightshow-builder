@@ -1000,7 +1000,6 @@ function BuilderInner() {
                 bpm={bpm}
                 previewBeat={previewBeat}
                 customFrames={sceneFrames}
-                audioTriggerFrames={audioTriggers}
               />
             </div>
 

@@ -16,10 +16,8 @@ interface Props {
   bpm: number;
   previewBeat?: number | null;
   customFrames?: Uint8Array[] | null;
-  audioTriggerFrames?: Set<number> | null;
 }
 interface Tooltip { label: string; x: number; y: number }
-interface DoorAnim { group: THREE.Group; axis: 'x' | 'y'; openAngle: number; current: number }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const GLTF_PATHS: Record<TeslaModel, string> = {
@@ -178,90 +176,6 @@ function addMirror(scene: THREE.Object3D, x: number, y: number, z: number, side:
 }
 
 // ─── Door builder ──────────────────────────────────────────────────────────────
-function buildDoors(
-  model: TeslaModel,
-  halfW: number, groundY: number,
-  bMat: THREE.Material, scene: THREE.Object3D,
-): DoorAnim[] {
-  const anims: DoorAnim[] = [];
-  const THICK = 0.042;
-  const OPEN = 1.22; // ~70°
-
-  const cfg: Record<TeslaModel, { a: number; b: number; c: number; dh: number; roofY?: number }> = {
-    model3:     { a: 0.90, b: -0.30, c: -1.58, dh: 0.70 },
-    modelY:     { a: 0.90, b: -0.30, c: -1.60, dh: 0.76 },
-    modelS:     { a: 0.96, b: -0.35, c: -1.70, dh: 0.68 },
-    modelX:     { a: 0.94, b: -0.36, c: -1.72, dh: 0.74, roofY: 1.68 },
-    cybertruck: { a: 1.80, b:  0.18, c:  0.18, dh: 0.82 },
-  };
-  const { a, b, c, dh, roofY } = cfg[model];
-
-  function regularDoor(hingeX: number, len: number, sideZ: number, dir: -1 | 1) {
-    const g = new THREE.Group();
-    g.position.set(hingeX, groundY + dh / 2, sideZ);
-    scene.add(g);
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(len - 0.02, dh, THICK), bMat);
-    mesh.position.set(-(len / 2), 0, dir * THICK / 2);
-    mesh.castShadow = true;
-    g.add(mesh);
-    // Handle
-    const h = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.022, 0.026), CHROME);
-    h.position.set(-(len * 0.52), 0.04, dir * (THICK / 2 + 0.014));
-    g.add(h);
-    anims.push({ group: g, axis: 'y', openAngle: dir * -OPEN, current: 0 });
-  }
-
-  if (model === 'cybertruck') {
-    regularDoor(a, a - b, -(halfW + 0.002), -1);
-    regularDoor(a, a - b,  (halfW + 0.002),  1);
-  } else if (model === 'modelX' && roofY) {
-    // Front conventional doors
-    regularDoor(a, a - b, -(halfW + 0.002), -1);
-    regularDoor(a, a - b,  (halfW + 0.002),  1);
-
-    // Falcon Wing doors: hinge at roof edge, swing UP and OUT
-    const fwSpan = b - c;
-    const fwMidX = (b + c) / 2;
-    const fwDoorH = roofY - groundY - dh - 0.06;
-
-    for (const side of [-1, 1] as const) {
-      const g = new THREE.Group();
-      // Hinge at roofline, left or right edge
-      g.position.set(fwMidX, roofY, side * halfW);
-      scene.add(g);
-
-      // Door panel hangs DOWN from hinge
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(fwSpan - 0.03, fwDoorH, THICK), bMat);
-      mesh.position.set(0, -(fwDoorH / 2), side * THICK / 2);
-      mesh.castShadow = true;
-      g.add(mesh);
-
-      // Inner sill trim strip along bottom edge
-      const trim = new THREE.Mesh(new THREE.BoxGeometry(fwSpan - 0.05, 0.04, 0.06), CHROME);
-      trim.position.set(0, -(fwDoorH - 0.02), side * (THICK / 2 + 0.03));
-      g.add(trim);
-
-      // Interior LED strip visible on underside of door
-      const led = new THREE.Mesh(new THREE.BoxGeometry(fwSpan - 0.10, 0.02, 0.02), EMISSIVE_WHITE);
-      led.position.set(0, -(fwDoorH - 0.03), side * (-THICK / 2 - 0.01));
-      g.add(led);
-
-      // Falcon wing opens OUT then UP: positive X rotation for left, negative for right
-      // side=-1 (left): +X rotation swings bottom toward -Z (outward) then up ✓
-      // side=+1 (right): -X rotation swings bottom toward +Z (outward) then up ✓
-      anims.push({ group: g, axis: 'x', openAngle: -side * 1.68, current: 0 });
-    }
-  } else {
-    // 4-door sedan / SUV
-    regularDoor(a, a - b, -(halfW + 0.002), -1);
-    regularDoor(a, a - b,  (halfW + 0.002),  1);
-    regularDoor(b, b - c, -(halfW + 0.002), -1);
-    regularDoor(b, b - c,  (halfW + 0.002),  1);
-  }
-
-  return anims;
-}
-
 // ─── Window panels ────────────────────────────────────────────────────────────
 function addWindows(model: TeslaModel, halfW: number, scene: THREE.Object3D) {
   const gm = GLASS();
@@ -430,23 +344,17 @@ function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function TeslaScene({
   teslaModel, style, intensity, bpm, previewBeat,
-  customFrames, audioTriggerFrames,
+  customFrames,
 }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
-  const [doorsOpen, setDoorsOpen] = useState(false);
-  const [falconOpen, setFalconOpen] = useState(false);
   const [gltfStatus, setGltfStatus] = useState<'loading' | 'loaded' | 'procedural'>('loading');
 
-  const animsRef = useRef<DoorAnim[]>([]);
   const lightObjsRef = useRef<ReturnType<typeof buildLightZones>['lightObjs']>([]);
   const frameDataRef = useRef<Uint8Array[]>([]);
   const frameIdxRef = useRef(0);
-  const doorsOpenRef = useRef(false);
-  const falconOpenRef = useRef(false);
   const previewBeatRef = useRef<number | null>(null);
   const customFramesRef = useRef<Uint8Array[] | null>(null);
-  const audioTriggerFramesRef = useRef<Set<number> | null>(null);
 
   // Keep style/intensity/bpm in sync without rebuilding scene
   useEffect(() => {
@@ -455,11 +363,8 @@ export default function TeslaScene({
     frameIdxRef.current = 0;
   }, [teslaModel, style, intensity, bpm]);
 
-  useEffect(() => { doorsOpenRef.current = doorsOpen; }, [doorsOpen]);
-  useEffect(() => { falconOpenRef.current = falconOpen; }, [falconOpen]);
   useEffect(() => { previewBeatRef.current = previewBeat ?? null; }, [previewBeat]);
   useEffect(() => { customFramesRef.current = customFrames ?? null; }, [customFrames]);
-  useEffect(() => { audioTriggerFramesRef.current = audioTriggerFrames ?? null; }, [audioTriggerFrames]);
 
   // Rebuild scene when model changes
   useEffect(() => {
@@ -532,7 +437,6 @@ export default function TeslaScene({
     // ALL procedural geometry goes here so nothing leaks into the HD model scene.
     const proceduralGroup = new THREE.Group();
     buildProceduralCar(proceduralGroup, teslaModel, p, halfW, groundY, bMat);
-    animsRef.current = buildDoors(teslaModel, halfW, groundY, bMat, proceduralGroup);
     addWindows(teslaModel, halfW, proceduralGroup);
     const mY = teslaModel === 'cybertruck' ? 1.22 : (p.bodyL > 5 ? 0.88 : 0.84);
     const mX = p.bodyL / 2 - 1.35;
@@ -660,7 +564,6 @@ export default function TeslaScene({
     // ── Animation loop ────────────────────────────────────────────────────────
     let raf: number;
     let lastFrame = 0;
-    let autoDoorCounter = 0;
     const FMS = 1000 / 20;
 
     function animate(now: number) {
@@ -680,27 +583,11 @@ export default function TeslaScene({
             frameIdxRef.current++;
           }
           const frame = frames[frameIdx];
-          // Beat-triggered door open: stays open ~1.3s then auto-closes
-          if (audioTriggerFramesRef.current?.has(frameIdx) && autoDoorCounter === 0) {
-            autoDoorCounter = 26;
-          }
-          if (autoDoorCounter > 0) autoDoorCounter--;
-
           lightObjs.forEach(({ pl, ch }) => {
             pl.intensity = (frame[ch] / 255) * 2.8;
           });
         }
       }
-
-      // Door / falcon wing animations (manual OR beat-triggered)
-      const beatOpen = autoDoorCounter > 0;
-      animsRef.current.forEach(a => {
-        const isFW = a.axis === 'x';
-        const shouldOpen = beatOpen || (isFW ? falconOpenRef.current : doorsOpenRef.current);
-        const target = shouldOpen ? a.openAngle : 0;
-        a.current = THREE.MathUtils.lerp(a.current, target, 0.075);
-        a.group.rotation[a.axis] = a.current;
-      });
 
       renderer.render(scene, camera);
     }
@@ -719,7 +606,7 @@ export default function TeslaScene({
       el.removeEventListener('mousemove', onMouseMove);
       obs.disconnect(); controls.dispose(); renderer.dispose(); dracoLoader.dispose();
       if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement);
-      setTooltip(null); setDoorsOpen(false); setFalconOpen(false);
+      setTooltip(null);
     };
   }, [teslaModel]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -746,30 +633,7 @@ export default function TeslaScene({
         </div>
       )}
 
-      {/* Door controls */}
-      <div style={{ position: 'absolute', bottom: 14, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 8, pointerEvents: 'none' }}>
-        <button onClick={() => setDoorsOpen(v => !v)} style={{
-          pointerEvents: 'auto', padding: '6px 16px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-          background: doorsOpen ? 'rgba(0,232,135,0.14)' : 'rgba(255,255,255,0.07)',
-          border: `1px solid ${doorsOpen ? 'rgba(0,232,135,0.35)' : 'rgba(255,255,255,0.14)'}`,
-          color: doorsOpen ? '#00e887' : '#bbb', cursor: 'pointer', backdropFilter: 'blur(8px)', transition: 'all .2s',
-        }}>
-          {doorsOpen ? 'Close Doors' : 'Open Doors'}
-        </button>
-
-        {teslaModel === 'modelX' && (
-          <button onClick={() => setFalconOpen(v => !v)} style={{
-            pointerEvents: 'auto', padding: '6px 16px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-            background: falconOpen ? 'rgba(80,160,255,0.14)' : 'rgba(255,255,255,0.07)',
-            border: `1px solid ${falconOpen ? 'rgba(80,160,255,0.35)' : 'rgba(255,255,255,0.14)'}`,
-            color: falconOpen ? '#50a0ff' : '#bbb', cursor: 'pointer', backdropFilter: 'blur(8px)', transition: 'all .2s',
-          }}>
-            {falconOpen ? 'Close Falcon Wings' : 'Falcon Wings ↑'}
-          </button>
-        )}
-      </div>
-
-      <div style={{ position: 'absolute', bottom: 50, right: 14, fontSize: 10, color: 'rgba(255,255,255,0.24)', pointerEvents: 'none' }}>
+      <div style={{ position: 'absolute', bottom: 14, right: 14, fontSize: 10, color: 'rgba(255,255,255,0.24)', pointerEvents: 'none' }}>
         drag · scroll · hover lights
       </div>
     </div>
