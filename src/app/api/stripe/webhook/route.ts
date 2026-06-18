@@ -91,10 +91,20 @@ async function upsertSubscription(
   user_id: string,
   sub: Stripe.Subscription,
 ) {
-  const priceId = sub.items.data[0]?.price?.id ?? null
-  const lookupKey = sub.items.data[0]?.price?.lookup_key ?? null
+  const item = sub.items?.data?.[0]
+  const priceId = item?.price?.id ?? null
+  const lookupKey = item?.price?.lookup_key ?? null
   const plan = lookupKey === 'creator_yearly' ? 'creator_yearly' : 'creator_monthly'
-  const currentPeriodEnd = new Date((sub as unknown as { current_period_end: number }).current_period_end * 1000).toISOString()
+
+  // current_period_end lives on the subscription (older API versions) OR on the
+  // line item (newer versions). Read whichever exists; never throw on a bad value.
+  const periodEndUnix =
+    (sub as unknown as { current_period_end?: number }).current_period_end ??
+    (item as unknown as { current_period_end?: number } | undefined)?.current_period_end ??
+    null
+  const currentPeriodEnd = periodEndUnix
+    ? new Date(periodEndUnix * 1000).toISOString()
+    : null
 
   await admin.from('subscriptions').upsert({
     user_id,
