@@ -14,7 +14,10 @@ export interface GalleryShow {
   view_count: number;
   like_count: number;
   created_at: string;
-  creator: string;
+  title: string;          // song title (or filename / show name fallback)
+  artist: string | null;  // song artist
+  creator: string;        // display name, or "ThatTeslaLightshow" for official
+  official: boolean;
 }
 
 const MODEL_LABELS: Record<string, string> = {
@@ -131,19 +134,31 @@ function ShowCard({ show }: { show: GalleryShow }) {
         {/* Animated preview */}
         <LightStrip style={show.style} bpm={show.bpm} intensity={show.intensity} height={72} />
 
-        {/* Title row */}
+        {/* Title row: song title + artist · model */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
           <div style={{ minWidth: 0 }}>
             <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, lineHeight: 1.3, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {show.name}
+              {show.title}
             </h2>
-            <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-              {MODEL_LABELS[show.tesla_model] ?? show.tesla_model} · by {show.creator}
+            <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {show.artist ? `${show.artist} · ` : ''}{MODEL_LABELS[show.tesla_model] ?? show.tesla_model}
             </p>
           </div>
           <span style={{ flexShrink: 0, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: STYLE_COLOR[show.style] ?? 'var(--bg3)', color: STYLE_TEXT[show.style] ?? 'var(--muted)' }}>
             {STYLE_LABELS[show.style] ?? show.style}
           </span>
+        </div>
+
+        {/* Creator credit */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: -2 }}>
+          <span style={{ fontSize: 12, color: show.official ? 'var(--red)' : 'var(--muted2)', fontWeight: show.official ? 600 : 400 }}>
+            by {show.creator}
+          </span>
+          {show.official && (
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.05em', color: 'var(--red)', background: 'rgba(232,64,74,0.12)', border: '1px solid rgba(232,64,74,0.3)', padding: '1px 6px', borderRadius: 10 }}>
+              OFFICIAL
+            </span>
+          )}
         </div>
 
         {/* Stats footer */}

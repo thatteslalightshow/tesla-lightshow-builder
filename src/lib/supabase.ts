@@ -29,6 +29,8 @@ export interface Show {
   share_token:  string
   view_count:   number
   like_count:   number
+  song_title:   string | null
+  song_artist:  string | null
   created_at:   string
   updated_at:   string
 }

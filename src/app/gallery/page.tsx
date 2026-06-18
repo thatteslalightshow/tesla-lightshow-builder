@@ -11,6 +11,8 @@ export const metadata: Metadata = {
 
 export const revalidate = 30
 
+type MaybeArr<T> = T | T[] | null
+
 interface ShowRow {
   id: string
   name: string
@@ -21,17 +23,28 @@ interface ShowRow {
   share_token: string
   view_count: number | null
   like_count: number | null
+  song_title: string | null
+  song_artist: string | null
   created_at: string
-  profiles: { display_name: string | null } | { display_name: string | null }[] | null
+  profiles: MaybeArr<{ display_name: string | null; is_admin: boolean | null }>
+  audio_files: MaybeArr<{ original_name: string | null }>
+}
+
+function first<T>(v: MaybeArr<T>): T | null {
+  return Array.isArray(v) ? (v[0] ?? null) : v
+}
+
+// "Kickstart_My_Heart__2021-_Remaster_.mp3" -> "Kickstart My Heart 2021 Remaster"
+function titleFromFile(name: string): string {
+  return name.replace(/\.[a-z0-9]+$/i, '').replace(/[_]+/g, ' ').replace(/\s*-\s*/g, ' ').replace(/\s{2,}/g, ' ').trim()
 }
 
 export default async function GalleryPage() {
   const admin = getAdminClient()
 
-  // Prefer the full select with engagement counts. If the engagement
-  // migration hasn't been run yet, those columns won't exist — fall back
-  // to the base columns so the gallery never breaks.
-  const FULL = 'id, name, tesla_model, style, intensity, bpm, share_token, view_count, like_count, created_at, profiles(display_name)'
+  // Prefer the full select with engagement + song metadata. If a migration
+  // hasn't been run yet, fall back to base columns so the gallery never breaks.
+  const FULL = 'id, name, tesla_model, style, intensity, bpm, share_token, view_count, like_count, song_title, song_artist, created_at, profiles(display_name, is_admin), audio_files(original_name)'
   const BASE = 'id, name, tesla_model, style, intensity, bpm, share_token, created_at, profiles(display_name)'
 
   let rows: ShowRow[] = []
@@ -48,12 +61,21 @@ export default async function GalleryPage() {
     rows = (full.data ?? []) as ShowRow[]
   }
   const shows: GalleryShow[] = rows.map(r => {
-    const profileEntry = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles
+    const profile = first(r.profiles)
+    const audio = first(r.audio_files)
+    const isOfficial = profile?.is_admin === true
+    const title = r.song_title?.trim()
+      || (audio?.original_name ? titleFromFile(audio.original_name) : '')
+      || r.name
     return {
       id: r.id, name: r.name, tesla_model: r.tesla_model, style: r.style,
       intensity: r.intensity, bpm: r.bpm, share_token: r.share_token,
       view_count: r.view_count ?? 0, like_count: r.like_count ?? 0,
-      created_at: r.created_at, creator: profileEntry?.display_name ?? 'Anonymous',
+      created_at: r.created_at,
+      title,
+      artist: r.song_artist?.trim() || null,
+      creator: isOfficial ? 'ThatTeslaLightshow' : (profile?.display_name ?? 'Anonymous'),
+      official: isOfficial,
     }
   })
 

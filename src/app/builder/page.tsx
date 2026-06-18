@@ -8,6 +8,7 @@ import TeslaScene from '@/components/TeslaScene';
 import { MODELS, generateFrames, getChannelCount } from '@/lib/tesla-channels'
 import { analyzeAudioToFrames } from '@/lib/audio-analysis';
 import { validateFseq, type FseqValidation } from '@/lib/fseq';
+import { parseId3, titleFromFilename } from '@/lib/id3';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TESLA_MODELS: { value: TeslaModel; label: string }[] = [
@@ -454,6 +455,8 @@ function BuilderInner() {
   const [bpm, setBpm] = useState(120);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioError, setAudioError] = useState('');
+  const [songTitle, setSongTitle] = useState('');
+  const [songArtist, setSongArtist] = useState('');
   const [audioUploaded, setAudioUploaded] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
   const [shareToken, setShareToken] = useState<string | null>(null);
@@ -549,6 +552,7 @@ function BuilderInner() {
     setIntensity(data.intensity);
     if (data.bpm) setBpm(data.bpm);
     setIsPublic(data.is_public); setShareToken(data.share_token);
+    setSongTitle(data.song_title ?? ''); setSongArtist(data.song_artist ?? '');
     const { data: audio } = await supabase.from('audio_files').select('id').eq('show_id', id).limit(1);
     if (audio?.length) setAudioUploaded(true);
   }
@@ -609,6 +613,17 @@ function BuilderInner() {
     setAudioFrames(null);
     setAudioTriggers(new Set());
     setWaveformData(null);
+
+    // Read song title + artist from the MP3's ID3 tags (filename fallback)
+    parseId3(file).then(tags => {
+      const title = tags.title?.trim() || titleFromFilename(file.name);
+      setSongTitle(title);
+      if (tags.artist?.trim()) setSongArtist(tags.artist.trim());
+      // If the show still has the default name, adopt the detected song title
+      setName(prev => (!prev || prev === 'My Light Show' || prev === 'Untitled Show') ? title : prev);
+    }).catch(() => {
+      setSongTitle(titleFromFilename(file.name));
+    });
 
     const reader = new FileReader();
     reader.onload = async ev => {
@@ -714,7 +729,7 @@ function BuilderInner() {
 
   async function save(): Promise<string | null> {
     setSaving(true); setSaveMsg('');
-    const payload = { user_id: userId, name, tesla_model: model, style, intensity, bpm, is_public: isPublic, updated_at: new Date().toISOString() };
+    const payload = { user_id: userId, name, tesla_model: model, style, intensity, bpm, is_public: isPublic, song_title: songTitle || null, song_artist: songArtist || null, updated_at: new Date().toISOString() };
     let showId = savedShowId;
     let error;
     if (showId) {
