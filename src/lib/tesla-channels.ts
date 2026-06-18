@@ -204,7 +204,7 @@ export const MODELS: Record<TeslaModel, ModelDefinition> = {
     proportions: { bodyL: 5.04, bodyW: 1.99, bodyH: 0.88, cabinL: 3.00, cabinW: 1.89, cabinH: 0.72, cabinX: -0.10, roofStyle: 'suv' },
   },
   cybertruck: {
-    model: 'cybertruck', channelCount: 62, zones: cybertruckZones,
+    model: 'cybertruck', channelCount: 48, zones: cybertruckZones,
     proportions: {
       bodyL: 5.68, bodyW: 2.08, bodyH: 0.99, cabinL: 2.10, cabinW: 1.98, cabinH: 0.72, cabinX: 0.70,
       roofStyle: 'angular',
