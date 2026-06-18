@@ -19,6 +19,8 @@ export default function DashboardPage() {
   const [nameInput, setNameInput] = useState('');
   const [savingName, setSavingName] = useState(false);
   const [userId, setUserId] = useState('');
+  const [subscription, setSubscription] = useState<{ status: string; plan: string; current_period_end: string | null } | null>(null);
+  const [subMsg, setSubMsg] = useState('');
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -26,12 +28,26 @@ export default function DashboardPage() {
       setEmail(session.user.email ?? '');
       setUserId(session.user.id);
       loadShows();
-      const { data: profile } = await supabase.from('profiles').select('is_admin, display_name').eq('id', session.user.id).single();
+      const [{ data: profile }, { data: sub }] = await Promise.all([
+        supabase.from('profiles').select('is_admin, display_name').eq('id', session.user.id).single(),
+        supabase.from('subscriptions').select('status, plan, current_period_end').eq('user_id', session.user.id).in('status', ['active', 'trialing', 'past_due']).maybeSingle(),
+      ]);
       if (profile?.is_admin) setIsAdmin(true);
       const dn = profile?.display_name ?? '';
       setDisplayName(dn);
       setNameInput(dn);
-      if (!dn) setEditingName(true); // prompt on first visit
+      if (!dn) setEditingName(true);
+      if (sub) setSubscription(sub);
+
+      // Handle post-Stripe redirect messages
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('subscription_success')) {
+        setSubMsg('🎉 You\'re now a Creator! Unlimited exports unlocked.');
+        window.history.replaceState({}, '', '/dashboard');
+      }
+      if (params.get('subscription_cancelled')) {
+        window.history.replaceState({}, '', '/dashboard');
+      }
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || !session) router.replace('/auth');
@@ -143,6 +159,67 @@ export default function DashboardPage() {
               </button>
               {displayName && <button onClick={() => setEditingName(false)} className="btn btn-ghost btn-sm">Cancel</button>}
             </div>
+          </div>
+        )}
+
+        {/* Subscription success toast */}
+        {subMsg && (
+          <div style={{ marginBottom: '1.5rem', padding: '1rem 1.5rem', background: 'rgba(80,160,255,0.08)', border: '1px solid rgba(80,160,255,0.25)', borderRadius: 'var(--radius-lg)', fontSize: 14, color: 'rgba(80,160,255,0.9)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {subMsg}
+            <button onClick={() => setSubMsg('')} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 16 }}>×</button>
+          </div>
+        )}
+
+        {/* Subscription status / upsell */}
+        {!isAdmin && (
+          <div style={{ marginBottom: '1.5rem', padding: '1rem 1.5rem', background: subscription?.status === 'active' || subscription?.status === 'trialing' ? 'rgba(80,160,255,0.05)' : 'rgba(255,255,255,0.03)', border: `1px solid ${subscription?.status === 'active' || subscription?.status === 'trialing' ? 'rgba(80,160,255,0.2)' : 'var(--border)'}`, borderRadius: 'var(--radius-lg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            {subscription?.status === 'active' || subscription?.status === 'trialing' ? (
+              <>
+                <div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 14, color: 'rgba(80,160,255,0.9)', marginBottom: 2 }}>Creator Plan ✓</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                    Unlimited exports · {subscription.plan === 'creator_yearly' ? 'Annual' : 'Monthly'} ·
+                    renews {subscription.current_period_end ? new Date(subscription.current_period_end).toLocaleDateString() : '—'}
+                  </div>
+                </div>
+                <button
+                  onClick={async () => {
+                    const res = await fetch('/api/subscription/portal', { method: 'POST' });
+                    if (res.ok) { const { url } = await res.json(); window.location.href = url; }
+                  }}
+                  className="btn btn-ghost btn-sm"
+                >
+                  Manage billing →
+                </button>
+              </>
+            ) : (
+              <>
+                <div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 14, marginBottom: 2 }}>Free plan</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>1 free export · $2.99/export after that</div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    onClick={async () => {
+                      const res = await fetch('/api/subscription/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan: 'monthly' }) });
+                      if (res.ok) { const { url } = await res.json(); window.location.href = url; }
+                    }}
+                    className="btn btn-ghost btn-sm" style={{ borderColor: 'rgba(80,160,255,0.3)', color: 'rgba(80,160,255,0.85)' }}
+                  >
+                    $4.99/mo
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const res = await fetch('/api/subscription/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan: 'yearly' }) });
+                      if (res.ok) { const { url } = await res.json(); window.location.href = url; }
+                    }}
+                    className="btn btn-primary btn-sm"
+                  >
+                    $39.99/yr — best value
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 

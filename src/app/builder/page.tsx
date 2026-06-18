@@ -485,6 +485,8 @@ function BuilderInner() {
   const [fseqValidation, setFseqValidation] = useState<FseqValidation | null>(null);
   const [exportCount, setExportCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [emailExport, setEmailExport] = useState(false);
   const [checkoutMsg, setCheckoutMsg] = useState(checkoutCancelled ? 'Payment cancelled — your show is still saved.' : '');
   const [showSharePrompt, setShowSharePrompt] = useState(false);
 
@@ -502,13 +504,15 @@ function BuilderInner() {
       if (editId) loadShow(editId);
       else if (remixToken) loadRemix(remixToken);
 
-      // Load profile (admin flag + export count)
-      const [{ data: profile }, { count }] = await Promise.all([
+      // Load profile (admin flag + export count + subscription)
+      const [{ data: profile }, { count }, { data: sub }] = await Promise.all([
         supabase.from('profiles').select('is_admin').eq('id', session.user.id).single(),
         supabase.from('exports').select('id', { count: 'exact', head: true }).eq('user_id', session.user.id),
+        supabase.from('subscriptions').select('status').eq('user_id', session.user.id).in('status', ['active', 'trialing']).maybeSingle(),
       ]);
       if (profile?.is_admin) setIsAdmin(true);
       setExportCount(count ?? 0);
+      if (sub) setIsSubscribed(true);
 
       // Returning from Stripe success — verify payment then auto-export
       if (checkoutSession && editId) {
@@ -743,8 +747,8 @@ function BuilderInner() {
       if (!showId) { setSaveMsg('Save failed — please try again.'); setExporting(false); return; }
     }
 
-    // After first free export, redirect to Stripe Checkout (admins always free)
-    if (exportCount > 0 && showId && !isAdmin) {
+    // Non-admin, non-subscriber, used free export → Stripe per-export checkout
+    if (exportCount > 0 && !isAdmin && !isSubscribed) {
       const res = await fetch('/api/stripe/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ show_id: showId }) });
       if (res.ok) {
         const { url } = await res.json();
@@ -756,13 +760,22 @@ function BuilderInner() {
       return;
     }
 
-    // Free export path (or server-side export if already saved)
+    // Free / subscribed / admin → server-side export
     if (showId) {
       try {
-        const res = await fetch('/api/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ show_id: showId }) });
+        const res = await fetch('/api/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ show_id: showId, deliver_by_email: emailExport }),
+        });
         if (res.ok) {
-          const { url, filename } = await res.json();
-          const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+          const { url, filename, delivered_by_email } = await res.json();
+          if (delivered_by_email) {
+            setCheckoutMsg('✓ Download link sent to your email!');
+            setTimeout(() => setCheckoutMsg(''), 6000);
+          } else {
+            const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+          }
           setExportCount(c => c + 1);
           setExporting(false); return;
         }
@@ -832,19 +845,41 @@ function BuilderInner() {
             </Link>
           )}
           <button onClick={save} disabled={saving || uploading} className="btn btn-ghost btn-sm">{saving ? '…' : 'Save'}</button>
+          {/* Email export toggle — useful on mobile */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}>
+            <input type="checkbox" checked={emailExport} onChange={e => setEmailExport(e.target.checked)}
+              style={{ accentColor: 'var(--red)', width: 14, height: 14 }} />
+            <span className="builder-status-msg" style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>Email me</span>
+          </label>
           <div style={{ position: 'relative' }}>
             <button onClick={exportZip} disabled={exporting || saving} className="btn btn-primary btn-sm">
               {exporting ? 'Exporting…' : (
                 <>
-                  <span className="desktop-only">{(isAdmin || exportCount === 0) ? '⬇ Export ZIP — Free' : '⬇ Export ZIP — $2.99'}</span>
+                  <span className="desktop-only">
+                    {(isAdmin || isSubscribed) ? '⬇ Export ZIP — Unlimited' : exportCount === 0 ? '⬇ Export ZIP — Free' : '⬇ Export ZIP — $2.99'}
+                  </span>
                   <span className="mobile-only">⬇ Export</span>
                 </>
               )}
             </button>
-            {(isAdmin || exportCount === 0) && (
-              <span style={{ position: 'absolute', top: -8, right: -8, background: isAdmin ? 'var(--red)' : 'var(--green)', color: '#fff', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8, whiteSpace: 'nowrap' }}>{isAdmin ? 'ADMIN' : 'FREE'}</span>
+            {(isAdmin || isSubscribed || exportCount === 0) && (
+              <span style={{ position: 'absolute', top: -8, right: -8, background: isAdmin ? 'var(--red)' : isSubscribed ? 'rgba(80,160,255,0.9)' : 'var(--green)', color: '#fff', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8, whiteSpace: 'nowrap' }}>
+                {isAdmin ? 'ADMIN' : isSubscribed ? 'PRO' : 'FREE'}
+              </span>
             )}
           </div>
+          {/* Subscription upsell for non-subscribers who've used their free export */}
+          {!isAdmin && !isSubscribed && exportCount > 0 && (
+            <button
+              onClick={async () => {
+                const res = await fetch('/api/subscription/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan: 'monthly' }) });
+                if (res.ok) { const { url } = await res.json(); window.location.href = url; }
+              }}
+              style={{ fontSize: 11, color: 'rgba(80,160,255,0.85)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, whiteSpace: 'nowrap', textDecoration: 'underline' }}
+            >
+              Unlimited · $4.99/mo
+            </button>
+          )}
         </div>
       </nav>
 
