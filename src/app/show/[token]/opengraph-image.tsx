@@ -10,6 +10,7 @@ const MODEL_LABELS: Record<string, string> = {
 }
 const STYLE_COLORS: Record<string, string> = {
   energetic: '#e8404a', wave: '#4a90e8', strobe: '#e8d84a', chase: '#00e887',
+  pulse: '#ff6b35', ripple: '#9d6bff', bounce: '#ff4aa0', twinkle: '#4ad8e8',
 }
 
 export default async function Image({ params }: { params: { token: string } }) {

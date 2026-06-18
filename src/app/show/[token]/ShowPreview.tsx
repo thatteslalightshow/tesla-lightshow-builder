@@ -13,6 +13,7 @@ const MODEL_LABELS: Record<string, string> = {
 }
 const STYLE_LABELS: Record<string, string> = {
   energetic: 'Energetic', wave: 'Wave', strobe: 'Strobe', chase: 'Chase',
+  pulse: 'Pulse', ripple: 'Ripple', bounce: 'Bounce', twinkle: 'Twinkle',
 }
 
 interface Props {

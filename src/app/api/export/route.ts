@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
-import { getAdminClient, getSignedDownloadUrl, type ShowStyle, type TeslaModel } from '@/lib/supabase'
+import { getAdminClient, getSignedDownloadUrl, type TeslaModel } from '@/lib/supabase'
 import { getAuthedUser } from '@/lib/auth'
-import { getChannelCount } from '@/lib/tesla-channels'
+import { getChannelCount, generateFrames, MODELS } from '@/lib/tesla-channels'
 import { sendExportDownload } from '@/lib/email'
 import JSZip from 'jszip'
 
@@ -29,27 +29,6 @@ function buildFseq(channels: number, frames: number, stepMs: number, frameData: 
     buf.set(frameData[f] ?? new Uint8Array(channels), headerSize + f * channels)
   }
   return buf
-}
-
-function generateFrames(style: ShowStyle, intensity: number, bpm: number, frames: number, channels: number): Uint8Array[] {
-  const scale = intensity / 100
-  const beatsPerFrame = bpm / (60 * 20)
-  return Array.from({ length: frames }, (_, f) => {
-    const frame = new Uint8Array(channels)
-    const t = f * beatsPerFrame
-    for (let c = 0; c < channels; c++) {
-      const zone = Math.floor(c / 3)
-      let val = 0
-      switch (style) {
-        case 'energetic': val = Math.sin(t * Math.PI * 2 + zone * 0.8) > 0.2 ? 255 : 0; break
-        case 'wave':      val = Math.round((Math.sin(t * Math.PI * 2 - zone * 0.5) * 0.5 + 0.5) * 255); break
-        case 'strobe':    val = Math.floor(t) % 2 === 0 && f % 3 === 0 ? 255 : 0; break
-        case 'chase':     val = zone === Math.floor(t) % Math.ceil(channels / 3) ? 255 : 0; break
-      }
-      frame[c] = Math.round(val * scale)
-    }
-    return frame
-  })
 }
 
 export async function POST(req: Request) {
@@ -108,7 +87,7 @@ export async function POST(req: Request) {
   const frames = Math.round(durationSec * FPS)
   const channels = getChannelCount(show.tesla_model as TeslaModel)
   const bpm = show.bpm ?? 120
-  const frameData = generateFrames(show.style, show.intensity, bpm, frames, channels)
+  const frameData = generateFrames(show.style, show.intensity, bpm, frames, MODELS[show.tesla_model as TeslaModel])
   const fseq = buildFseq(channels, frames, Math.round(1000 / FPS), frameData)
 
   // ── Build ZIP ─────────────────────────────────────────────────────────────

@@ -112,6 +112,7 @@ export default function DashboardPage() {
   };
   const styleLabels: Record<string, string> = {
     energetic: 'Energetic', wave: 'Wave', strobe: 'Strobe', chase: 'Chase',
+    pulse: 'Pulse', ripple: 'Ripple', bounce: 'Bounce', twinkle: 'Twinkle',
   };
 
   return (

@@ -220,6 +220,9 @@ export function generateFrames(
   const scale = intensity / 100
   const beatsPerFrame = bpm / (60 * 20)   // assumes 20 fps
 
+  // Front(+x)/rear(-x) extent for position-driven styles (ripple, bounce)
+  const maxX = Math.max(...zones.map(z => Math.abs(z.position[0]))) || 1
+
   return Array.from({ length: frames }, (_, f) => {
     const frame = new Uint8Array(channelCount)
     const t = f * beatsPerFrame
@@ -230,6 +233,8 @@ export function generateFrames(
       // Type-based phase grouping so left/right sides can be driven together or independently
       const isLeft = zone.id.startsWith('fl_') || zone.id.startsWith('rl_') || zone.id.startsWith('l_') || zone.id.startsWith('falcon_l') || zone.id.startsWith('bed_l') || zone.id.startsWith('under')
       const sidePhase = isLeft ? 0 : 0.5   // offset right side for chase/wave effects
+      const xNorm = zone.position[0] / maxX        // -1 (rear) .. +1 (front)
+      const distFromCenter = Math.abs(xNorm)       // 0 (center) .. 1 (ends)
 
       switch (style) {
         case 'energetic':
@@ -239,13 +244,37 @@ export function generateFrames(
           brightness = Math.sin(t * Math.PI * 2 - zoneIdx * 0.35 + sidePhase) * 0.5 + 0.5
           break
         case 'strobe':
-          // Front/rear alternate; interior stays off during strobe
           if (zone.type === 'interior') { brightness = 0; break }
           brightness = Math.floor(t * 2) % 2 === (zoneIdx % 2) ? 1 : 0
           break
         case 'chase':
           brightness = zoneIdx === Math.floor(t) % zones.length ? 1 : 0.03
           break
+        case 'pulse':
+          // Whole car breathes together on the beat
+          brightness = Math.pow(Math.sin(t * Math.PI) * 0.5 + 0.5, 2)
+          break
+        case 'ripple': {
+          // Brightness radiates out from the car's centre
+          const phase = (t * 1.5 - distFromCenter * 2) * Math.PI
+          brightness = Math.max(0, Math.sin(phase))
+          break
+        }
+        case 'bounce': {
+          // A lit band sweeps front<->rear (ping-pong)
+          const tri = Math.abs(((t * 0.5) % 2) - 1)      // 0..1..0 triangle
+          const pos = tri * 2 - 1                          // -1 .. +1
+          brightness = Math.max(0, 1 - Math.abs(xNorm - pos) * 2.2)
+          break
+        }
+        case 'twinkle': {
+          // Deterministic per-zone sparkle that re-rolls a few times per beat
+          const tick = Math.floor(t * 4)
+          const h = Math.sin((zoneIdx + 1) * 12.9898 + tick * 78.233) * 43758.5453
+          const r = h - Math.floor(h)                      // pseudo-random 0..1
+          brightness = r > 0.78 ? 1 : 0.02
+          break
+        }
       }
 
       frame[zone.channel] = Math.round(Math.min(brightness * scale, 1) * 255)

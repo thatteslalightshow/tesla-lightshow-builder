@@ -5,7 +5,7 @@ import TeslaScene from '@/components/TeslaScene';
 import type { TeslaModel, ShowStyle } from '@/lib/supabase';
 
 const VALID_MODELS: TeslaModel[] = ['model3', 'modelY', 'modelS', 'modelX', 'cybertruck'];
-const VALID_STYLES: ShowStyle[] = ['energetic', 'wave', 'strobe', 'chase'];
+const VALID_STYLES: ShowStyle[] = ['energetic', 'wave', 'strobe', 'chase', 'pulse', 'ripple', 'bounce', 'twinkle'];
 
 /**
  * Public, auth-free 3D preview rendered inside the mobile app's WebView.

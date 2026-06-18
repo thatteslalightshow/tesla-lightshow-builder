@@ -8,6 +8,7 @@
 
 const ACCENT: Record<string, string> = {
   energetic: '#e8404a', wave: '#4a90e8', strobe: '#e8d84a', chase: '#00e887',
+  pulse: '#ff6b35', ripple: '#9d6bff', bounce: '#ff4aa0', twinkle: '#4ad8e8',
 };
 
 const ZONES = 11;
@@ -42,6 +43,29 @@ export default function LightStrip({
         animationName = 'ls-strobe';
         duration = beat;
         delay = 0; // all flash together
+        break;
+      }
+      case 'pulse': {
+        duration = beat * 2;
+        delay = 0; // whole strip breathes together
+        break;
+      }
+      case 'ripple': {
+        duration = beat * 2;
+        delay = (Math.abs(i - (ZONES - 1) / 2) / ZONES) * duration; // out from centre
+        break;
+      }
+      case 'bounce': {
+        animationName = 'ls-blip';
+        const half = beat * ZONES * 0.4;
+        duration = half;
+        const mid = (ZONES - 1) / 2;
+        delay = (Math.abs(i - mid) / ZONES) * duration;
+        break;
+      }
+      case 'twinkle': {
+        duration = beat * 0.75;
+        delay = ((i * 271) % 100) / 100 * duration; // scattered shimmer
         break;
       }
       case 'energetic':

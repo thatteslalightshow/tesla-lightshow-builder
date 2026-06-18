@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 export type TeslaModel = 'model3' | 'modelY' | 'modelS' | 'modelX' | 'cybertruck'
-export type ShowStyle  = 'energetic' | 'wave' | 'strobe' | 'chase'
+export type ShowStyle  = 'energetic' | 'wave' | 'strobe' | 'chase' | 'pulse' | 'ripple' | 'bounce' | 'twinkle'
 export type SubTier    = 'free' | 'pro' | 'team'
 
 export interface Profile {

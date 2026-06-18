@@ -24,6 +24,10 @@ const STYLES: { value: ShowStyle; label: string; desc: string }[] = [
   { value: 'wave', label: 'Wave', desc: 'Smooth rolling light waves' },
   { value: 'strobe', label: 'Strobe', desc: 'Sharp rhythmic strobing' },
   { value: 'chase', label: 'Chase', desc: 'Sequential chasing pattern' },
+  { value: 'pulse', label: 'Pulse', desc: 'Whole car breathes on the beat' },
+  { value: 'ripple', label: 'Ripple', desc: 'Light radiates from the centre out' },
+  { value: 'bounce', label: 'Bounce', desc: 'A band sweeps front to back' },
+  { value: 'twinkle', label: 'Twinkle', desc: 'Sparkling random shimmer' },
 ];
 
 const PREVIEW_DURATION = 30;
