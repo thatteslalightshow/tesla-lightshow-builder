@@ -109,18 +109,18 @@ export async function analyzeAudioToFrames(
           brightness = bassN[f]; break
         case 'drl':
         case 'highbeam':
+        case 'marker':
           brightness = midN[f]; break
-        case 'interior':
-          brightness = trebleN[f]; break
         case 'brake':
         case 'turn_front':
         case 'turn_rear':
           brightness = triggerFrames.has(f) ? 1.0 : 0; break
-        case 'strip':
         case 'fog':
         case 'reverse':
         case 'plate':
           brightness = totalN[f]; break
+        case 'closure':
+          brightness = 0; break  // closures are not audio-driven
         default:
           brightness = totalN[f]
       }

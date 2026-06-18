@@ -81,20 +81,14 @@ function buildFseq(channels: number, frames: number, stepMs: number, frameData: 
 }
 
 // ─── Beat-edit helpers ────────────────────────────────────────────────────────
-function getMirrorChannel(zoneId: string, zones: { id: string; channel: number }[]): number | null {
-  let mirrorId: string | null = null;
-  if (zoneId.startsWith('fl_'))      mirrorId = zoneId.replace('fl_', 'fr_');
-  else if (zoneId.startsWith('fr_')) mirrorId = zoneId.replace('fr_', 'fl_');
-  else if (zoneId.startsWith('rl_')) mirrorId = zoneId.replace('rl_', 'rr_');
-  else if (zoneId.startsWith('rr_')) mirrorId = zoneId.replace('rr_', 'rl_');
-  else if (zoneId === 'l_sill')      mirrorId = 'r_sill';
-  else if (zoneId === 'r_sill')      mirrorId = 'l_sill';
-  else if (zoneId === 'bed_l')       mirrorId = 'bed_r';
-  else if (zoneId === 'bed_r')       mirrorId = 'bed_l';
-  else if (zoneId.startsWith('falcon_l')) mirrorId = zoneId.replace('falcon_l', 'falcon_r');
-  else if (zoneId.startsWith('falcon_r')) mirrorId = zoneId.replace('falcon_r', 'falcon_l');
-  if (!mirrorId) return null;
-  return zones.find(z => z.id === mirrorId)?.channel ?? null;
+// Mirror a channel to its left/right counterpart by geometry (same X, opposite Z).
+function getMirrorChannel(zoneId: string, zones: { id: string; channel: number; position: [number, number, number] }[]): number | null {
+  const src = zones.find(z => z.id === zoneId);
+  if (!src) return null;
+  const [sx, , sz] = src.position;
+  if (Math.abs(sz) < 0.05) return null; // centre element — no mirror
+  const m = zones.find(z => z.id !== zoneId && Math.abs(z.position[0] - sx) < 0.06 && Math.abs(z.position[2] + sz) < 0.10);
+  return m?.channel ?? null;
 }
 
 function customBlocksToFrames(

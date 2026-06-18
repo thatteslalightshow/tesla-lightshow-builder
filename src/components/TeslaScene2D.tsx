@@ -204,8 +204,8 @@ export default function TeslaScene2D({ teslaModel, style, intensity, bpm, previe
       ctx.fill();
     });
 
-    // Sill strips as lines
-    zones.filter(z => z.type === 'strip' && (z.id.includes('sill') || z.id.includes('l_sill') || z.id.includes('r_sill'))).forEach(zone => {
+    // Sill strips as lines (legacy ids; none in the current channel model)
+    zones.filter(z => z.id.includes('sill')).forEach(zone => {
       const [, , zz] = zone.position;
       const brightness = frame[zone.channel] / 255;
       if (brightness < 0.01) return;

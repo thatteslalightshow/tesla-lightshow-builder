@@ -289,29 +289,14 @@ function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
       case 'plate':
         geo = new THREE.BoxGeometry(D, 0.026, 0.40);
         break;
-      case 'interior':
-        // Flat ceiling dome panel — wide in X (car length), thin in Y
-        geo = new THREE.BoxGeometry(0.52, 0.014, 0.26);
+      case 'marker':
+        // Small side marker / aux park element
+        geo = new THREE.BoxGeometry(D, 0.026, 0.10);
         break;
-      case 'strip': {
-        const isSill = Math.abs(z) > 0.88;
-        const isBed  = zone.id.includes('bed');
-        const isUnder = zone.id.includes('under');
-        if (isSill) {
-          // Side sill strip: runs along the car body length
-          geo = new THREE.BoxGeometry(2.10, 0.014, 0.022);
-        } else if (isBed) {
-          // Truck bed rail strip: runs across the width
-          geo = new THREE.BoxGeometry(0.022, 0.014, 1.92);
-        } else if (isUnder) {
-          // Undercarriage glow panel
-          geo = new THREE.BoxGeometry(1.60, 0.010, 1.90);
-        } else {
-          // Cybertruck front/rear LED bar segments: wide in Z
-          geo = new THREE.BoxGeometry(D, 0.055, 0.44);
-        }
+      case 'closure':
+        // Closures: small hover hitbox; not driven by the light show
+        geo = new THREE.BoxGeometry(0.05, 0.05, 0.05);
         break;
-      }
       default:
         geo = new THREE.BoxGeometry(D, 0.048, 0.18);
     }
