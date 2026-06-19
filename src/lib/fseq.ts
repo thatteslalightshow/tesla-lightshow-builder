@@ -35,37 +35,39 @@ export function validateFseq(
   if (major !== 2) warnings.push(`FSEQ major version ${major} — Tesla expects 2.`)
   info.push(`FSEQ v${major}.${minor}`)
 
-  // Data start / header size
+  // Data start / header size (official validator requires >= 24)
   const dataStart = view.getUint16(4, true)
-  if (dataStart < 32) errors.push(`Data start offset ${dataStart} < 32 bytes (header too small).`)
+  if (dataStart < 24) errors.push(`Data start offset ${dataStart} < 24 bytes (header too small).`)
 
-  // Channel count
+  // Channel count — Tesla's validator accepts only 48 (single car) or 200 (multi)
   const channels = view.getUint32(10, true)
-  if (channels === 0) errors.push('Channel count is 0.')
-  if (channels !== expectedChannels) {
-    warnings.push(`Channel count ${channels} doesn't match expected ${expectedChannels} for this model.`)
+  if (channels !== 48 && channels !== 200) {
+    errors.push(`Channel count ${channels} — Tesla requires exactly 48 (or 200 for multi-car).`)
+  } else if (channels !== expectedChannels) {
+    info.push(`${channels} channels`)
+  } else {
+    info.push(`${channels} channels`)
   }
-  info.push(`${channels} channels`)
 
   // Frame count
   const frames = view.getUint32(14, true)
-  if (frames === 0) errors.push('Frame count is 0.')
+  if (frames < 1) errors.push('Frame count must be at least 1.')
   info.push(`${frames} frames`)
 
-  // Step time — Tesla supports 15–100ms; 20ms (50fps) recommended
+  // Step time — official validator requires >= 15ms; Tesla recommends 20ms (50fps)
   const stepMs = view.getUint16(18, true)
-  if (stepMs === 0) errors.push('Step time is 0 ms.')
-  else if (stepMs < 15 || stepMs > 100) warnings.push(`Step time ${stepMs} ms is outside Tesla's supported 15–100 ms range.`)
+  if (stepMs < 15) errors.push(`Step time ${stepMs} ms is below Tesla's 15 ms minimum.`)
+  else if (stepMs > 100) warnings.push(`Step time ${stepMs} ms is above Tesla's supported 100 ms.`)
   const durationSec = (frames * stepMs) / 1000
   info.push(`${stepMs} ms/frame (${Math.round(1000 / stepMs)} fps)`)
   info.push(`~${durationSec.toFixed(1)}s duration`)
   // Tesla's hard limit is 4 hours
   if (durationSec > 4 * 3600) errors.push(`Show is ${(durationSec / 60).toFixed(0)} min — exceeds Tesla's 4-hour maximum.`)
 
-  // Compression (Tesla requires uncompressed)
-  const compressionType = u8[21]
+  // Compression — official validator reads byte 20 and requires 0 (uncompressed)
+  const compressionType = u8[20]
   if (compressionType !== 0) {
-    warnings.push(`Compression type ${compressionType} — Tesla requires uncompressed (0).`)
+    errors.push(`Compression type ${compressionType} — Tesla requires V2 uncompressed (0).`)
   }
 
   // Size sanity

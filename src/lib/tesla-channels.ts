@@ -21,11 +21,12 @@ export type ClosureFamily =
   | 'liftgate' | 'door_handles' | 'charge_port'
 
 // ─── Closure command encoding (xLights "On" effect brightness → fseq byte) ──────
+// Verified against a real Tesla lightshow.fseq: floor(percent x 255).
 export const CLOSURE_CMD = {
   idle:  0,
-  open:  64,   // 25%
-  dance: 128,  // 50%
-  close: 191,  // 75%
+  open:  63,   // 25%  floor(63.75)
+  dance: 127,  // 50%  floor(127.5)
+  close: 191,  // 75%  floor(191.25)
   stop:  255,  // 100%
 } as const
 export type ClosureCommand = keyof typeof CLOSURE_CMD
@@ -62,7 +63,10 @@ export interface ModelDefinition {
 }
 
 // ─── Canonical channel table (index = real Tesla fseq channel) ──────────────────
-// pos describes WHERE on the car: xz = front/rear + side, yf = height fraction of body.
+// Positions for the LIGHT channels (0-29) are the authoritative per-channel layout
+// decoded from Tesla's official xLights model ("Tesla Model S.xmodel"), normalized:
+//   nx = front(+1)/rear(-1)   ny = ground(0)/roof(1)   nz = right(+1)/left(-1)
+// Closure channels (30-45) use sensible physical placements (used for future 3D).
 type Side = 'L' | 'R' | 'C'
 interface ChannelSpec {
   index: number
@@ -71,10 +75,9 @@ interface ChannelSpec {
   type: LightType
   color: number
   closure?: ClosureFamily
-  xz: 'front' | 'rear' | 'frontMid' | 'rearMid'
-  side: Side
-  zf: number   // fraction of half-width (0=center, 1=edge)
-  yf: number   // fraction of body height for the light's vertical position
+  nx: number   // front(+1) .. rear(-1)
+  ny: number   // ground(0) .. roof(1)
+  nz: number   // right(+1) .. left(-1)
 }
 
 const C = {
@@ -83,56 +86,56 @@ const C = {
 }
 
 const CHANNELS: ChannelSpec[] = [
-  // ── Front lights ──
-  { index: 0,  id: 'l_outer_main',  label: 'Left Outer Main Beam',  type: 'headlight', color: C.white, xz: 'front', side: 'L', zf: 0.92, yf: 0.95 },
-  { index: 1,  id: 'r_outer_main',  label: 'Right Outer Main Beam', type: 'headlight', color: C.white, xz: 'front', side: 'R', zf: 0.92, yf: 0.95 },
-  { index: 2,  id: 'l_inner_main',  label: 'Left Inner Main Beam',  type: 'highbeam',  color: C.white, xz: 'front', side: 'L', zf: 0.70, yf: 0.98 },
-  { index: 3,  id: 'r_inner_main',  label: 'Right Inner Main Beam', type: 'highbeam',  color: C.white, xz: 'front', side: 'R', zf: 0.70, yf: 0.98 },
-  { index: 4,  id: 'l_signature',   label: 'Left Signature',        type: 'drl',       color: C.drl,   xz: 'front', side: 'L', zf: 0.80, yf: 1.05 },
-  { index: 5,  id: 'r_signature',   label: 'Right Signature',       type: 'drl',       color: C.drl,   xz: 'front', side: 'R', zf: 0.80, yf: 1.05 },
-  { index: 6,  id: 'l_ch4',         label: 'Left Channel 4',        type: 'drl',       color: C.drl,   xz: 'front', side: 'L', zf: 0.86, yf: 0.90 },
-  { index: 7,  id: 'r_ch4',         label: 'Right Channel 4',       type: 'drl',       color: C.drl,   xz: 'front', side: 'R', zf: 0.86, yf: 0.90 },
-  { index: 8,  id: 'l_ch5',         label: 'Left Channel 5',        type: 'drl',       color: C.drl,   xz: 'front', side: 'L', zf: 0.78, yf: 0.86 },
-  { index: 9,  id: 'r_ch5',         label: 'Right Channel 5',       type: 'drl',       color: C.drl,   xz: 'front', side: 'R', zf: 0.78, yf: 0.86 },
-  { index: 10, id: 'l_ch6',         label: 'Left Channel 6',        type: 'drl',       color: C.drl,   xz: 'front', side: 'L', zf: 0.72, yf: 0.82 },
-  { index: 11, id: 'r_ch6',         label: 'Right Channel 6',       type: 'drl',       color: C.drl,   xz: 'front', side: 'R', zf: 0.72, yf: 0.82 },
-  { index: 12, id: 'l_front_turn',  label: 'Left Front Turn',       type: 'turn_front',color: C.amber, xz: 'front', side: 'L', zf: 1.00, yf: 0.88 },
-  { index: 13, id: 'r_front_turn',  label: 'Right Front Turn',      type: 'turn_front',color: C.amber, xz: 'front', side: 'R', zf: 1.00, yf: 0.88 },
-  { index: 14, id: 'l_front_fog',   label: 'Left Front Fog',        type: 'fog',       color: C.fog,   xz: 'front', side: 'L', zf: 0.94, yf: 0.40 },
-  { index: 15, id: 'r_front_fog',   label: 'Right Front Fog',       type: 'fog',       color: C.fog,   xz: 'front', side: 'R', zf: 0.94, yf: 0.40 },
-  { index: 16, id: 'l_aux_park',    label: 'Left Aux Park',         type: 'marker',    color: C.warm,  xz: 'front', side: 'L', zf: 0.88, yf: 0.70 },
-  { index: 17, id: 'r_aux_park',    label: 'Right Aux Park',        type: 'marker',    color: C.warm,  xz: 'front', side: 'R', zf: 0.88, yf: 0.70 },
+  // ── Front lights (positions from Tesla's xLights model) ──
+  { index: 0,  id: 'l_outer_main',  label: 'Left Outer Main Beam',  type: 'headlight', color: C.white, nx: +0.941, ny: 0.381, nz: -0.720 },
+  { index: 1,  id: 'r_outer_main',  label: 'Right Outer Main Beam', type: 'headlight', color: C.white, nx: +0.941, ny: 0.381, nz: +0.740 },
+  { index: 2,  id: 'l_inner_main',  label: 'Left Inner Main Beam',  type: 'highbeam',  color: C.white, nx: +0.966, ny: 0.357, nz: -0.620 },
+  { index: 3,  id: 'r_inner_main',  label: 'Right Inner Main Beam', type: 'highbeam',  color: C.white, nx: +0.966, ny: 0.357, nz: +0.640 },
+  { index: 4,  id: 'l_signature',   label: 'Left Signature',        type: 'drl',       color: C.drl,   nx: +0.907, ny: 0.476, nz: -0.780 },
+  { index: 5,  id: 'r_signature',   label: 'Right Signature',       type: 'drl',       color: C.drl,   nx: +0.907, ny: 0.476, nz: +0.820 },
+  { index: 6,  id: 'l_ch4',         label: 'Left Channel 4',        type: 'drl',       color: C.drl,   nx: +0.924, ny: 0.452, nz: -0.720 },
+  { index: 7,  id: 'r_ch4',         label: 'Right Channel 4',       type: 'drl',       color: C.drl,   nx: +0.924, ny: 0.452, nz: +0.760 },
+  { index: 8,  id: 'l_ch5',         label: 'Left Channel 5',        type: 'drl',       color: C.drl,   nx: +0.949, ny: 0.429, nz: -0.640 },
+  { index: 9,  id: 'r_ch5',         label: 'Right Channel 5',       type: 'drl',       color: C.drl,   nx: +0.949, ny: 0.429, nz: +0.680 },
+  { index: 10, id: 'l_ch6',         label: 'Left Channel 6',        type: 'drl',       color: C.drl,   nx: +0.975, ny: 0.405, nz: -0.560 },
+  { index: 11, id: 'r_ch6',         label: 'Right Channel 6',       type: 'drl',       color: C.drl,   nx: +0.975, ny: 0.405, nz: +0.600 },
+  { index: 12, id: 'l_front_turn',  label: 'Left Front Turn',       type: 'turn_front',color: C.amber, nx: +0.907, ny: 0.405, nz: -0.820 },
+  { index: 13, id: 'r_front_turn',  label: 'Right Front Turn',      type: 'turn_front',color: C.amber, nx: +0.907, ny: 0.405, nz: +0.860 },
+  { index: 14, id: 'l_front_fog',   label: 'Left Front Fog',        type: 'fog',       color: C.fog,   nx: +0.941, ny: 0.071, nz: -0.820 },
+  { index: 15, id: 'r_front_fog',   label: 'Right Front Fog',       type: 'fog',       color: C.fog,   nx: +0.941, ny: 0.071, nz: +0.860 },
+  { index: 16, id: 'l_aux_park',    label: 'Left Aux Park',         type: 'marker',    color: C.warm,  nx: +0.975, ny: 0.071, nz: -0.740 },
+  { index: 17, id: 'r_aux_park',    label: 'Right Aux Park',        type: 'marker',    color: C.warm,  nx: +0.975, ny: 0.071, nz: +0.780 },
   // ── Side markers / repeaters ──
-  { index: 18, id: 'l_side_marker', label: 'Left Side Marker',      type: 'marker',    color: C.amber, xz: 'frontMid', side: 'L', zf: 1.00, yf: 0.60 },
-  { index: 19, id: 'r_side_marker', label: 'Right Side Marker',     type: 'marker',    color: C.amber, xz: 'frontMid', side: 'R', zf: 1.00, yf: 0.60 },
-  { index: 20, id: 'l_side_rep',    label: 'Left Side Repeater',    type: 'marker',    color: C.amber, xz: 'frontMid', side: 'L', zf: 1.00, yf: 0.72 },
-  { index: 21, id: 'r_side_rep',    label: 'Right Side Repeater',   type: 'marker',    color: C.amber, xz: 'frontMid', side: 'R', zf: 1.00, yf: 0.72 },
+  { index: 18, id: 'l_side_marker', label: 'Left Side Marker',      type: 'marker',    color: C.amber, nx: +1.000, ny: 0.048, nz: -0.660 },
+  { index: 19, id: 'r_side_marker', label: 'Right Side Marker',     type: 'marker',    color: C.amber, nx: +1.000, ny: 0.048, nz: +0.700 },
+  { index: 20, id: 'l_side_rep',    label: 'Left Side Repeater',    type: 'marker',    color: C.amber, nx: +0.534, ny: 0.476, nz: -0.960 },
+  { index: 21, id: 'r_side_rep',    label: 'Right Side Repeater',   type: 'marker',    color: C.amber, nx: +0.534, ny: 0.476, nz: +1.000 },
   // ── Rear lights ──
-  { index: 22, id: 'l_rear_turn',   label: 'Left Rear Turn',        type: 'turn_rear', color: C.amber, xz: 'rear', side: 'L', zf: 0.96, yf: 0.84 },
-  { index: 23, id: 'r_rear_turn',   label: 'Right Rear Turn',       type: 'turn_rear', color: C.amber, xz: 'rear', side: 'R', zf: 0.96, yf: 0.84 },
-  { index: 24, id: 'brake',         label: 'Brake Lights',          type: 'brake',     color: C.brake, xz: 'rear', side: 'C', zf: 0.00, yf: 1.02 },
-  { index: 25, id: 'l_tail',        label: 'Left Tail',             type: 'tail',      color: C.red,   xz: 'rear', side: 'L', zf: 0.90, yf: 0.90 },
-  { index: 26, id: 'r_tail',        label: 'Right Tail',            type: 'tail',      color: C.red,   xz: 'rear', side: 'R', zf: 0.90, yf: 0.90 },
-  { index: 27, id: 'reverse',       label: 'Reverse Lights',        type: 'reverse',   color: C.white, xz: 'rear', side: 'C', zf: 0.40, yf: 0.60 },
-  { index: 28, id: 'rear_fog',      label: 'Rear Fog Lights',       type: 'fog',       color: C.fog,   xz: 'rear', side: 'C', zf: 0.60, yf: 0.45 },
-  { index: 29, id: 'plate',         label: 'License Plate',         type: 'plate',     color: C.white, xz: 'rear', side: 'C', zf: 0.00, yf: 0.55 },
-  // ── Closures ──
-  { index: 30, id: 'falcon_l',      label: 'Left Falcon Door',      type: 'closure', color: C.closure, closure: 'falcon_doors', xz: 'frontMid', side: 'L', zf: 0.85, yf: 1.40 },
-  { index: 31, id: 'falcon_r',      label: 'Right Falcon Door',     type: 'closure', color: C.closure, closure: 'falcon_doors', xz: 'frontMid', side: 'R', zf: 0.85, yf: 1.40 },
-  { index: 32, id: 'front_door_l',  label: 'Left Front Door',       type: 'closure', color: C.closure, closure: 'front_doors', xz: 'frontMid', side: 'L', zf: 1.02, yf: 0.78 },
-  { index: 33, id: 'front_door_r',  label: 'Right Front Door',      type: 'closure', color: C.closure, closure: 'front_doors', xz: 'frontMid', side: 'R', zf: 1.02, yf: 0.78 },
-  { index: 34, id: 'mirror_l',      label: 'Left Mirror',           type: 'closure', color: C.closure, closure: 'mirrors', xz: 'frontMid', side: 'L', zf: 1.10, yf: 1.00 },
-  { index: 35, id: 'mirror_r',      label: 'Right Mirror',          type: 'closure', color: C.closure, closure: 'mirrors', xz: 'frontMid', side: 'R', zf: 1.10, yf: 1.00 },
-  { index: 36, id: 'window_fl',     label: 'Left Front Window',     type: 'closure', color: C.closure, closure: 'windows', xz: 'frontMid', side: 'L', zf: 1.00, yf: 1.15 },
-  { index: 37, id: 'window_rl',     label: 'Left Rear Window',      type: 'closure', color: C.closure, closure: 'windows', xz: 'rearMid', side: 'L', zf: 1.00, yf: 1.15 },
-  { index: 38, id: 'window_fr',     label: 'Right Front Window',    type: 'closure', color: C.closure, closure: 'windows', xz: 'frontMid', side: 'R', zf: 1.00, yf: 1.15 },
-  { index: 39, id: 'window_rr',     label: 'Right Rear Window',     type: 'closure', color: C.closure, closure: 'windows', xz: 'rearMid', side: 'R', zf: 1.00, yf: 1.15 },
-  { index: 40, id: 'liftgate',      label: 'Liftgate',              type: 'closure', color: C.closure, closure: 'liftgate', xz: 'rear', side: 'C', zf: 0.00, yf: 1.30 },
-  { index: 41, id: 'handle_fl',     label: 'Left Front Door Handle',  type: 'closure', color: C.closure, closure: 'door_handles', xz: 'frontMid', side: 'L', zf: 1.04, yf: 0.82 },
-  { index: 42, id: 'handle_rl',     label: 'Left Rear Door Handle',   type: 'closure', color: C.closure, closure: 'door_handles', xz: 'rearMid', side: 'L', zf: 1.04, yf: 0.82 },
-  { index: 43, id: 'handle_fr',     label: 'Right Front Door Handle', type: 'closure', color: C.closure, closure: 'door_handles', xz: 'frontMid', side: 'R', zf: 1.04, yf: 0.82 },
-  { index: 44, id: 'handle_rr',     label: 'Right Rear Door Handle',  type: 'closure', color: C.closure, closure: 'door_handles', xz: 'rearMid', side: 'R', zf: 1.04, yf: 0.82 },
-  { index: 45, id: 'charge_port',   label: 'Charge Port',           type: 'closure', color: C.closure, closure: 'charge_port', xz: 'rear', side: 'L', zf: 0.95, yf: 0.78 },
+  { index: 22, id: 'l_rear_turn',   label: 'Left Rear Turn',        type: 'turn_rear', color: C.amber, nx: -0.924, ny: 0.619, nz: -0.720 },
+  { index: 23, id: 'r_rear_turn',   label: 'Right Rear Turn',       type: 'turn_rear', color: C.amber, nx: -0.924, ny: 0.619, nz: +0.760 },
+  { index: 24, id: 'brake',         label: 'Brake Lights',          type: 'brake',     color: C.brake, nx: -0.788, ny: 0.841, nz: +0.020 },
+  { index: 25, id: 'l_tail',        label: 'Left Tail',             type: 'tail',      color: C.red,   nx: -0.938, ny: 0.611, nz: -0.647 },
+  { index: 26, id: 'r_tail',        label: 'Right Tail',            type: 'tail',      color: C.red,   nx: -0.938, ny: 0.611, nz: +0.687 },
+  { index: 27, id: 'reverse',       label: 'Reverse Lights',        type: 'reverse',   color: C.white, nx: -0.966, ny: 0.619, nz: +0.020 },
+  { index: 28, id: 'rear_fog',      label: 'Rear Fog Lights',       type: 'fog',       color: C.fog,   nx: -0.975, ny: 0.619, nz: +0.020 },
+  { index: 29, id: 'plate',         label: 'License Plate',         type: 'plate',     color: C.white, nx: -1.000, ny: 0.571, nz: +0.020 },
+  // ── Closures (physical placements; invisible until 3D closure animation) ──
+  { index: 30, id: 'falcon_l',      label: 'Left Falcon Door',      type: 'closure', color: C.closure, closure: 'falcon_doors', nx: +0.00, ny: 0.88, nz: -0.85 },
+  { index: 31, id: 'falcon_r',      label: 'Right Falcon Door',     type: 'closure', color: C.closure, closure: 'falcon_doors', nx: +0.00, ny: 0.88, nz: +0.85 },
+  { index: 32, id: 'front_door_l',  label: 'Left Front Door',       type: 'closure', color: C.closure, closure: 'front_doors', nx: +0.30, ny: 0.50, nz: -0.95 },
+  { index: 33, id: 'front_door_r',  label: 'Right Front Door',      type: 'closure', color: C.closure, closure: 'front_doors', nx: +0.30, ny: 0.50, nz: +0.95 },
+  { index: 34, id: 'mirror_l',      label: 'Left Mirror',           type: 'closure', color: C.closure, closure: 'mirrors', nx: +0.55, ny: 0.72, nz: -0.98 },
+  { index: 35, id: 'mirror_r',      label: 'Right Mirror',          type: 'closure', color: C.closure, closure: 'mirrors', nx: +0.55, ny: 0.72, nz: +0.98 },
+  { index: 36, id: 'window_fl',     label: 'Left Front Window',     type: 'closure', color: C.closure, closure: 'windows', nx: +0.35, ny: 0.78, nz: -0.95 },
+  { index: 37, id: 'window_rl',     label: 'Left Rear Window',      type: 'closure', color: C.closure, closure: 'windows', nx: -0.20, ny: 0.78, nz: -0.95 },
+  { index: 38, id: 'window_fr',     label: 'Right Front Window',    type: 'closure', color: C.closure, closure: 'windows', nx: +0.35, ny: 0.78, nz: +0.95 },
+  { index: 39, id: 'window_rr',     label: 'Right Rear Window',     type: 'closure', color: C.closure, closure: 'windows', nx: -0.20, ny: 0.78, nz: +0.95 },
+  { index: 40, id: 'liftgate',      label: 'Liftgate',              type: 'closure', color: C.closure, closure: 'liftgate', nx: -0.92, ny: 0.82, nz: +0.00 },
+  { index: 41, id: 'handle_fl',     label: 'Left Front Door Handle',  type: 'closure', color: C.closure, closure: 'door_handles', nx: +0.35, ny: 0.55, nz: -0.97 },
+  { index: 42, id: 'handle_rl',     label: 'Left Rear Door Handle',   type: 'closure', color: C.closure, closure: 'door_handles', nx: -0.20, ny: 0.55, nz: -0.97 },
+  { index: 43, id: 'handle_fr',     label: 'Right Front Door Handle', type: 'closure', color: C.closure, closure: 'door_handles', nx: +0.35, ny: 0.55, nz: +0.97 },
+  { index: 44, id: 'handle_rr',     label: 'Right Rear Door Handle',  type: 'closure', color: C.closure, closure: 'door_handles', nx: -0.20, ny: 0.55, nz: +0.97 },
+  { index: 45, id: 'charge_port',   label: 'Charge Port',           type: 'closure', color: C.closure, closure: 'charge_port', nx: -0.80, ny: 0.50, nz: -0.90 },
 ]
 
 // Closure channel indices and the set of closure families a model actually has.
@@ -148,16 +151,12 @@ const MODEL_CLOSURES: Record<TeslaModel, ClosureFamily[]> = {
 }
 
 function placeFromSpec(spec: ChannelSpec, p: CarProportions): [number, number, number] {
-  const front = p.bodyL / 2 - 0.14
-  const rear = -(p.bodyL / 2 - 0.14)
-  const x =
-    spec.xz === 'front' ? front :
-    spec.xz === 'rear' ? rear :
-    spec.xz === 'frontMid' ? front * 0.30 :
-    rear * 0.30
-  const halfW = p.bodyW / 2 + 0.02
-  const z = spec.side === 'C' ? 0 : (spec.side === 'L' ? -1 : 1) * halfW * spec.zf
-  const y = 0.10 + spec.yf * p.bodyH
+  // nx/ny/nz are normalized car coords (front+, up, right+) from Tesla's xLights
+  // model; scale to each car's length / full height / width.
+  const carHeight = p.bodyH + p.cabinH
+  const x = spec.nx * (p.bodyL / 2)
+  const y = 0.10 + spec.ny * carHeight
+  const z = spec.nz * (p.bodyW / 2)
   return [Number(x.toFixed(3)), Number(y.toFixed(3)), Number(z.toFixed(3))]
 }
 
