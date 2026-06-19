@@ -418,8 +418,8 @@ export default function TeslaScene({
     // ── Car body: try GLTF, fall back to procedural ──────────────────────────
     const bMat = bodyMat(teslaModel === 'cybertruck' ? 0.92 : 0.78);
 
-    // Procedural group — shown immediately, entirely removed when GLTF loads.
-    // ALL procedural geometry goes here so nothing leaks into the HD model scene.
+    // Procedural group — built but NOT shown during loading (it looked clunky).
+    // It's added to the scene only if the GLTF fails to load (error fallback).
     const proceduralGroup = new THREE.Group();
     buildProceduralCar(proceduralGroup, teslaModel, p, halfW, groundY, bMat);
     addWindows(teslaModel, halfW, proceduralGroup);
@@ -427,7 +427,6 @@ export default function TeslaScene({
     const mX = p.bodyL / 2 - 1.35;
     addMirror(proceduralGroup, mX, mY, -halfW, -1, bMat);
     addMirror(proceduralGroup, mX, mY,  halfW,  1, bMat);
-    scene.add(proceduralGroup);
     setGltfStatus('loading');
 
     const dracoLoader = new DRACOLoader();
@@ -519,7 +518,8 @@ export default function TeslaScene({
       },
       undefined,
       () => {
-        // No GLTF file found — procedural already in scene, nothing to do
+        // GLTF failed to load — fall back to the procedural car
+        scene.add(proceduralGroup);
         setGltfStatus('procedural');
       },
     );
@@ -598,6 +598,14 @@ export default function TeslaScene({
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={mountRef} style={{ width: '100%', height: '100%', cursor: 'grab' }} />
+
+      {/* Clean loading state (instead of the clunky procedural placeholder) */}
+      {gltfStatus === 'loading' && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, pointerEvents: 'none' }}>
+          <div style={{ width: 34, height: 34, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.12)', borderTopColor: 'rgba(232,64,74,0.9)', animation: 'spin 0.8s linear infinite' }} />
+          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: '.06em', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>Loading model</div>
+        </div>
+      )}
 
       {/* GLTF loading badge */}
       {gltfStatus === 'loaded' && (
