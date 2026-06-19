@@ -103,7 +103,14 @@ export async function POST(req: Request) {
   const zip = new JSZip()
   const folder = zip.folder('LightShow')!
   folder.file('lightshow.fseq', fseq)
-  if (audioBytes) folder.file('lightshow.wav', audioBytes)
+  if (audioBytes) {
+    // Tesla accepts .mp3 or .wav, and the audio filename must match the fseq.
+    // Ship the file with the extension matching its REAL format (detected from
+    // the bytes), so an uploaded MP3 isn't mislabeled as .wav and rejected.
+    const head = new Uint8Array(audioBytes.slice(0, 4))
+    const isWav = head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46 // "RIFF"
+    folder.file(`lightshow.${isWav ? 'wav' : 'mp3'}`, audioBytes)
+  }
   folder.file('show_config.json', JSON.stringify({
     name: show.name, tesla_model: show.tesla_model,
     style: show.style, intensity: show.intensity,

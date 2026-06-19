@@ -1019,10 +1019,11 @@ function BuilderInner() {
     const zip = new JSZip();
     const folder = zip.folder('LightShow')!;
     folder.file('lightshow.fseq', fseq);
-    // Only include audio if it's WAV — Tesla ignores non-WAV audio
+    // Ship audio with the extension matching its real format (Tesla accepts
+    // .mp3 or .wav, and the audio name must match the .fseq name).
     if (audioFile) {
       const isWav = audioFile.type === 'audio/wav' || audioFile.type === 'audio/x-wav';
-      folder.file('lightshow.wav', await audioFile.arrayBuffer(), { comment: isWav ? '' : 'WARNING: convert to WAV for Tesla audio playback' });
+      folder.file(`lightshow.${isWav ? 'wav' : 'mp3'}`, await audioFile.arrayBuffer());
     }
     folder.file('show_config.json', JSON.stringify({ name, tesla_model: model, style, intensity, bpm }, null, 2));
     const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
