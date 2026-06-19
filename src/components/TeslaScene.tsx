@@ -245,7 +245,7 @@ function addWindows(model: TeslaModel, halfW: number, scene: THREE.Object3D) {
 
 // ─── Light zone meshes ────────────────────────────────────────────────────────
 function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
-  const out: { mesh: THREE.Mesh; pl: THREE.PointLight; ch: number; label: string }[] = [];
+  const out: { mesh: THREE.Mesh; mat: THREE.MeshStandardMaterial; pl: THREE.PointLight; ch: number; label: string; type: string }[] = [];
   const zoneHitboxes: THREE.Mesh[] = [];
 
   def.zones.forEach(zone => {
@@ -304,26 +304,107 @@ function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
     const mat = new THREE.MeshStandardMaterial({
       color: zone.color,
       emissive: new THREE.Color(zone.color),
-      emissiveIntensity: 0.15,
-      roughness: 0.05,
+      emissiveIntensity: 0.05,  // faint lens when off; driven up when the channel fires
+      roughness: 0.25,
       metalness: 0.0,
+      toneMapped: false,        // let the glow read at full strength
     });
 
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(x, y, z);
     mesh.userData.label = zone.label;
-    mesh.visible = false; // invisible — used only for raycaster hover detection
+    // Hidden until snapped onto a real fixture (snapLightsToFixtures makes it
+    // visible). Non-snapped models keep the point-light glow, no regression.
+    mesh.visible = false;
     scene.add(mesh);
     zoneHitboxes.push(mesh);
 
-    const pl = new THREE.PointLight(zone.color, 0, 2.0);
+    const pl = new THREE.PointLight(zone.color, 0, 2.6, 2.0);
     pl.position.set(x, y, z);
     scene.add(pl);
 
-    out.push({ mesh, pl, ch: zone.channel, label: zone.label });
+    out.push({ mesh, mat, pl, ch: zone.channel, label: zone.label, type: zone.type });
   });
 
   return { lightObjs: out, zoneHitboxes };
+}
+
+// ─── Real fixture extraction (snap lights to the actual mesh) ────────────────────
+type FixtureClass = 'red' | 'amber' | 'white';
+interface Fixture { pos: THREE.Vector3; cls: FixtureClass }
+
+// Material/mesh name patterns that mark light geometry across our model sources
+const LIGHT_RE = /light|lamp|farol|lanterna|lantern|traseira|brake|break|reverse|indicator|drl|signal|repeater|vermelho|headlight|taillight|platnomor/i;
+// Exclude interior/wheel names that happen to contain "light"
+const NOT_LIGHT_RE = /carpet|interior|seat|button|lcd|screen|dash|cabin|wheel|hub|disc/i;
+const RED_RE   = /vermelho|lanterna|lantern|traseira|tail|brake|break|red/i;
+const AMBER_RE = /turn|indicator|signal|repeater|blink/i;
+
+function fixtureClassFor(type: string): FixtureClass {
+  if (type === 'tail' || type === 'brake') return 'red';
+  if (type === 'turn_front' || type === 'turn_rear') return 'amber';
+  return 'white';
+}
+
+// Find real light fixtures on the loaded+transformed GLB. Each light mesh's
+// vertices are bucketed into front/rear × left/right quadrants (handles meshes
+// that merge all lights into one) and a world-space centroid is emitted per
+// populated quadrant, classified by material colour.
+function extractFixtures(root: THREE.Object3D): Fixture[] {
+  root.updateWorldMatrix(true, true);
+  const rootBox = new THREE.Box3().setFromObject(root);
+  const cx = (rootBox.min.x + rootBox.max.x) / 2;
+  const cz = (rootBox.min.z + rootBox.max.z) / 2;
+  const fixtures: Fixture[] = [];
+  const v = new THREE.Vector3();
+
+  root.traverse(obj => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    const matsArr = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    const name = (matsArr.map(m => (m && (m as THREE.Material).name) || '').join(' ') + ' ' + (mesh.name || '')).toLowerCase();
+    if (!LIGHT_RE.test(name) || NOT_LIGHT_RE.test(name)) return;
+    const cls: FixtureClass = RED_RE.test(name) ? 'red' : AMBER_RE.test(name) ? 'amber' : 'white';
+
+    const posAttr = mesh.geometry.attributes.position as THREE.BufferAttribute | undefined;
+    if (!posAttr || posAttr.count === 0) return;
+    const buckets = new Map<string, { sum: THREE.Vector3; n: number }>();
+    const step = Math.max(1, Math.floor(posAttr.count / 500));
+    for (let i = 0; i < posAttr.count; i += step) {
+      v.fromBufferAttribute(posAttr, i).applyMatrix4(mesh.matrixWorld);
+      const key = (v.x >= cx ? 'F' : 'R') + (v.z >= cz ? 'r' : 'l');
+      let b = buckets.get(key);
+      if (!b) { b = { sum: new THREE.Vector3(), n: 0 }; buckets.set(key, b); }
+      b.sum.add(v); b.n++;
+    }
+    buckets.forEach(b => { if (b.n >= 3) fixtures.push({ pos: b.sum.multiplyScalar(1 / b.n), cls }); });
+  });
+  return fixtures;
+}
+
+// Snap each light's panel + point light onto the nearest real fixture of the
+// right half (front/rear) and colour. Returns how many lights were snapped.
+function snapLightsToFixtures(
+  lightObjs: { mesh: THREE.Mesh; pl: THREE.PointLight; type: string }[],
+  fixtures: Fixture[],
+): number {
+  if (fixtures.length < 4) return 0;
+  let snapped = 0;
+  for (const o of lightObjs) {
+    if (o.type === 'closure') continue; // closures handled separately
+    const wantFront = o.mesh.position.x >= 0;
+    const cls = fixtureClassFor(o.type);
+    let pool = fixtures.filter(f => (f.pos.x >= 0) === wantFront && f.cls === cls);
+    if (!pool.length) pool = fixtures.filter(f => (f.pos.x >= 0) === wantFront);
+    if (!pool.length) continue;
+    let best = pool[0], bd = Infinity;
+    for (const f of pool) { const d = f.pos.distanceTo(o.mesh.position); if (d < bd) { bd = d; best = f; } }
+    o.mesh.position.copy(best.pos);
+    o.pl.position.copy(best.pos);
+    o.mesh.visible = true; // show the emissive fixture panel at its real spot
+    snapped++;
+  }
+  return snapped;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -514,6 +595,25 @@ export default function TeslaScene({
         // Replace procedural with GLTF
         scene.remove(proceduralGroup);
         scene.add(gltfScene);
+
+        // ── Step 7: snap lights onto the model's REAL fixtures ──────────────────
+        // Extract actual light geometry; auto-correct front/back from where the
+        // tail (red) lights truly are, then snap each light there.
+        let fixtures = extractFixtures(gltfScene);
+        const reds = fixtures.filter(f => f.cls === 'red');
+        if (reds.length) {
+          const meanRedX = reds.reduce((s, f) => s + f.pos.x, 0) / reds.length;
+          // Our convention puts the rear at -X; if the tails sit at +X the model
+          // is loaded backwards — flip it 180° so body and lights agree.
+          if (meanRedX > 0) {
+            gltfScene.rotation.y += Math.PI;
+            gltfScene.updateWorldMatrix(true, true);
+            fixtures = extractFixtures(gltfScene);
+          }
+        }
+        const n = snapLightsToFixtures(lightObjsRef.current, fixtures);
+        console.log(`[GLTF ${teslaModel}] fixtures=${fixtures.length} lights snapped=${n}`);
+
         setGltfStatus('loaded');
       },
       undefined,
@@ -568,8 +668,10 @@ export default function TeslaScene({
             frameIdxRef.current++;
           }
           const frame = frames[frameIdx];
-          lightObjs.forEach(({ pl, ch }) => {
-            pl.intensity = (frame[ch] / 255) * 2.8;
+          lightObjs.forEach(({ pl, mat, ch, type }) => {
+            const v = frame[ch] / 255;
+            pl.intensity = v * 2.8;
+            if (type !== 'closure') mat.emissiveIntensity = 0.05 + v * 3.2; // fixture lens glows
           });
         }
       }
