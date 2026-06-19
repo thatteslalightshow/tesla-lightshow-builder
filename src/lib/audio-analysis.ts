@@ -74,28 +74,45 @@ export async function analyzeAudioToFrames(
   const trebleN = percentileNorm(trebleRms)
   const totalN  = percentileNorm(bassRms.map((b, i) => (b + midRms[i] + trebleRms[i]) / 3))
 
-  // Onset detection for beat-triggered effects
+  // ── Onset envelope: spectral flux (the RISE in energy) catches beat attacks
+  // far more precisely than an absolute loudness threshold.
+  const flux: number[] = new Array(totalFrames).fill(0)
+  for (let f = 1; f < totalFrames; f++) {
+    flux[f] = Math.max(0, bassN[f] - bassN[f - 1]) * 0.7
+            + Math.max(0, midN[f]  - midN[f - 1])  * 0.3
+  }
+
+  // ── BPM via autocorrelation of the onset envelope (robust to syncopation)
+  let bpm = 120
+  {
+    const minLag = Math.round(FPS * 60 / 180) // up to 180 BPM
+    const maxLag = Math.round(FPS * 60 / 60)  // down to 60 BPM
+    let bestLag = 0, bestCorr = -1
+    for (let lag = minLag; lag <= maxLag; lag++) {
+      let corr = 0
+      for (let f = 0; f + lag < totalFrames; f++) corr += flux[f] * flux[f + lag]
+      corr /= (totalFrames - lag)
+      if (corr > bestCorr) { bestCorr = corr; bestLag = lag }
+    }
+    if (bestLag > 0) bpm = Math.max(60, Math.min(200, Math.round(60 / (bestLag / FPS))))
+  }
+  const beatFrames = (60 / bpm) * FPS // frames per beat
+
+  // ── Peak-pick onsets: local maxima of the flux above an adaptive threshold,
+  // spaced at least half a beat apart so we land one trigger per real hit.
   const triggerFrames = new Set<number>()
-  const lookback = 10
-  const threshold = 1.55
-  let lastTrigger = -4
-  for (let f = lookback; f < totalFrames; f++) {
-    const window = bassN.slice(f - lookback, f)
-    const avg = window.reduce((a, b) => a + b, 0) / lookback
-    if (bassN[f] > avg * threshold && f - lastTrigger >= 4) {
+  const W = 8 // ~160ms local window
+  const minGap = Math.max(4, Math.floor(beatFrames * 0.5))
+  let lastTrigger = -minGap
+  for (let f = 2; f < totalFrames - 2; f++) {
+    let s = 0, n = 0
+    for (let k = f - W; k <= f + W; k++) if (k >= 0 && k < totalFrames) { s += flux[k]; n++ }
+    const localMean = s / n
+    const isPeak = flux[f] > flux[f - 1] && flux[f] >= flux[f + 1]
+    if (isPeak && flux[f] > localMean * 1.8 + 0.035 && f - lastTrigger >= minGap) {
       triggerFrames.add(f)
       lastTrigger = f
     }
-  }
-
-  // Estimate BPM from onset intervals
-  const onsets = [...triggerFrames].sort((a, b) => a - b)
-  let bpm = 120
-  if (onsets.length > 4) {
-    const intervals = onsets.slice(1).map((o, i) => o - onsets[i])
-    const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length
-    bpm = Math.round(60 / (avgInterval / FPS))
-    bpm = Math.max(60, Math.min(200, bpm))
   }
 
   // Build frame data — map each zone type to a band

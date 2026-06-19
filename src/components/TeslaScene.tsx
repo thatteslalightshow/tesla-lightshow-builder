@@ -249,6 +249,9 @@ function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
   const zoneHitboxes: THREE.Mesh[] = [];
 
   def.zones.forEach(zone => {
+    // Skip closures in the 3D scene — they have no light and only cost perf.
+    // (They'll get dedicated geometry when closure animation is added.)
+    if (zone.type === 'closure') return;
     const [x, y, z] = zone.position;
 
     // Lights are flat panels flush with the front/rear fascia.
@@ -292,10 +295,6 @@ function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
       case 'marker':
         // Small side marker / aux park element
         geo = new THREE.BoxGeometry(D, 0.026, 0.10);
-        break;
-      case 'closure':
-        // Closures: small hover hitbox; not driven by the light show
-        geo = new THREE.BoxGeometry(0.05, 0.05, 0.05);
         break;
       default:
         geo = new THREE.BoxGeometry(D, 0.048, 0.18);
@@ -365,11 +364,13 @@ export default function TeslaScene({
     // ── Renderer ──────────────────────────────────────────────────────────────
     const w = el.clientWidth || 800;
     const h = el.clientHeight || 480;
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setSize(w, h);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Cap pixel ratio — 2x on retina is 4x the pixels for little visual gain and
+    // is the main interaction-lag culprit alongside the per-light cost.
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.3;
     el.appendChild(renderer.domElement);
@@ -397,7 +398,7 @@ export default function TeslaScene({
     scene.add(new THREE.AmbientLight(0x10101e, 0.5));
     const sun = new THREE.DirectionalLight(0xffffff, 3.0);
     sun.position.set(7, 12, 6); sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(1024, 1024);
     sun.shadow.camera.left = -10; sun.shadow.camera.right = 10;
     sun.shadow.camera.top = 10; sun.shadow.camera.bottom = -10;
     scene.add(sun);
