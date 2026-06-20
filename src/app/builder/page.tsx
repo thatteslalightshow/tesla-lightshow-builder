@@ -22,6 +22,7 @@ type ClosureBlocks = Record<number, Record<number, ClosureCommand>>;
 import { analyzeAudioToFrames } from '@/lib/audio-analysis';
 import { validateFseq, type FseqValidation } from '@/lib/fseq';
 import { parseId3, titleFromFilename } from '@/lib/id3';
+import { audioBufferToWav } from '@/lib/wav';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TESLA_MODELS: { value: TeslaModel; label: string }[] = [
@@ -623,6 +624,7 @@ function BuilderInner() {
 
   // ── Audio preview state ───────────────────────────────────────────────────
   const rawAudioRef = useRef<ArrayBuffer | null>(null);
+  const wavBlobRef = useRef<Blob | null>(null);  // decoded → WAV for Tesla
   const audioCtxRef = useRef<AudioContext | null>(null);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const previewRafRef = useRef<number>(0);
@@ -792,6 +794,7 @@ function BuilderInner() {
     setAudioUploaded(false);
     stopPreview();
 
+    wavBlobRef.current = null;
     setAudioFrames(null);
     setAudioTriggers(new Set());
     setWaveformData(null);
@@ -824,6 +827,8 @@ function BuilderInner() {
           const ctx2 = new AudioContext();
           const ab2 = await ctx2.decodeAudioData((rawAudioRef.current as ArrayBuffer).slice(0));
           await ctx2.close();
+          // Convert the decoded audio to WAV (sample-accurate, Tesla-recommended).
+          try { wavBlobRef.current = audioBufferToWav(ab2); } catch { wavBlobRef.current = null; }
           const result = await analyzeAudioToFrames(ab2, MODELS[model]);
           setAudioFrames(result.frames);
           setAudioTriggers(result.triggerFrames);
@@ -897,13 +902,27 @@ function BuilderInner() {
   // ── Save & upload ─────────────────────────────────────────────────────────
   async function uploadAudio(showId: string, file: File) {
     setUploading(true);
-    const form = new FormData();
-    form.append('file', file); form.append('show_id', showId);
-    const res = await fetch('/api/upload', { method: 'POST', body: form });
+    const post = async (f: File) => {
+      const form = new FormData();
+      form.append('file', f); form.append('show_id', showId);
+      return fetch('/api/upload', { method: 'POST', body: form });
+    };
+
+    // Prefer the converted WAV (sample-accurate sync). If it fails to upload
+    // (e.g. very long song), fall back to the original — which now ships with
+    // the correct .mp3 extension and still plays on Tesla.
+    const base = file.name.replace(/\.[^.]+$/, '');
+    const wavFile = wavBlobRef.current
+      ? new File([wavBlobRef.current], `${base}.wav`, { type: 'audio/wav' })
+      : null;
+
+    let res = wavFile ? await post(wavFile) : await post(file);
+    if (!res.ok && wavFile) res = await post(file);
+
     setUploading(false);
     if (res.ok) { setAudioUploaded(true); }
     else {
-      const { error } = await res.json();
+      const { error } = await res.json().catch(() => ({ error: 'upload error' }));
       setSaveMsg(`Audio upload failed: ${error}`);
       setTimeout(() => setSaveMsg(''), 4000);
     }
@@ -1019,9 +1038,11 @@ function BuilderInner() {
     const zip = new JSZip();
     const folder = zip.folder('LightShow')!;
     folder.file('lightshow.fseq', fseq);
-    // Ship audio with the extension matching its real format (Tesla accepts
-    // .mp3 or .wav, and the audio name must match the .fseq name).
-    if (audioFile) {
+    // Prefer the converted WAV (sample-accurate). Otherwise ship the original
+    // with the correct extension (Tesla accepts .mp3 or .wav; name must match).
+    if (wavBlobRef.current) {
+      folder.file('lightshow.wav', await wavBlobRef.current.arrayBuffer());
+    } else if (audioFile) {
       const isWav = audioFile.type === 'audio/wav' || audioFile.type === 'audio/x-wav';
       folder.file(`lightshow.${isWav ? 'wav' : 'mp3'}`, await audioFile.arrayBuffer());
     }
@@ -1109,12 +1130,12 @@ function BuilderInner() {
               style={{ display: 'block', border: `1px dashed ${audioFile ? 'rgba(0,232,135,0.35)' : 'var(--border)'}`, borderRadius: 'var(--radius)', padding: '1rem', textAlign: 'center', cursor: 'pointer', transition: 'border-color .15s', background: audioFile ? 'rgba(0,232,135,0.04)' : 'transparent' }}
               onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--red)')}
               onMouseLeave={e => (e.currentTarget.style.borderColor = audioFile ? 'rgba(0,232,135,0.35)' : 'var(--border)')}>
-              <input type="file" accept="audio/mpeg,audio/mp3,audio/wav" onChange={onAudioChange} style={{ display: 'none' }} />
+              <input type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac" onChange={onAudioChange} style={{ display: 'none' }} />
               <div style={{ fontSize: '1.4rem', marginBottom: 4 }}>🎵</div>
               <div style={{ fontSize: 12, color: audioUploaded ? 'var(--green)' : audioFile ? '#ff8c00' : 'var(--muted)' }}>
-                {audioUploaded ? `✓ ${audioFile?.name ?? 'Audio saved'}` : audioFile ? audioFile.name : 'Click to upload MP3 or WAV'}
+                {audioUploaded ? `✓ ${audioFile?.name ?? 'Audio saved'}` : audioFile ? audioFile.name : 'Click to upload your song'}
               </div>
-              {!audioFile && <div style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 2 }}>Max 50MB · MP3 or WAV</div>}
+              {!audioFile && <div style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 2 }}>MP3, WAV, M4A… · auto-converted to Tesla WAV</div>}
             </label>
             {audioError && <div style={{ fontSize: 11, color: '#ff8a8a', marginTop: 4 }}>{audioError}</div>}
             {analyzing && (

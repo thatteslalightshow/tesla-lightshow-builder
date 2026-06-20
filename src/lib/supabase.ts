@@ -66,13 +66,21 @@ export function sanitizeFileName(name: string): string {
 }
 
 export const ALLOWED_AUDIO_TYPES = new Set([
-  'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav'
+  'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav',
+  'audio/mp4', 'audio/x-m4a', 'audio/aac', 'audio/ogg', 'audio/flac', 'audio/webm',
 ])
+const ALLOWED_AUDIO_EXT = ['.mp3', '.wav', '.m4a', '.mp4', '.aac', '.ogg', '.flac', '.webm']
 
-export const MAX_AUDIO_SIZE = 50 * 1024 * 1024
+// 70MB accommodates the converted WAV (~10MB/min) for typical song lengths.
+export const MAX_AUDIO_SIZE = 70 * 1024 * 1024
 
 export function validateAudioFile(file: File): string | null {
-  if (!ALLOWED_AUDIO_TYPES.has(file.type)) return 'Only MP3 and WAV files are allowed'
-  if (file.size > MAX_AUDIO_SIZE) return 'File must be under 50MB'
+  // Accept by MIME or extension — browsers report inconsistent MIME types,
+  // and we convert anything decodable to WAV anyway.
+  const ext = file.name.toLowerCase().match(/\.[a-z0-9]+$/)?.[0] ?? ''
+  if (!ALLOWED_AUDIO_TYPES.has(file.type) && !ALLOWED_AUDIO_EXT.includes(ext)) {
+    return 'Please upload an audio file (MP3, WAV, M4A, AAC, OGG, FLAC)'
+  }
+  if (file.size > MAX_AUDIO_SIZE) return 'File must be under 70MB'
   return null
 }
