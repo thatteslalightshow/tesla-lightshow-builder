@@ -246,9 +246,25 @@ function addWindows(model: TeslaModel, halfW: number, scene: THREE.Object3D) {
   }
 }
 
+// ─── Light driver ──────────────────────────────────────────────────────────────
+// A glowing fixture: `mat` is the emissive material driven by its channel value,
+// `center` is its world position (for the colored-spill pool), `baseOpacity` is
+// the resting opacity (proxy boxes are faintly visible; real-lens overlays are
+// invisible until lit). `nx/ny/nz` are the normalized car coords (proxies only,
+// used to anchor/partition onto the loaded geometry).
+interface LightObj {
+  mesh?: THREE.Mesh;
+  mat: THREE.MeshStandardMaterial;
+  ch: number;
+  color: THREE.Color;
+  center: THREE.Vector3;
+  baseOpacity: number;
+  nx?: number; ny?: number; nz?: number;
+}
+
 // ─── Light zone meshes ────────────────────────────────────────────────────────
 function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
-  const out: { mesh: THREE.Mesh; mat: THREE.MeshStandardMaterial; ch: number; color: THREE.Color; label: string; nx: number; ny: number; nz: number }[] = [];
+  const out: LightObj[] = [];
   const zoneHitboxes: THREE.Mesh[] = [];
 
   def.zones.forEach(zone => {
@@ -318,10 +334,87 @@ function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
     scene.add(mesh);            // visible — this IS the light the user sees turn on
     zoneHitboxes.push(mesh);
 
-    out.push({ mesh, mat, ch: zone.channel, color: new THREE.Color(zone.color), label: zone.label, nx: zone.nx, ny: zone.ny, nz: zone.nz });
+    out.push({ mesh, mat, ch: zone.channel, color: new THREE.Color(zone.color), center: mesh.position, baseOpacity: 0.16, nx: zone.nx, ny: zone.ny, nz: zone.nz });
   });
 
   return { lightObjs: out, zoneHitboxes };
+}
+
+// ─── Real-lens lights (models whose GLB ships a 'Lights' mesh, e.g. Model S) ─────
+// Proxy boxes never line up with the curved body. Instead, take the car's ACTUAL
+// light geometry and partition its triangles to the nearest light channel (by
+// normalized car position), then build a transparent emissive overlay per channel
+// that glows over the real lens when its channel fires. Positions are exact because
+// they ARE Tesla's lens geometry. Returns null if there's no 'Lights' mesh.
+function buildMeshLights(
+  gltfScene: THREE.Group,
+  channels: { ch: number; color: THREE.Color; nx: number; ny: number; nz: number }[],
+  scene: THREE.Scene,
+  bodyBox: THREE.Box3,
+  fullBox: THREE.Box3,
+): LightObj[] | null {
+  const lightsMesh = gltfScene.getObjectByName('Lights');
+  if (!(lightsMesh instanceof THREE.Mesh)) return null;
+  lightsMesh.updateWorldMatrix(true, false);
+  const m4 = lightsMesh.matrixWorld;
+  const geo = lightsMesh.geometry as THREE.BufferGeometry;
+  const pos = geo.attributes.position as THREE.BufferAttribute;
+  const idx = geo.index;
+  const triN = idx ? idx.count / 3 : pos.count / 3;
+  if (triN < 1) return null;
+
+  const bc = bodyBox.getCenter(new THREE.Vector3());
+  const bs = bodyBox.getSize(new THREE.Vector3());
+  const minY = fullBox.min.y, fullH = fullBox.max.y - fullBox.min.y;
+  const ti = (t: number, k: number) => (idx ? idx.getX(t * 3 + k) : t * 3 + k);
+  const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3(), cen = new THREE.Vector3();
+
+  // Assign each triangle to its nearest channel; collect vertex indices per channel.
+  const buckets = new Map<number, number[]>();
+  for (let t = 0; t < triN; t++) {
+    const i0 = ti(t, 0), i1 = ti(t, 1), i2 = ti(t, 2);
+    vA.fromBufferAttribute(pos, i0).applyMatrix4(m4);
+    vB.fromBufferAttribute(pos, i1).applyMatrix4(m4);
+    vC.fromBufferAttribute(pos, i2).applyMatrix4(m4);
+    cen.copy(vA).add(vB).add(vC).multiplyScalar(1 / 3);
+    const nx = (cen.x - bc.x) / (bs.x / 2);
+    const ny = (cen.y - minY) / fullH;
+    const nz = (cen.z - bc.z) / (bs.z / 2);
+    let best = -1, bestD = Infinity;
+    for (const c of channels) {
+      const dx = nx - c.nx, dy = (ny - c.ny) * 0.6, dz = nz - c.nz;
+      const d = dx * dx + dy * dy + dz * dz;
+      if (d < bestD) { bestD = d; best = c.ch; }
+    }
+    const arr = buckets.get(best);
+    if (arr) arr.push(i0, i1, i2); else buckets.set(best, [i0, i1, i2]);
+  }
+
+  const out: LightObj[] = [];
+  buckets.forEach((idxs, ch) => {
+    const chan = channels.find(c => c.ch === ch);
+    if (!chan) return;
+    const positions = new Float32Array(idxs.length * 3);
+    const v = new THREE.Vector3(); const center = new THREE.Vector3();
+    for (let k = 0; k < idxs.length; k++) {
+      v.fromBufferAttribute(pos, idxs[k]).applyMatrix4(m4);
+      positions[k * 3] = v.x; positions[k * 3 + 1] = v.y; positions[k * 3 + 2] = v.z;
+      center.add(v);
+    }
+    center.multiplyScalar(1 / idxs.length);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    g.computeVertexNormals();
+    const mat = new THREE.MeshStandardMaterial({
+      color: chan.color, emissive: chan.color, emissiveIntensity: 0,
+      roughness: 0.3, metalness: 0, transparent: true, opacity: 0,
+      depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2,
+    });
+    const mesh = new THREE.Mesh(g, mat);
+    scene.add(mesh);
+    out.push({ mesh, mat, ch, color: chan.color.clone(), center, baseOpacity: 0 });
+  });
+  return out.length ? out : null;
 }
 
 // ─── Closures: animate the real GLB panels (Model S only) ───────────────────────
@@ -619,44 +712,47 @@ export default function TeslaScene({
           });
         });
 
-        // ── Step 6: anchor light fixtures to the REAL loaded car ─────────────────
-        // Procedural placeFromSpec coords don't match this GLB, so lights floated
-        // off the model. Re-map each light's authoritative normalized car coords
-        // (nx front+, ny up 0..1, nz right+) onto the actual geometry: length &
-        // width from the Body mesh (excludes mirrors/wheels), height from the full
-        // model (ground→roof).
+        // ── Step 6: light up the REAL lens geometry where the GLB provides it ────
         const bodyNode = gltfScene.getObjectByName('Body');
         const bodyBox = bodyNode ? new THREE.Box3().setFromObject(bodyNode) : box;
-        const bc = bodyBox.getCenter(new THREE.Vector3());
-        const bs = bodyBox.getSize(new THREE.Vector3());
-        const fullH = box.max.y - box.min.y;
-        // Stretch the box slightly so the start point is reliably OUTSIDE the body.
-        lightObjsRef.current.forEach(o => {
-          o.mesh.position.set(
-            bc.x + o.nx * (bs.x / 2) * 1.12,
-            box.min.y + o.ny * fullH,
-            bc.z + o.nz * (bs.z / 2) * 1.12,
-          );
-        });
 
-        // Add the car first so the raycaster below can hit it.
+        // Add the car first so we can read its 'Lights' mesh / raycast against it.
         scene.remove(proceduralGroup);
         scene.add(gltfScene);
 
-        // Snap each fixture onto the REAL body surface: the bbox map lands it near
-        // the right spot, but the curved/tapered body means many poke out. Cast a
-        // ray from just outside, inward toward the centerline at the light's
-        // height, and drop the fixture where it hits the actual panel (held 1.5cm
-        // proud so it doesn't z-fight). Misses keep the bbox position.
-        const snapRay = new THREE.Raycaster();
-        snapRay.far = 2.5;
-        lightObjsRef.current.forEach(o => {
-          const from = o.mesh.position.clone();
-          const dir = new THREE.Vector3(bc.x, from.y, bc.z).sub(from).normalize();
-          snapRay.set(from.addScaledVector(dir, -0.5), dir);
-          const hit = snapRay.intersectObject(gltfScene, true)[0];
-          if (hit) o.mesh.position.copy(hit.point).addScaledVector(dir, -0.015);
-        });
+        const realLights = buildMeshLights(
+          gltfScene,
+          lightObjsRef.current.map(o => ({ ch: o.ch, color: o.color, nx: o.nx ?? 0, ny: o.ny ?? 0, nz: o.nz ?? 0 })),
+          scene, bodyBox, box,
+        );
+        if (realLights) {
+          // Hide the proxy boxes — the real-lens overlays take over (perfectly placed).
+          lightObjsRef.current.forEach(o => { if (o.mesh) o.mesh.visible = false; });
+          lightObjsRef.current = realLights;
+        } else {
+          // No 'Lights' mesh: anchor proxy boxes to the body, then raycast each onto
+          // the real surface so they don't poke out of the curved body.
+          const bc = bodyBox.getCenter(new THREE.Vector3());
+          const bs = bodyBox.getSize(new THREE.Vector3());
+          const fullH = box.max.y - box.min.y;
+          lightObjsRef.current.forEach(o => {
+            o.mesh?.position.set(
+              bc.x + (o.nx ?? 0) * (bs.x / 2) * 1.12,
+              box.min.y + (o.ny ?? 0) * fullH,
+              bc.z + (o.nz ?? 0) * (bs.z / 2) * 1.12,
+            );
+          });
+          const snapRay = new THREE.Raycaster();
+          snapRay.far = 2.5;
+          lightObjsRef.current.forEach(o => {
+            if (!o.mesh) return;
+            const from = o.mesh.position.clone();
+            const dir = new THREE.Vector3(bc.x, from.y, bc.z).sub(from).normalize();
+            snapRay.set(from.addScaledVector(dir, -0.5), dir);
+            const hit = snapRay.intersectObject(gltfScene, true)[0];
+            if (hit) o.mesh.position.copy(hit.point).addScaledVector(dir, -0.015);
+          });
+        }
         // Model S exports real, separable panels — animate them directly.
         if (teslaModel === 'modelS') closureObjsRef.current = buildModelSClosures(gltfScene, scene);
         renderer.shadowMap.needsUpdate = true;  // re-render shadows now the car is in
@@ -731,15 +827,15 @@ export default function TeslaScene({
           }
           const frame = frames[frameIdx];
           activeFrameRef.current = frame;
-          // Each fixture lens glows with its channel value (or a click pulse).
+          // Each fixture glows with its channel value (or a click pulse).
           const lpz = pulseRef.current;
           const activeForPool: { pos: THREE.Vector3; color: THREE.Color; v: number }[] = [];
-          lightObjs.forEach(({ mesh, mat, ch, color }) => {
+          lightObjsRef.current.forEach(({ mat, ch, color, center, baseOpacity }) => {
             let v = (frame[ch] ?? 0) / 255;
             if (lpz && lpz.ch === ch && now < lpz.until) v = Math.max(v, lpz.target);
             mat.emissiveIntensity = v * 3.2;
-            mat.opacity = 0.16 + v * 0.84;
-            if (v > 0.06) activeForPool.push({ pos: mesh.position, color, v });
+            mat.opacity = baseOpacity + v * (1 - baseOpacity);
+            if (v > 0.06) activeForPool.push({ pos: center, color, v });
           });
           // ...and the spill pool follows the brightest few for colored glow.
           activeForPool.sort((a, b) => b.v - a.v);
