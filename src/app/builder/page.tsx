@@ -22,7 +22,7 @@ type ClosureBlocks = Record<number, Record<number, ClosureCommand>>;
 import { analyzeAudioToFrames } from '@/lib/audio-analysis';
 import { validateFseq, type FseqValidation } from '@/lib/fseq';
 import { parseId3, titleFromFilename } from '@/lib/id3';
-import { audioBufferToWav } from '@/lib/wav';
+import { audioBufferToWav, resampleTo44100 } from '@/lib/wav';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TESLA_MODELS: { value: TeslaModel; label: string }[] = [
@@ -829,8 +829,8 @@ function BuilderInner() {
           const ctx2 = new AudioContext();
           const ab2 = await ctx2.decodeAudioData((rawAudioRef.current as ArrayBuffer).slice(0));
           await ctx2.close();
-          // Convert the decoded audio to WAV (sample-accurate, Tesla-recommended).
-          try { wavBlobRef.current = audioBufferToWav(ab2); } catch { wavBlobRef.current = null; }
+          // Convert to WAV at 44.1 kHz (Tesla requires it — 48 kHz won't sync).
+          try { wavBlobRef.current = audioBufferToWav(await resampleTo44100(ab2)); } catch { wavBlobRef.current = null; }
           const result = await analyzeAudioToFrames(ab2, MODELS[model]);
           setAudioFrames(result.frames);
           setAudioTriggers(result.triggerFrames);
@@ -1446,10 +1446,13 @@ function BuilderInner() {
             <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: '.5rem' }}>How to use on your Tesla</div>
             <ol style={{ paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '.35rem' }}>
               <li>Click <strong style={{ color: 'var(--text)' }}>Export ZIP</strong> to download the LightShow package.</li>
-              <li>Copy the <code style={{ background: 'var(--bg3)', padding: '1px 4px', borderRadius: 3 }}>LightShow/</code> folder to the root of a USB drive (exFAT).</li>
-              <li>Plug the USB into your Tesla's front USB port.</li>
-              <li>Tap <strong style={{ color: 'var(--text)' }}>Entertainment → Light Show</strong> on the touchscreen.</li>
+              <li>Copy the <code style={{ background: 'var(--bg3)', padding: '1px 4px', borderRadius: 3 }}>LightShow/</code> folder to the root of a USB drive (exFAT or FAT32 — not NTFS).</li>
+              <li>Plug the USB into your Tesla's front USB or glovebox port.</li>
+              <li>Tap <strong style={{ color: 'var(--text)' }}>Toybox → Light Show → Schedule Show</strong> on the touchscreen.</li>
             </ol>
+            <a href="/guide" target="_blank" style={{ display: 'inline-block', marginTop: '.6rem', fontSize: 12.5, color: 'var(--red)' }}>
+              Full step-by-step guide, incl. how to format a USB drive →
+            </a>
           </div>
         </main>
       </div>

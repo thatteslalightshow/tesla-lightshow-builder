@@ -1,3 +1,21 @@
+// Tesla requires the show audio to be sampled at 44.1 kHz — 48 kHz files (the
+// default on many Macs, where AudioContext decodes to the system rate) play but
+// drift out of sync with the .fseq. Re-render the decoded buffer at 44.1 kHz via
+// an OfflineAudioContext before we encode the WAV.
+export const TESLA_SAMPLE_RATE = 44100
+
+export async function resampleTo44100(buffer: AudioBuffer): Promise<AudioBuffer> {
+  if (buffer.sampleRate === TESLA_SAMPLE_RATE) return buffer
+  const frames = Math.ceil(buffer.duration * TESLA_SAMPLE_RATE)
+  const Offline = (window.OfflineAudioContext || (window as unknown as { webkitOfflineAudioContext: typeof OfflineAudioContext }).webkitOfflineAudioContext)
+  const offline = new Offline(buffer.numberOfChannels, frames, TESLA_SAMPLE_RATE)
+  const src = offline.createBufferSource()
+  src.buffer = buffer
+  src.connect(offline.destination)
+  src.start()
+  return offline.startRendering()
+}
+
 // Encode a decoded AudioBuffer to a 16-bit PCM WAV Blob.
 // Tesla light shows play .wav sample-accurately (no MP3 encoder delay), so we
 // convert whatever the user uploads (mp3/m4a/ogg/…) into a WAV before shipping.

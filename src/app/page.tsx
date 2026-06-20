@@ -397,6 +397,7 @@ export default function Home() {
         <div style={{ fontFamily:'var(--font-display)', fontWeight:600, fontSize:13, color:'rgba(255,255,255,0.4)' }}>ThatTeslaLightshow</div>
         <div style={{ display:'flex', gap:24, fontSize:13, color:'rgba(255,255,255,0.25)' }}>
           <Link href="/gallery" onMouseEnter={e=>(e.currentTarget.style.color='rgba(255,255,255,0.6)')} onMouseLeave={e=>(e.currentTarget.style.color='rgba(255,255,255,0.25)')}>Gallery</Link>
+          <Link href="/guide" onMouseEnter={e=>(e.currentTarget.style.color='rgba(255,255,255,0.6)')} onMouseLeave={e=>(e.currentTarget.style.color='rgba(255,255,255,0.25)')}>Guide</Link>
           <Link href="/pricing" onMouseEnter={e=>(e.currentTarget.style.color='rgba(255,255,255,0.6)')} onMouseLeave={e=>(e.currentTarget.style.color='rgba(255,255,255,0.25)')}>Pricing</Link>
           <Link href="/auth" onMouseEnter={e=>(e.currentTarget.style.color='rgba(255,255,255,0.6)')} onMouseLeave={e=>(e.currentTarget.style.color='rgba(255,255,255,0.25)')}>Sign in</Link>
         </div>
