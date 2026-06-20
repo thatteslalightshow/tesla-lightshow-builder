@@ -625,6 +625,7 @@ function BuilderInner() {
   // ── Audio preview state ───────────────────────────────────────────────────
   const rawAudioRef = useRef<ArrayBuffer | null>(null);
   const wavBlobRef = useRef<Blob | null>(null);  // decoded → WAV for Tesla
+  const audioDurationRef = useRef<number | null>(null);  // seconds, for fseq length
   const audioCtxRef = useRef<AudioContext | null>(null);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const previewRafRef = useRef<number>(0);
@@ -817,6 +818,7 @@ function BuilderInner() {
         rawAudioRef.current = raw.slice(0);
         const ctx = new AudioContext();
         const ab = await ctx.decodeAudioData(raw.slice(0));
+        audioDurationRef.current = ab.duration;  // full song length for the fseq
         const detected = detectBPM(ab);
         setBpm(Math.max(60, Math.min(200, detected)));
         await ctx.close();
@@ -937,7 +939,7 @@ function BuilderInner() {
           beats: VISIBLE_BEATS,
         }
       : null;
-    const fullPayload = { user_id: userId, name, tesla_model: model, style, intensity, bpm, is_public: isPublic, song_title: songTitle || null, song_artist: songArtist || null, edit_data: editData, updated_at: new Date().toISOString() };
+    const fullPayload = { user_id: userId, name, tesla_model: model, style, intensity, bpm, is_public: isPublic, song_title: songTitle || null, song_artist: songArtist || null, edit_data: editData, duration_sec: audioDurationRef.current ?? undefined, updated_at: new Date().toISOString() };
     let showId = savedShowId;
     let error;
 
@@ -1046,7 +1048,6 @@ function BuilderInner() {
       const isWav = audioFile.type === 'audio/wav' || audioFile.type === 'audio/x-wav';
       folder.file(`lightshow.${isWav ? 'wav' : 'mp3'}`, await audioFile.arrayBuffer());
     }
-    folder.file('show_config.json', JSON.stringify({ name, tesla_model: model, style, intensity, bpm }, null, 2));
     const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url;

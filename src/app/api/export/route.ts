@@ -69,20 +69,32 @@ export async function POST(req: Request) {
     .from('shows').select('*').eq('id', body.show_id).eq('user_id', user.id).single()
   if (showErr || !show) return NextResponse.json({ error: 'Show not found' }, { status: 404 })
 
-  // ── Load audio ────────────────────────────────────────────────────────────
-  const { data: audioRecord } = await admin
-    .from('audio_files').select('*').eq('show_id', body.show_id)
-    .order('uploaded_at', { ascending: false }).limit(1).maybeSingle()
+  // ── Load audio (each show has at most one row; no fragile column ordering) ──
+  const { data: audioRows } = await admin
+    .from('audio_files').select('*').eq('show_id', body.show_id).limit(1)
+  const audioRecord = audioRows?.[0] ?? null
 
   let audioBytes: ArrayBuffer | null = null
-  if (audioRecord) {
+  if (audioRecord?.storage_path) {
     const { data: audioData, error: dlErr } = await admin.storage
       .from('audio-files').download(audioRecord.storage_path)
     if (!dlErr && audioData) audioBytes = await audioData.arrayBuffer()
   }
 
   // ── Generate FSEQ ─────────────────────────────────────────────────────────
-  const durationSec = audioRecord?.duration_sec ?? show.duration_sec ?? 30
+  // Prefer the audio's REAL length so the fseq matches the song. For our WAVs
+  // (canonical 44-byte header) duration = dataSize / byteRate, no decoding needed.
+  let wavDurationSec: number | null = null
+  if (audioBytes && audioBytes.byteLength > 44) {
+    const head = new Uint8Array(audioBytes.slice(0, 4))
+    if (head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46) { // "RIFF"
+      const dv = new DataView(audioBytes)
+      const byteRate = dv.getUint32(28, true)
+      const dataSize = dv.getUint32(40, true)
+      if (byteRate > 0 && dataSize > 0) wavDurationSec = dataSize / byteRate
+    }
+  }
+  const durationSec = wavDurationSec ?? audioRecord?.duration_sec ?? show.duration_sec ?? 30
   const frames = Math.round(durationSec * FPS)
   const channels = getChannelCount(show.tesla_model as TeslaModel)
   const bpm = show.bpm ?? 120
@@ -111,11 +123,6 @@ export async function POST(req: Request) {
     const isWav = head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46 // "RIFF"
     folder.file(`lightshow.${isWav ? 'wav' : 'mp3'}`, audioBytes)
   }
-  folder.file('show_config.json', JSON.stringify({
-    name: show.name, tesla_model: show.tesla_model,
-    style: show.style, intensity: show.intensity,
-    bpm, generated_at: new Date().toISOString(),
-  }, null, 2))
 
   const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
 
