@@ -196,7 +196,7 @@ function Timeline({
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  const LABEL_W  = isMobile ? 72  : 112;
+  const LABEL_W  = isMobile ? 92  : 150;
   const ROW_H    = isMobile ? 40  : 22;
   const GROUP_H  = isMobile ? 32  : 26;
   const HEADER_H = isMobile ? 28  : 24;
@@ -347,13 +347,16 @@ function Timeline({
                 </div>
               );
             }
-            // ── Closure leaf label ──
+            // ── Closure leaf label (concise display, full name on hover) ──
             if (row.closure) {
+              const shortLabel = row.label
+                .replace(/^Left /, 'L ').replace(/^Right /, 'R ')
+                .replace(/ Door Handle$/, ' Door');
               return (
-                <div key={row.id} style={{ height: ROW_H, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 5, paddingLeft: row.depth * 10 + 8, paddingRight: 8, overflow: 'hidden' }}>
+                <div key={row.id} title={row.label} style={{ height: ROW_H, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 5, paddingLeft: row.depth * 10 + 8, paddingRight: 6, overflow: 'hidden' }}>
                   <span style={{ width: 7, height: 7, borderRadius: 2, background: '#9d6bff', flexShrink: 0, boxShadow: '0 0 4px #9d6bff' }} />
                   <span style={{ color: 'rgba(255,255,255,0.5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: isMobile ? 9 : 10 }}>
-                    {row.label}
+                    {shortLabel}
                   </span>
                 </div>
               );
@@ -362,7 +365,7 @@ function Timeline({
             const [r, g, b] = hexToRgb(row.color ?? 0xffffff);
             const colorStr = `rgb(${r},${g},${b})`;
             return (
-              <div key={row.id} style={{ height: ROW_H, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 5, paddingLeft: row.depth * 10 + 8, paddingRight: 8, overflow: 'hidden' }}>
+              <div key={row.id} title={row.label} style={{ height: ROW_H, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 5, paddingLeft: row.depth * 10 + 8, paddingRight: 6, overflow: 'hidden' }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: colorStr, flexShrink: 0, boxShadow: `0 0 4px ${colorStr}` }} />
                 <span style={{ color: 'rgba(255,255,255,0.45)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: isMobile ? 9 : 10 }}>
                   {row.label}
@@ -1477,19 +1480,25 @@ function BuilderInner() {
           </div>
 
           {/* Closures: command legend + live limit validation */}
-          {Object.keys(closureBlocks).length > 0 && (
-            <div style={{ padding: '0.85rem 1rem', background: 'rgba(157,107,255,0.05)', border: '1px solid rgba(157,107,255,0.2)', borderRadius: 'var(--radius-lg)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 11, color: 'var(--muted)' }}>
-                <span style={{ fontWeight: 700, color: '#b48cff', letterSpacing: '.04em' }}>CLOSURES</span>
-                {(['open', 'close', 'dance', 'stop'] as const).map(c => (
-                  <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ width: 14, height: 14, borderRadius: 3, background: CMD_STYLE[c].bg, border: `1px solid ${CMD_STYLE[c].fg}`, color: CMD_STYLE[c].fg, fontSize: 9, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{CMD_STYLE[c].letter}</span>
-                    {c.charAt(0).toUpperCase() + c.slice(1)}
-                  </span>
-                ))}
-                <span style={{ color: 'var(--muted2)' }}>· click a cell to cycle</span>
-              </div>
-              {closureWarnings.length > 0 ? (
+          {/* Always-visible closure reference (not just after placing a command) */}
+          <div style={{ padding: '0.85rem 1rem', background: 'rgba(157,107,255,0.05)', border: '1px solid rgba(157,107,255,0.2)', borderRadius: 'var(--radius-lg)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 11, color: 'var(--muted)' }}>
+              <span style={{ fontWeight: 700, color: '#b48cff', letterSpacing: '.04em' }}>CLOSURES</span>
+              {(['open', 'close', 'dance', 'stop'] as const).map(c => (
+                <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ width: 14, height: 14, borderRadius: 3, background: CMD_STYLE[c].bg, border: `1px solid ${CMD_STYLE[c].fg}`, color: CMD_STYLE[c].fg, fontSize: 9, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{CMD_STYLE[c].letter}</span>
+                  {c.charAt(0).toUpperCase() + c.slice(1)}
+                </span>
+              ))}
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--muted2)', lineHeight: 1.55 }}>
+              In the <strong style={{ color: 'var(--muted)' }}>Closures</strong> rows of the timeline, <strong style={{ color: 'var(--muted)' }}>click a beat cell to cycle</strong> its command:
+              {' '}<strong style={{ color: CMD_STYLE.open.fg }}>Open</strong> and <strong style={{ color: CMD_STYLE.close.fg }}>Close</strong> actuate the panel,
+              {' '}<strong style={{ color: CMD_STYLE.dance.fg }}>Dance</strong> wiggles it open &amp; shut, and
+              {' '}<strong style={{ color: CMD_STYLE.stop.fg }}>Stop</strong> halts it mid-motion. Click again past Stop to clear.
+            </div>
+            {Object.keys(closureBlocks).length > 0 && (
+              closureWarnings.length > 0 ? (
                 closureWarnings.map((w, i) => (
                   <div key={i} style={{ fontSize: 12, color: '#ff8a8a', display: 'flex', gap: 6 }}>
                     <span>⚠</span><span>{w}</span>
@@ -1497,9 +1506,9 @@ function BuilderInner() {
                 ))
               ) : (
                 <div style={{ fontSize: 12, color: 'var(--green)' }}>✓ Closure commands within Tesla limits</div>
-              )}
-            </div>
-          )}
+              )
+            )}
+          </div>
 
           {/* FSEQ Validation panel — shown after export */}
           {fseqValidation && (

@@ -353,14 +353,39 @@ function buildModelSClosures(gltfScene: THREE.Group, scene: THREE.Scene): Closur
     return pivot;
   };
 
-  // Windows (ch 36-39) — slide straight down into the door (~92% of glass height)
-  for (const [name, ch] of [['Window_LF', 36], ['Window_LR', 37], ['Window_RF', 38], ['Window_RR', 39]] as const) {
-    const node = get(name); if (!node) continue;
-    const b = worldBox(node);
-    const drop = (b.max.y - b.min.y) * 0.92;
-    const pivot = pivotAt(node, b.getCenter(new THREE.Vector3()));
-    const restY = pivot.position.y;
-    out.push({ ch, open: 0, apply: o => { pivot.position.y = restY - drop * o; } });
+  // Doors + their windows. Each door (ch 41-44, the "door handle" family on S)
+  // swings out around its front vertical edge; its window (ch 36-39) is nested
+  // INSIDE the door pivot so the glass swings with the door AND can still roll
+  // down (translated within the door's frame, like a real window).
+  const DOORS = [
+    { door: 'Door_LF', win: 'Window_LF', doorCh: 41, winCh: 36 },
+    { door: 'Door_LR', win: 'Window_LR', doorCh: 42, winCh: 37 },
+    { door: 'Door_RF', win: 'Window_RF', doorCh: 43, winCh: 38 },
+    { door: 'Door_RR', win: 'Window_RR', doorCh: 44, winCh: 39 },
+  ] as const;
+  for (const d of DOORS) {
+    const doorNode = get(d.door);
+    const winNode = get(d.win);
+    if (doorNode) {
+      const b = worldBox(doorNode); const c = b.getCenter(new THREE.Vector3());
+      const side: 1 | -1 = c.z >= 0 ? 1 : -1;       // body side the door sits on
+      const pivot = pivotAt(doorNode, new THREE.Vector3(b.max.x, c.y, c.z)); // hinge front edge
+      out.push({ ch: d.doorCh, open: 0, apply: o => { pivot.rotation.y = side * 0.62 * o; } });
+      if (winNode) {
+        const wb = worldBox(winNode);
+        const drop = (wb.max.y - wb.min.y) * 0.92;
+        pivot.attach(winNode);                       // window rides with the door
+        const restY = winNode.position.y;
+        out.push({ ch: d.winCh, open: 0, apply: o => { winNode.position.y = restY - drop * o; } });
+      }
+    } else if (winNode) {
+      // No door node — fall back to a standalone sliding window
+      const wb = worldBox(winNode);
+      const drop = (wb.max.y - wb.min.y) * 0.92;
+      const pivot = pivotAt(winNode, wb.getCenter(new THREE.Vector3()));
+      const restY = pivot.position.y;
+      out.push({ ch: d.winCh, open: 0, apply: o => { pivot.position.y = restY - drop * o; } });
+    }
   }
 
   // Mirrors (ch 34-35) — fold inward around a vertical axis at the body-side edge
