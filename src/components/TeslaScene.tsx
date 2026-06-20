@@ -16,6 +16,9 @@ interface Props {
   bpm: number;
   previewBeat?: number | null;
   customFrames?: Uint8Array[] | null;
+  // Fire a closure immediately on click (instant feedback, vs waiting for the
+  // looping playhead to reach that beat). `n` changes each click to retrigger.
+  pulse?: { ch: number; cmd: string; n: number } | null;
 }
 interface Tooltip { label: string; x: number; y: number }
 
@@ -369,24 +372,28 @@ function buildModelSClosures(gltfScene: THREE.Group, scene: THREE.Scene): Closur
     out.push({ ch, open: 0, apply: o => { pivot.rotation.y = sign * 1.2 * o; } });
   }
 
-  // Liftgate (ch 40) → Trunk lid — lift up, hinged at its cabin-side (front) edge
+  // Liftgate (ch 40) → Trunk lid — lift up, hinged at its cabin-side (front) edge.
+  // The Spoiler sits on the lid, so attach it to the SAME pivot or it floats.
   {
     const node = get('Trunk');
     if (node) {
       const b = worldBox(node); const c = b.getCenter(new THREE.Vector3());
       const pivot = pivotAt(node, new THREE.Vector3(b.max.x, b.max.y, c.z));
+      const spoiler = get('Spoiler');
+      if (spoiler) pivot.attach(spoiler);   // lifts together with the lid
       out.push({ ch: 40, open: 0, apply: o => { pivot.rotation.z = -0.5 * o; } });
     }
   }
 
-  // Charge port (ch 45) → Charge_Cap — flip open around a vertical edge
+  // Charge port (ch 45) → Charge_Cap — small flap on the rear-left (driver's side)
+  // quarter panel; swing it clearly outward, hinged at its forward vertical edge.
   {
     const node = get('Charge_Cap');
     if (node) {
       const b = worldBox(node); const c = b.getCenter(new THREE.Vector3());
-      const edgeZ = b.max.z >= Math.abs(b.min.z) ? b.max.z : b.min.z;
-      const pivot = pivotAt(node, new THREE.Vector3(c.x, c.y, edgeZ));
-      out.push({ ch: 45, open: 0, apply: o => { pivot.rotation.y = -0.9 * o; } });
+      const side: 1 | -1 = c.z >= 0 ? 1 : -1;          // which body side it sits on
+      const pivot = pivotAt(node, new THREE.Vector3(b.max.x, c.y, c.z));
+      out.push({ ch: 45, open: 0, apply: o => { pivot.rotation.y = side * 1.2 * o; } });
     }
   }
 
@@ -404,7 +411,7 @@ function closureTarget(byte: number, tSec: number): number {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function TeslaScene({
   teslaModel, style, intensity, bpm, previewBeat,
-  customFrames,
+  customFrames, pulse,
 }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
@@ -412,6 +419,7 @@ export default function TeslaScene({
 
   const lightObjsRef = useRef<ReturnType<typeof buildLightZones>['lightObjs']>([]);
   const closureObjsRef = useRef<ClosureObj[]>([]);
+  const pulseRef = useRef<{ ch: number; target: number; until: number } | null>(null);
   const activeFrameRef = useRef<Uint8Array | null>(null);
   const frameDataRef = useRef<Uint8Array[]>([]);
   const frameIdxRef = useRef(0);
@@ -427,6 +435,14 @@ export default function TeslaScene({
 
   useEffect(() => { previewBeatRef.current = previewBeat ?? null; }, [previewBeat]);
   useEffect(() => { customFramesRef.current = customFrames ?? null; }, [customFrames]);
+
+  // Clicking a closure pulses it open right away (≈1.4s) so you don't wait for
+  // the looping playhead to come around. open/dance → open; close/stop → rest.
+  useEffect(() => {
+    if (!pulse) return;
+    const target = pulse.cmd === 'open' || pulse.cmd === 'dance' ? 1 : 0;
+    pulseRef.current = { ch: pulse.ch, target, until: performance.now() + 1400 };
+  }, [pulse]);
 
   // Rebuild scene when model changes
   useEffect(() => {
@@ -665,8 +681,11 @@ export default function TeslaScene({
       if (closureObjs.length) {
         const frame = activeFrameRef.current;
         const tSec = now / 1000;
+        const pz = pulseRef.current;
+        if (pz && now >= pz.until) pulseRef.current = null;
         closureObjs.forEach(co => {
-          const target = frame ? closureTarget(frame[co.ch] ?? 0, tSec) : 0;
+          let target = frame ? closureTarget(frame[co.ch] ?? 0, tSec) : 0;
+          if (pz && pz.ch === co.ch && now < pz.until) target = pz.target; // instant click feedback
           co.open += (target - co.open) * 0.18;
           if (co.open < 0.004) co.open = 0;
           co.apply(co.open);

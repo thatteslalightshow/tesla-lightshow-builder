@@ -658,19 +658,25 @@ function BuilderInner() {
   const [symmetry, setSymmetry] = useState(true);
   const [customBlocks, setCustomBlocks] = useState<Record<number, Set<number>>>({});
   const [closureBlocks, setClosureBlocks] = useState<ClosureBlocks>({});
+  const [closurePulse, setClosurePulse] = useState<{ ch: number; cmd: ClosureCommand; n: number } | null>(null);
+  const pulseN = useRef(0);
 
   // Cycle a closure command: empty → Open → Close → Dance → Stop → empty
   function onClosureCommand(channel: number, beatIdx: number) {
+    // The new command for this cell (cycles open→close→dance→stop→clear)
+    const cur = closureBlocks[channel]?.[beatIdx];
+    const idx = cur ? CMD_CYCLE.indexOf(cur) : -1;
+    const newCmd = idx >= CMD_CYCLE.length - 1 ? null : CMD_CYCLE[idx + 1];
     setClosureBlocks(prev => {
       const next = { ...prev };
       const lane = { ...(next[channel] ?? {}) };
-      const cur = lane[beatIdx];
-      const idx = cur ? CMD_CYCLE.indexOf(cur) : -1;
-      if (idx >= CMD_CYCLE.length - 1) delete lane[beatIdx];
-      else lane[beatIdx] = CMD_CYCLE[idx + 1];
+      if (newCmd === null) delete lane[beatIdx];
+      else lane[beatIdx] = newCmd;
       if (Object.keys(lane).length) next[channel] = lane; else delete next[channel];
       return next;
     });
+    // Pulse the closure in the 3D view immediately for instant feedback.
+    if (newCmd) setClosurePulse({ ch: channel, cmd: newCmd, n: ++pulseN.current });
   }
   const closureWarnings = useMemo(
     () => validateClosures(closureBlocks, MODELS[model].zones),
@@ -1347,6 +1353,7 @@ function BuilderInner() {
                 bpm={bpm}
                 previewBeat={previewBeat}
                 customFrames={sceneFrames}
+                pulse={closurePulse}
               />
             </div>
 
