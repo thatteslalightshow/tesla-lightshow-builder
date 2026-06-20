@@ -904,29 +904,53 @@ function BuilderInner() {
   // ── Save & upload ─────────────────────────────────────────────────────────
   async function uploadAudio(showId: string, file: File) {
     setUploading(true);
-    const post = async (f: File) => {
-      const form = new FormData();
-      form.append('file', f); form.append('show_id', showId);
-      return fetch('/api/upload', { method: 'POST', body: form });
+
+    // Upload straight from the browser to Supabase Storage via a signed URL.
+    // (Vercel functions cap request bodies at ~4.5MB — a full-song WAV is far
+    // bigger — so we never stream the file through our own API.)
+    const putViaSignedUrl = async (f: File): Promise<string | null> => {
+      // 1. Ask our API for a signed upload URL (tiny metadata-only request)
+      const signRes = await fetch('/api/upload', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ show_id: showId, file_name: f.name, file_size: f.size }),
+      });
+      if (!signRes.ok) {
+        const { error } = await signRes.json().catch(() => ({ error: 'upload error' }));
+        return error ?? 'upload error';
+      }
+      const { path, token } = await signRes.json();
+      // 2. PUT the bytes directly to Storage
+      const { error: upErr } = await supabase.storage
+        .from('audio-files').uploadToSignedUrl(path, token, f, { contentType: f.type });
+      if (upErr) return upErr.message;
+      // 3. Record the audio_files row
+      const commitRes = await fetch('/api/upload/commit', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ show_id: showId, path, original_name: f.name, file_size: f.size, mime_type: f.type }),
+      });
+      if (!commitRes.ok) {
+        const { error } = await commitRes.json().catch(() => ({ error: 'upload error' }));
+        return error ?? 'upload error';
+      }
+      return null; // success
     };
 
-    // Prefer the converted WAV (sample-accurate sync). If it fails to upload
-    // (e.g. very long song), fall back to the original — which now ships with
-    // the correct .mp3 extension and still plays on Tesla.
+    // Prefer the converted 44.1kHz WAV (sample-accurate sync). If it fails,
+    // fall back to the original — which ships with the correct extension and
+    // still plays on Tesla.
     const base = file.name.replace(/\.[^.]+$/, '');
     const wavFile = wavBlobRef.current
       ? new File([wavBlobRef.current], `${base}.wav`, { type: 'audio/wav' })
       : null;
 
-    let res = wavFile ? await post(wavFile) : await post(file);
-    if (!res.ok && wavFile) res = await post(file);
+    let err = await putViaSignedUrl(wavFile ?? file);
+    if (err && wavFile) err = await putViaSignedUrl(file);
 
     setUploading(false);
-    if (res.ok) { setAudioUploaded(true); }
+    if (!err) { setAudioUploaded(true); }
     else {
-      const { error } = await res.json().catch(() => ({ error: 'upload error' }));
-      setSaveMsg(`Audio upload failed: ${error}`);
-      setTimeout(() => setSaveMsg(''), 4000);
+      setSaveMsg(`Audio upload failed: ${err}`);
+      setTimeout(() => setSaveMsg(''), 5000);
     }
   }
 

@@ -84,3 +84,15 @@ export function validateAudioFile(file: File): string | null {
   if (file.size > MAX_AUDIO_SIZE) return 'File must be under 70MB'
   return null
 }
+
+// Files upload straight from the browser to Storage (Vercel functions cap the
+// request body at ~4.5MB, far below a full-song WAV), so the API only sees
+// metadata. Validate on name + size instead of the File object.
+export function validateAudioMeta(name: string, size: number): string | null {
+  const ext = name.toLowerCase().match(/\.[a-z0-9]+$/)?.[0] ?? ''
+  if (!ALLOWED_AUDIO_EXT.includes(ext)) {
+    return 'Please upload an audio file (MP3, WAV, M4A, AAC, OGG, FLAC)'
+  }
+  if (size > MAX_AUDIO_SIZE) return 'File must be under 70MB'
+  return null
+}
