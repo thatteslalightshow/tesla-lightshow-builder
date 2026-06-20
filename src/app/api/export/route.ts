@@ -10,6 +10,11 @@ const MODEL_LABELS: Record<string, string> = {
   modelX: 'Model X', cybertruck: 'Cybertruck',
 }
 
+// Bundling a full-song audio file into the zip (download + zip + re-upload of
+// ~10MB) can take a while; give the function room so it doesn't time out and
+// drop the client into the audio-less fallback path.
+export const maxDuration = 120
+
 // Signed URL TTL: 1 hour for email delivery, 15 min for direct download
 const EMAIL_EXPIRY_SEC = 3600
 const DIRECT_EXPIRY_SEC = 900
@@ -133,12 +138,17 @@ export async function POST(req: Request) {
   if (zipUploadErr) return NextResponse.json({ error: zipUploadErr.message }, { status: 500 })
 
   // ── Record export ─────────────────────────────────────────────────────────
-  const { data: exportRecord } = await admin
+  const { data: exportRecord, error: exportInsertErr } = await admin
     .from('exports').insert({
       user_id: user.id, show_id: body.show_id,
       audio_file_id: audioRecord?.id ?? null,
+      // The export is bundled as a single zip; fseq_path is NOT NULL in the
+      // schema, so point it at the same zip rather than leaving it empty
+      // (an empty insert silently broke export tracking and free-export gating).
+      fseq_path: zipPath,
       zip_path: zipPath, file_size_bytes: zipBuffer.byteLength,
     }).select().single()
+  if (exportInsertErr) console.error('export insert failed:', exportInsertErr.message)
 
   // ── Deliver ───────────────────────────────────────────────────────────────
   const deliverByEmail = body.deliver_by_email === true

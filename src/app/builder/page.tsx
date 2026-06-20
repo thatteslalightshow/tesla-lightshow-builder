@@ -620,6 +620,8 @@ function BuilderInner() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportStage, setExportStage] = useState('');   // '' = idle; else label
+  const [exportPct, setExportPct] = useState(0);         // 0 = indeterminate
   const [saveMsg, setSaveMsg] = useState('');
 
   // ── Audio preview state ───────────────────────────────────────────────────
@@ -1020,27 +1022,50 @@ function BuilderInner() {
       return;
     }
 
-    // Free / subscribed / admin → server-side export
+    // Free / subscribed / admin → server-side export. This is authoritative: it
+    // bundles the audio STORED for the show, so it works even when the song
+    // isn't in memory (e.g. re-opening a saved show — the case that used to
+    // silently ship an fseq with no audio).
     if (showId) {
+      setExportStage('Building your light show'); setExportPct(0);
+      let res: Response | null = null;
       try {
-        const res = await fetch('/api/export', {
+        res = await fetch('/api/export', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ show_id: showId, deliver_by_email: emailExport }),
         });
-        if (res.ok) {
-          const { url, filename, delivered_by_email } = await res.json();
-          if (delivered_by_email) {
-            setCheckoutMsg('✓ Download link sent to your email!');
-            setTimeout(() => setCheckoutMsg(''), 6000);
-          } else {
-            const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
-          }
+      } catch { res = null; }
+
+      if (res && res.ok) {
+        const { url, filename, delivered_by_email } = await res.json();
+        if (delivered_by_email) {
+          setCheckoutMsg('✓ Download link sent to your email!');
+          setTimeout(() => setCheckoutMsg(''), 6000);
           setExportCount(c => c + 1);
-          setExporting(false); return;
+          setExporting(false); setExportStage('');
+        } else {
+          await streamDownload(url, filename || `${name.replace(/\s+/g, '_')}_lightshow.zip`);
+          setExportCount(c => c + 1);
+          setExporting(false); setExportStage(''); setShowSharePrompt(true);
         }
-      } catch { /* fall through to client-side export */ }
+        return;
+      }
+
+      // Server export failed. Fall back to a browser-built zip ONLY if the audio
+      // is in memory this session — otherwise it would silently ship with no
+      // audio (the "only the fseq exported" bug). Otherwise, surface the error.
+      if (!wavBlobRef.current && !audioFile) {
+        const { error: srvErr } = res ? await res.json().catch(() => ({ error: '' })) : { error: 'network error' };
+        setSaveMsg(`Export failed: ${srvErr || 'please try again'}. Re-upload your song, then export.`);
+        setTimeout(() => setSaveMsg(''), 8000);
+        setExporting(false); setExportStage('');
+        return;
+      }
     }
+
+    // ── Client-side fallback (only reached when audio is in memory) ───────────
+    setExportStage('Packaging your show'); setExportPct(0);
     const FPS = 50;
     // Match the audio length when we have it; otherwise a 30s style loop.
     const frames = audioFrames ? audioFrames.length : 30 * FPS;
@@ -1077,8 +1102,33 @@ function BuilderInner() {
     const a = document.createElement('a'); a.href = url;
     a.download = `${name.replace(/\s+/g, '_')}_lightshow.zip`; a.click();
     URL.revokeObjectURL(url);
-    setExporting(false);
+    setExporting(false); setExportStage('');
     setShowSharePrompt(true);
+  }
+
+  // Download the export zip with a real progress bar (the server zip can be
+  // ~10MB once audio is bundled, and the build step itself takes a moment).
+  async function streamDownload(url: string, filename: string) {
+    setExportStage('Downloading'); setExportPct(0);
+    try {
+      const resp = await fetch(url);
+      const total = Number(resp.headers.get('content-length')) || 0;
+      if (resp.body && total > 0) {
+        const reader = resp.body.getReader();
+        const chunks: Uint8Array[] = []; let received = 0;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) { chunks.push(value); received += value.length; setExportPct(Math.round((received / total) * 100)); }
+        }
+        const blob = new Blob(chunks as BlobPart[], { type: 'application/zip' });
+        const objUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = objUrl; a.download = filename; a.click();
+        URL.revokeObjectURL(objUrl);
+        return;
+      }
+    } catch { /* fall through to a plain browser download */ }
+    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
   }
 
   // ── Cleanup on unmount ────────────────────────────────────────────────────
@@ -1480,6 +1530,26 @@ function BuilderInner() {
           </div>
         </main>
       </div>
+
+      {/* Export progress toast */}
+      {exporting && exportStage && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 101, background: 'rgba(10,10,15,0.97)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 14, padding: '1rem 1.25rem', width: 'min(420px, calc(100vw - 3rem))', backdropFilter: 'blur(16px)', boxShadow: '0 8px 40px rgba(0,0,0,0.6)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13 }}>
+              {exportStage}{exportStage === 'Downloading' && exportPct > 0 ? ` — ${exportPct}%` : '…'}
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>This can take a moment</span>
+          </div>
+          <div style={{ height: 6, borderRadius: 4, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', position: 'relative' }}>
+            {exportStage === 'Downloading' && exportPct > 0 ? (
+              <div style={{ height: '100%', width: `${exportPct}%`, background: 'var(--red)', borderRadius: 4, transition: 'width .2s' }} />
+            ) : (
+              <div style={{ position: 'absolute', height: '100%', width: '40%', background: 'var(--red)', borderRadius: 4, animation: 'tlsIndeterminate 1.1s ease-in-out infinite' }} />
+            )}
+          </div>
+          <style>{`@keyframes tlsIndeterminate { 0% { left: -40%; } 100% { left: 100%; } }`}</style>
+        </div>
+      )}
 
       {/* Post-export share prompt */}
       {showSharePrompt && (
