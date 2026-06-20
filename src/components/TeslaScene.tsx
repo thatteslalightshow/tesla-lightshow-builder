@@ -325,6 +325,117 @@ function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
   return { lightObjs: out, zoneHitboxes };
 }
 
+// ─── Closure proxies ───────────────────────────────────────────────────────────
+// The HD GLB bodies are mostly single merged meshes (except Model S), so we can't
+// move the car's real panels everywhere. Instead each closure gets a translucent,
+// glowing proxy panel that is INVISIBLE at rest and animates open (swing/slide/
+// lift/fold) only while its command byte is active — a clear "this closure is
+// firing now" indicator that works on every model. Driven by frame[channel].
+export interface ClosureObj {
+  group: THREE.Group;
+  ch: number;
+  open: number;            // smoothed openness 0..1
+  apply: (open: number) => void;
+}
+
+function buildClosureProxies(def: typeof MODELS[TeslaModel], scene: THREE.Scene): ClosureObj[] {
+  const out: ClosureObj[] = [];
+  const mkMat = () => new THREE.MeshStandardMaterial({
+    color: 0x9d6bff, emissive: 0x9d6bff, emissiveIntensity: 0.6,
+    transparent: true, opacity: 0, roughness: 0.25, metalness: 0.0,
+    side: THREE.DoubleSide, depthWrite: false,
+  });
+
+  def.zones.forEach(zone => {
+    if (zone.type !== 'closure' || !zone.closure) return;
+    const [x, y, z] = zone.position;
+    const side: 1 | -1 = z >= 0 ? 1 : -1;          // right (+z) / left (-z)
+    const mat = mkMat();
+    const group = new THREE.Group();
+    let panel: THREE.Mesh;
+    let apply: (o: number) => void;
+
+    switch (zone.closure) {
+      case 'windows': {                              // glass pane slides DOWN into door
+        const wlen = 0.5, wh = 0.34;
+        panel = new THREE.Mesh(new THREE.BoxGeometry(wlen, wh, 0.02), mat);
+        group.position.set(x, y, z + side * 0.01);
+        group.add(panel);
+        apply = o => { panel.position.y = -wh * o; mat.opacity = 0.36 * Math.min(1, o * 2.2); };
+        break;
+      }
+      case 'mirrors': {                              // folds inward around the arm root
+        const ml = 0.16, mh = 0.12;
+        panel = new THREE.Mesh(new THREE.BoxGeometry(0.02, mh, ml), mat);
+        panel.position.set(0, 0, side * ml / 2);
+        group.position.set(x, y, z);
+        group.add(panel);
+        apply = o => { group.rotation.y = side * 1.3 * o; mat.opacity = 0.55 * Math.min(1, o * 2.2); };
+        break;
+      }
+      case 'front_doors': {                          // swings out around front vertical edge
+        const dl = 0.95, dh = 0.62;
+        panel = new THREE.Mesh(new THREE.BoxGeometry(dl, dh, 0.02), mat);
+        panel.position.set(-dl / 2, 0, 0);
+        group.position.set(x + dl / 2, y, z);
+        group.add(panel);
+        apply = o => { group.rotation.y = -side * 0.55 * o; mat.opacity = 0.4 * Math.min(1, o * 2.2); };
+        break;
+      }
+      case 'falcon_doors': {                         // swings UP and out around longitudinal edge
+        const dl = 0.95, dh = 0.55;
+        panel = new THREE.Mesh(new THREE.BoxGeometry(dl, dh, 0.02), mat);
+        panel.position.set(0, dh / 2, 0);
+        group.position.set(x, y, z);
+        group.add(panel);
+        apply = o => { group.rotation.x = -side * 1.0 * o; mat.opacity = 0.4 * Math.min(1, o * 2.2); };
+        break;
+      }
+      case 'liftgate': {                             // rear hatch lifts up around top-rear hinge
+        const ll = 0.9, lw = 1.4;
+        panel = new THREE.Mesh(new THREE.BoxGeometry(0.02, ll, lw), mat);
+        panel.position.set(0, -ll / 2, 0);
+        group.position.set(x, y + ll / 2, 0);
+        group.add(panel);
+        apply = o => { group.rotation.z = -0.7 * o; mat.opacity = 0.4 * Math.min(1, o * 2.2); };
+        break;
+      }
+      case 'charge_port': {                          // small flap flips open
+        const cs = 0.16;
+        panel = new THREE.Mesh(new THREE.BoxGeometry(cs, cs, 0.02), mat);
+        panel.position.set(cs / 2, 0, 0);
+        group.position.set(x - cs / 2, y, z);
+        group.add(panel);
+        apply = o => { group.rotation.y = side * 1.4 * o; mat.opacity = 0.6 * Math.min(1, o * 2.2); };
+        break;
+      }
+      case 'door_handles': {                         // flush handle pops outward
+        const hl = 0.18, hh = 0.04;
+        panel = new THREE.Mesh(new THREE.BoxGeometry(hl, hh, 0.03), mat);
+        group.position.set(x, y, z);
+        group.add(panel);
+        apply = o => { panel.position.z = side * 0.05 * o; mat.opacity = 0.7 * Math.min(1, o * 2.2); };
+        break;
+      }
+      default: return;
+    }
+
+    group.visible = false;
+    scene.add(group);
+    out.push({ group, ch: zone.channel, open: 0, apply });
+  });
+
+  return out;
+}
+
+// bytes: 0 idle · 63 open · 127 dance · 191 close · 255 stop → target openness
+function closureTarget(byte: number, tSec: number): number {
+  if (byte < 32) return 0;                          // idle
+  if (byte < 96) return 1;                          // open
+  if (byte < 160) return 0.5 + 0.5 * Math.sin(tSec * 7); // dance — oscillate
+  return 0;                                         // close / stop
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function TeslaScene({
   teslaModel, style, intensity, bpm, previewBeat,
@@ -335,6 +446,8 @@ export default function TeslaScene({
   const [gltfStatus, setGltfStatus] = useState<'loading' | 'loaded' | 'procedural'>('loading');
 
   const lightObjsRef = useRef<ReturnType<typeof buildLightZones>['lightObjs']>([]);
+  const closureObjsRef = useRef<ClosureObj[]>([]);
+  const activeFrameRef = useRef<Uint8Array | null>(null);
   const frameDataRef = useRef<Uint8Array[]>([]);
   const frameIdxRef = useRef(0);
   const previewBeatRef = useRef<number | null>(null);
@@ -510,6 +623,7 @@ export default function TeslaScene({
             mesh.position.z *= zFactor;
             pl.position.z   *= zFactor;
           });
+          closureObjsRef.current.forEach(({ group }) => { group.position.z *= zFactor; });
         }
 
         // Replace procedural with GLTF
@@ -528,6 +642,8 @@ export default function TeslaScene({
     // ── Light zones ───────────────────────────────────────────────────────────
     const { lightObjs, zoneHitboxes } = buildLightZones(def, scene);
     lightObjsRef.current = lightObjs;
+    const closureObjs = buildClosureProxies(def, scene);
+    closureObjsRef.current = closureObjs;
     frameDataRef.current = generateFrames(style, intensity, bpm, 40, def);
 
     // ── Raycaster tooltip ─────────────────────────────────────────────────────
@@ -569,10 +685,25 @@ export default function TeslaScene({
             frameIdxRef.current++;
           }
           const frame = frames[frameIdx];
+          activeFrameRef.current = frame;
           lightObjs.forEach(({ pl, ch }) => {
             pl.intensity = (frame[ch] / 255) * 2.8;
           });
         }
+      }
+
+      // Closures animate every render frame (smoother than the 50fps light tick).
+      if (closureObjs.length) {
+        const frame = activeFrameRef.current;
+        const tSec = now / 1000;
+        closureObjs.forEach(co => {
+          const target = frame ? closureTarget(frame[co.ch] ?? 0, tSec) : 0;
+          co.open += (target - co.open) * 0.18;
+          if (co.open < 0.004) co.open = 0;
+          const vis = co.open > 0.004;
+          if (co.group.visible !== vis) co.group.visible = vis;
+          if (vis) co.apply(co.open);
+        });
       }
 
       renderer.render(scene, camera);
