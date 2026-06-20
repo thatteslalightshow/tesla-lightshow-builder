@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAdminClient, getSignedDownloadUrl, type TeslaModel } from '@/lib/supabase'
+import { getAdminClient, type TeslaModel } from '@/lib/supabase'
 import { getAuthedUser } from '@/lib/auth'
 import { getChannelCount, generateFrames, buildEditFrames, hasEdits, MODELS, FPS, STEP_MS, type EditData } from '@/lib/tesla-channels'
 import { sendExportDownload } from '@/lib/email'
@@ -153,7 +153,15 @@ export async function POST(req: Request) {
   // ── Deliver ───────────────────────────────────────────────────────────────
   const deliverByEmail = body.deliver_by_email === true
   const expirySec = deliverByEmail ? EMAIL_EXPIRY_SEC : DIRECT_EXPIRY_SEC
-  const signedUrl = await getSignedDownloadUrl('fseq-exports', zipPath, expirySec)
+  // Sign with the admin (service-role) client — the private fseq-exports bucket
+  // isn't readable by the anon client, so the shared getSignedDownloadUrl helper
+  // (which uses the browser client) threw here and 500'd the whole export.
+  const { data: signed, error: signErr } = await admin.storage
+    .from('fseq-exports').createSignedUrl(zipPath, expirySec)
+  if (signErr || !signed) {
+    return NextResponse.json({ error: signErr?.message ?? 'Could not create download URL' }, { status: 500 })
+  }
+  const signedUrl = signed.signedUrl
 
   if (deliverByEmail && user.email) {
     await sendExportDownload({
