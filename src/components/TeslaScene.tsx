@@ -260,7 +260,6 @@ interface LightObj {
   center: THREE.Vector3;
   baseOpacity: number;
   nx?: number; ny?: number; nz?: number;
-  type?: string;
 }
 
 // ─── Light zone meshes ────────────────────────────────────────────────────────
@@ -335,7 +334,7 @@ function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
     scene.add(mesh);            // visible — this IS the light the user sees turn on
     zoneHitboxes.push(mesh);
 
-    out.push({ mesh, mat, ch: zone.channel, color: new THREE.Color(zone.color), center: mesh.position, baseOpacity: 0.16, nx: zone.nx, ny: zone.ny, nz: zone.nz, type: zone.type });
+    out.push({ mesh, mat, ch: zone.channel, color: new THREE.Color(zone.color), center: mesh.position, baseOpacity: 0.16, nx: zone.nx, ny: zone.ny, nz: zone.nz });
   });
 
   return { lightObjs: out, zoneHitboxes };
@@ -395,9 +394,6 @@ function buildMeshLights(
   buckets.forEach((idxs, ch) => {
     const chan = channels.find(c => c.ch === ch);
     if (!chan) return;
-    // A channel that only grabbed a stray triangle or two isn't really a fixture
-    // here — leave it uncovered so the caller gives it an anchored proxy instead.
-    if (idxs.length < 9) return;
     const positions = new Float32Array(idxs.length * 3);
     const v = new THREE.Vector3(); const center = new THREE.Vector3();
     for (let k = 0; k < idxs.length; k++) {
@@ -724,50 +720,38 @@ export default function TeslaScene({
         scene.remove(proceduralGroup);
         scene.add(gltfScene);
 
-        // Anchor a proxy box to the body and snap it onto the real surface.
-        const bc = bodyBox.getCenter(new THREE.Vector3());
-        const bs = bodyBox.getSize(new THREE.Vector3());
-        const fullH = box.max.y - box.min.y;
-        const snapRay = new THREE.Raycaster(); snapRay.far = 2.5;
-        const anchorProxy = (o: LightObj) => {
-          if (!o.mesh) return;
-          o.mesh.position.set(
-            bc.x + (o.nx ?? 0) * (bs.x / 2) * 1.12,
-            box.min.y + (o.ny ?? 0) * fullH,
-            bc.z + (o.nz ?? 0) * (bs.z / 2) * 1.12,
-          );
-          const from = o.mesh.position.clone();
-          const dir = new THREE.Vector3(bc.x, from.y, bc.z).sub(from).normalize();
-          snapRay.set(from.addScaledVector(dir, -0.5), dir);
-          const hit = snapRay.intersectObject(gltfScene, true)[0];
-          if (hit) o.mesh.position.copy(hit.point).addScaledVector(dir, -0.015);
-        };
-
-        // Markers/repeaters aren't part of the headlight/tail lens cluster, so keep
-        // them out of the mesh partition — they always get an anchored proxy.
         const realLights = buildMeshLights(
           gltfScene,
-          lightObjsRef.current
-            .filter(o => o.type !== 'marker')
-            .map(o => ({ ch: o.ch, color: o.color, nx: o.nx ?? 0, ny: o.ny ?? 0, nz: o.nz ?? 0 })),
+          lightObjsRef.current.map(o => ({ ch: o.ch, color: o.color, nx: o.nx ?? 0, ny: o.ny ?? 0, nz: o.nz ?? 0 })),
           scene, bodyBox, box,
         );
         if (realLights) {
-          // Use the real lenses where the Lights mesh covers them; for channels it
-          // didn't reach (markers, some center-rear), keep an anchored proxy so
-          // EVERY channel still lights up. Proxies stay invisible until lit.
-          const covered = new Set(realLights.map(l => l.ch));
-          const leftover: LightObj[] = [];
+          // Hide the proxy boxes — the real-lens overlays take over (perfectly placed).
+          lightObjsRef.current.forEach(o => { if (o.mesh) o.mesh.visible = false; });
+          lightObjsRef.current = realLights;
+        } else {
+          // No 'Lights' mesh: anchor proxy boxes to the body, then raycast each onto
+          // the real surface so they don't poke out of the curved body.
+          const bc = bodyBox.getCenter(new THREE.Vector3());
+          const bs = bodyBox.getSize(new THREE.Vector3());
+          const fullH = box.max.y - box.min.y;
+          lightObjsRef.current.forEach(o => {
+            o.mesh?.position.set(
+              bc.x + (o.nx ?? 0) * (bs.x / 2) * 1.12,
+              box.min.y + (o.ny ?? 0) * fullH,
+              bc.z + (o.nz ?? 0) * (bs.z / 2) * 1.12,
+            );
+          });
+          const snapRay = new THREE.Raycaster();
+          snapRay.far = 2.5;
           lightObjsRef.current.forEach(o => {
             if (!o.mesh) return;
-            if (covered.has(o.ch)) { o.mesh.visible = false; return; }
-            o.baseOpacity = 0;
-            anchorProxy(o);
-            leftover.push(o);
+            const from = o.mesh.position.clone();
+            const dir = new THREE.Vector3(bc.x, from.y, bc.z).sub(from).normalize();
+            snapRay.set(from.addScaledVector(dir, -0.5), dir);
+            const hit = snapRay.intersectObject(gltfScene, true)[0];
+            if (hit) o.mesh.position.copy(hit.point).addScaledVector(dir, -0.015);
           });
-          lightObjsRef.current = realLights.concat(leftover);
-        } else {
-          lightObjsRef.current.forEach(anchorProxy);
         }
         // Model S exports real, separable panels — animate them directly.
         if (teslaModel === 'modelS') closureObjsRef.current = buildModelSClosures(gltfScene, scene);
