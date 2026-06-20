@@ -41,7 +41,8 @@ export interface LightZone {
   id: string
   label: string
   channel: number                          // 0-indexed FSEQ channel (authoritative)
-  position: [number, number, number]       // [x, y, z] metres
+  position: [number, number, number]       // [x, y, z] metres (procedural fallback)
+  nx: number; ny: number; nz: number        // normalized car coords (front+, up 0..1, right+)
   color: number                            // Three.js 0xRRGGBB
   type: LightType
   closure?: ClosureFamily                   // present only on closure channels
@@ -163,7 +164,9 @@ function placeFromSpec(spec: ChannelSpec, p: CarProportions): [number, number, n
 function zonesFor(model: TeslaModel, p: CarProportions): LightZone[] {
   return CHANNELS.map(spec => ({
     id: spec.id, label: spec.label, channel: spec.index,
-    position: placeFromSpec(spec, p), color: spec.color, type: spec.type,
+    position: placeFromSpec(spec, p),
+    nx: spec.nx, ny: spec.ny, nz: spec.nz,
+    color: spec.color, type: spec.type,
     closure: spec.closure,
   }))
 }

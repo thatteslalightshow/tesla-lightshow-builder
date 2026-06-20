@@ -248,7 +248,7 @@ function addWindows(model: TeslaModel, halfW: number, scene: THREE.Object3D) {
 
 // ─── Light zone meshes ────────────────────────────────────────────────────────
 function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
-  const out: { mesh: THREE.Mesh; mat: THREE.MeshStandardMaterial; ch: number; color: THREE.Color; label: string }[] = [];
+  const out: { mesh: THREE.Mesh; mat: THREE.MeshStandardMaterial; ch: number; color: THREE.Color; label: string; nx: number; ny: number; nz: number }[] = [];
   const zoneHitboxes: THREE.Mesh[] = [];
 
   def.zones.forEach(zone => {
@@ -318,7 +318,7 @@ function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
     scene.add(mesh);            // visible — this IS the light the user sees turn on
     zoneHitboxes.push(mesh);
 
-    out.push({ mesh, mat, ch: zone.channel, color: new THREE.Color(zone.color), label: zone.label });
+    out.push({ mesh, mat, ch: zone.channel, color: new THREE.Color(zone.color), label: zone.label, nx: zone.nx, ny: zone.ny, nz: zone.nz });
   });
 
   return { lightObjs: out, zoneHitboxes };
@@ -619,15 +619,24 @@ export default function TeslaScene({
           });
         });
 
-        // ── Step 6: rescale light zone Z positions to actual model width ─────────
-        // We scaled the model by bodyL/sizeX (length). The Z (width) may differ
-        // from p.bodyW, causing zones to float outside the car body.
-        const actualHalfZ = size.z / 2;
-        const expectedHalfZ = p.bodyW / 2;
-        const zFactor = actualHalfZ / expectedHalfZ;
-        if (Math.abs(zFactor - 1) > 0.05) {
-          lightObjsRef.current.forEach(({ mesh }) => { mesh.position.z *= zFactor; });
-        }
+        // ── Step 6: anchor light fixtures to the REAL loaded car ─────────────────
+        // Procedural placeFromSpec coords don't match this GLB, so lights floated
+        // off the model. Re-map each light's authoritative normalized car coords
+        // (nx front+, ny up 0..1, nz right+) onto the actual geometry: length &
+        // width from the Body mesh (excludes mirrors/wheels), height from the full
+        // model (ground→roof).
+        const bodyNode = gltfScene.getObjectByName('Body');
+        const bodyBox = bodyNode ? new THREE.Box3().setFromObject(bodyNode) : box;
+        const bc = bodyBox.getCenter(new THREE.Vector3());
+        const bs = bodyBox.getSize(new THREE.Vector3());
+        const fullH = box.max.y - box.min.y;
+        lightObjsRef.current.forEach(o => {
+          o.mesh.position.set(
+            bc.x + o.nx * bs.x / 2,
+            box.min.y + o.ny * fullH,
+            bc.z + o.nz * bs.z / 2,
+          );
+        });
 
         // Replace procedural with GLTF
         scene.remove(proceduralGroup);
@@ -706,10 +715,12 @@ export default function TeslaScene({
           }
           const frame = frames[frameIdx];
           activeFrameRef.current = frame;
-          // Each fixture lens glows with its channel value...
+          // Each fixture lens glows with its channel value (or a click pulse).
+          const lpz = pulseRef.current;
           const activeForPool: { pos: THREE.Vector3; color: THREE.Color; v: number }[] = [];
           lightObjs.forEach(({ mesh, mat, ch, color }) => {
-            const v = (frame[ch] ?? 0) / 255;
+            let v = (frame[ch] ?? 0) / 255;
+            if (lpz && lpz.ch === ch && now < lpz.until) v = Math.max(v, lpz.target);
             mat.emissiveIntensity = v * 3.2;
             mat.opacity = 0.16 + v * 0.84;
             if (v > 0.06) activeForPool.push({ pos: mesh.position, color, v });

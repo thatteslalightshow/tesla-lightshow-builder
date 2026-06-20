@@ -775,6 +775,9 @@ function BuilderInner() {
     const zone = def.zones.find(z => z.channel === channel);
     if (!zone) return;
     const mirrorCh = symmetry ? getMirrorChannel(zone.id, def.zones) : null;
+    // Light up the fixture immediately on paint (instant feedback in the 3D view)
+    const adding = !customBlocks[channel]?.has(beatIdx);
+    if (adding) setClosurePulse({ ch: channel, cmd: 'open', n: ++pulseN.current });
     setCustomBlocks(prev => {
       const next = { ...prev };
       const beats = new Set(next[channel] ?? []);
