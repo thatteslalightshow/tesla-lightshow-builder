@@ -630,17 +630,33 @@ export default function TeslaScene({
         const bc = bodyBox.getCenter(new THREE.Vector3());
         const bs = bodyBox.getSize(new THREE.Vector3());
         const fullH = box.max.y - box.min.y;
+        // Stretch the box slightly so the start point is reliably OUTSIDE the body.
         lightObjsRef.current.forEach(o => {
           o.mesh.position.set(
-            bc.x + o.nx * bs.x / 2,
+            bc.x + o.nx * (bs.x / 2) * 1.12,
             box.min.y + o.ny * fullH,
-            bc.z + o.nz * bs.z / 2,
+            bc.z + o.nz * (bs.z / 2) * 1.12,
           );
         });
 
-        // Replace procedural with GLTF
+        // Add the car first so the raycaster below can hit it.
         scene.remove(proceduralGroup);
         scene.add(gltfScene);
+
+        // Snap each fixture onto the REAL body surface: the bbox map lands it near
+        // the right spot, but the curved/tapered body means many poke out. Cast a
+        // ray from just outside, inward toward the centerline at the light's
+        // height, and drop the fixture where it hits the actual panel (held 1.5cm
+        // proud so it doesn't z-fight). Misses keep the bbox position.
+        const snapRay = new THREE.Raycaster();
+        snapRay.far = 2.5;
+        lightObjsRef.current.forEach(o => {
+          const from = o.mesh.position.clone();
+          const dir = new THREE.Vector3(bc.x, from.y, bc.z).sub(from).normalize();
+          snapRay.set(from.addScaledVector(dir, -0.5), dir);
+          const hit = snapRay.intersectObject(gltfScene, true)[0];
+          if (hit) o.mesh.position.copy(hit.point).addScaledVector(dir, -0.015);
+        });
         // Model S exports real, separable panels — animate them directly.
         if (teslaModel === 'modelS') closureObjsRef.current = buildModelSClosures(gltfScene, scene);
         renderer.shadowMap.needsUpdate = true;  // re-render shadows now the car is in
@@ -665,7 +681,7 @@ export default function TeslaScene({
     const SPILL_POOL = 8;
     const poolLights: THREE.PointLight[] = [];
     for (let i = 0; i < SPILL_POOL; i++) {
-      const pl = new THREE.PointLight(0xffffff, 0, 2.6, 2);
+      const pl = new THREE.PointLight(0xffffff, 0, 1.8, 2);
       scene.add(pl);
       poolLights.push(pl);
     }
@@ -729,7 +745,7 @@ export default function TeslaScene({
           activeForPool.sort((a, b) => b.v - a.v);
           for (let i = 0; i < poolLights.length; i++) {
             const a = activeForPool[i];
-            if (a) { poolLights[i].position.copy(a.pos); poolLights[i].color.copy(a.color); poolLights[i].intensity = a.v * 3.0; }
+            if (a) { poolLights[i].position.copy(a.pos); poolLights[i].color.copy(a.color); poolLights[i].intensity = a.v * 1.8; }
             else poolLights[i].intensity = 0;
           }
         }
