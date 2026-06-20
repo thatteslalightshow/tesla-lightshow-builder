@@ -248,7 +248,7 @@ function addWindows(model: TeslaModel, halfW: number, scene: THREE.Object3D) {
 
 // ─── Light zone meshes ────────────────────────────────────────────────────────
 function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
-  const out: { mesh: THREE.Mesh; pl: THREE.PointLight; ch: number; label: string }[] = [];
+  const out: { mesh: THREE.Mesh; mat: THREE.MeshStandardMaterial; ch: number; color: THREE.Color; label: string }[] = [];
   const zoneHitboxes: THREE.Mesh[] = [];
 
   def.zones.forEach(zone => {
@@ -303,26 +303,22 @@ function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
         geo = new THREE.BoxGeometry(D, 0.048, 0.18);
     }
 
+    // Visible fixture lens: faint when the channel is off, glows when it fires.
     const mat = new THREE.MeshStandardMaterial({
       color: zone.color,
       emissive: new THREE.Color(zone.color),
-      emissiveIntensity: 0.15,
-      roughness: 0.05,
-      metalness: 0.0,
+      emissiveIntensity: 0.0,
+      roughness: 0.25, metalness: 0.0,
+      transparent: true, opacity: 0.16,
     });
 
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(x, y, z);
     mesh.userData.label = zone.label;
-    mesh.visible = false; // invisible — used only for raycaster hover detection
-    scene.add(mesh);
+    scene.add(mesh);            // visible — this IS the light the user sees turn on
     zoneHitboxes.push(mesh);
 
-    const pl = new THREE.PointLight(zone.color, 0, 2.0);
-    pl.position.set(x, y, z);
-    scene.add(pl);
-
-    out.push({ mesh, pl, ch: zone.channel, label: zone.label });
+    out.push({ mesh, mat, ch: zone.channel, color: new THREE.Color(zone.color), label: zone.label });
   });
 
   return { lightObjs: out, zoneHitboxes };
@@ -490,6 +486,11 @@ export default function TeslaScene({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
+    // The car & sun are static (only the camera orbits), so render shadows once
+    // instead of every frame — a big chunk of the orbit lag. We flip needsUpdate
+    // whenever the scene content changes (GLTF load / fallback).
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = true;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.3;
     el.appendChild(renderer.domElement);
@@ -625,10 +626,7 @@ export default function TeslaScene({
         const expectedHalfZ = p.bodyW / 2;
         const zFactor = actualHalfZ / expectedHalfZ;
         if (Math.abs(zFactor - 1) > 0.05) {
-          lightObjsRef.current.forEach(({ mesh, pl }) => {
-            mesh.position.z *= zFactor;
-            pl.position.z   *= zFactor;
-          });
+          lightObjsRef.current.forEach(({ mesh }) => { mesh.position.z *= zFactor; });
         }
 
         // Replace procedural with GLTF
@@ -636,12 +634,14 @@ export default function TeslaScene({
         scene.add(gltfScene);
         // Model S exports real, separable panels — animate them directly.
         if (teslaModel === 'modelS') closureObjsRef.current = buildModelSClosures(gltfScene, scene);
+        renderer.shadowMap.needsUpdate = true;  // re-render shadows now the car is in
         setGltfStatus('loaded');
       },
       undefined,
       () => {
         // GLTF failed to load — fall back to the procedural car
         scene.add(proceduralGroup);
+        renderer.shadowMap.needsUpdate = true;
         setGltfStatus('procedural');
       },
     );
@@ -649,6 +649,18 @@ export default function TeslaScene({
     // ── Light zones ───────────────────────────────────────────────────────────
     const { lightObjs, zoneHitboxes } = buildLightZones(def, scene);
     lightObjsRef.current = lightObjs;
+
+    // Colored spill pool: a fixed handful of point lights (constant shader cost)
+    // reassigned each frame to the brightest active fixtures — replaces the old
+    // one-point-light-per-channel setup that made orbiting lag.
+    const SPILL_POOL = 8;
+    const poolLights: THREE.PointLight[] = [];
+    for (let i = 0; i < SPILL_POOL; i++) {
+      const pl = new THREE.PointLight(0xffffff, 0, 2.6, 2);
+      scene.add(pl);
+      poolLights.push(pl);
+    }
+
     // Closures animate the real GLB panels — populated in the GLTF onLoad for
     // Model S (the only model with separable named nodes); empty otherwise.
     closureObjsRef.current = [];
@@ -694,9 +706,21 @@ export default function TeslaScene({
           }
           const frame = frames[frameIdx];
           activeFrameRef.current = frame;
-          lightObjs.forEach(({ pl, ch }) => {
-            pl.intensity = (frame[ch] / 255) * 2.8;
+          // Each fixture lens glows with its channel value...
+          const activeForPool: { pos: THREE.Vector3; color: THREE.Color; v: number }[] = [];
+          lightObjs.forEach(({ mesh, mat, ch, color }) => {
+            const v = (frame[ch] ?? 0) / 255;
+            mat.emissiveIntensity = v * 3.2;
+            mat.opacity = 0.16 + v * 0.84;
+            if (v > 0.06) activeForPool.push({ pos: mesh.position, color, v });
           });
+          // ...and the spill pool follows the brightest few for colored glow.
+          activeForPool.sort((a, b) => b.v - a.v);
+          for (let i = 0; i < poolLights.length; i++) {
+            const a = activeForPool[i];
+            if (a) { poolLights[i].position.copy(a.pos); poolLights[i].color.copy(a.color); poolLights[i].intensity = a.v * 3.0; }
+            else poolLights[i].intensity = 0;
+          }
         }
       }
 
