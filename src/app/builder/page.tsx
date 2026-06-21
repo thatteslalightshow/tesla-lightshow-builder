@@ -7,6 +7,10 @@ import { supabase, validateAudioFile, type TeslaModel, type ShowStyle } from '@/
 import TeslaScene from '@/components/TeslaScene';
 import { MODELS, generateFrames, getChannelCount, buildTimelineRows, CLOSURE_CMD, CLOSURE_LIMITS, type TimelineRow, type ClosureCommand, type ClosureFamily } from '@/lib/tesla-channels'
 
+// Email delivery is off until a sending domain is registered + verified in Resend
+// (see email-status). Flip to true once that's done to re-show the "Email me" toggle.
+const EMAIL_ENABLED = false;
+
 // Closure command UI metadata
 const CMD_CYCLE: ClosureCommand[] = ['open', 'close', 'dance', 'stop'];
 const CMD_STYLE: Record<ClosureCommand, { letter: string; fg: string; bg: string }> = {
@@ -1169,12 +1173,14 @@ function BuilderInner() {
             </Link>
           )}
           <button onClick={save} disabled={saving || uploading} className="btn btn-ghost btn-sm">{saving ? '…' : 'Save'}</button>
-          {/* Email export toggle — useful on mobile */}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}>
-            <input type="checkbox" checked={emailExport} onChange={e => setEmailExport(e.target.checked)}
-              style={{ accentColor: 'var(--red)', width: 14, height: 14 }} />
-            <span className="builder-status-msg" style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>Email me</span>
-          </label>
+          {/* Email export toggle — hidden until a verified sending domain exists */}
+          {EMAIL_ENABLED && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}>
+              <input type="checkbox" checked={emailExport} onChange={e => setEmailExport(e.target.checked)}
+                style={{ accentColor: 'var(--red)', width: 14, height: 14 }} />
+              <span className="builder-status-msg" style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>Email me</span>
+            </label>
+          )}
           <div style={{ position: 'relative' }}>
             <button onClick={exportZip} disabled={exporting || saving} className="btn btn-primary btn-sm">
               {exporting ? 'Exporting…' : (
