@@ -1,13 +1,13 @@
 import { createServerSupabase } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-05-27.dahlia' })
+import { getStripe } from '@/lib/stripe'
 
 export async function GET(req: Request) {
   if (!process.env.STRIPE_SECRET_KEY) {
     return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 })
   }
+  const stripe = getStripe()
 
   const { searchParams } = new URL(req.url)
   const sessionId = searchParams.get('session_id')

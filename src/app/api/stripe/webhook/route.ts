@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
+import { getStripe } from '@/lib/stripe'
 import { getAdminClient } from '@/lib/supabase'
 import { sendExportReceipt } from '@/lib/email'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-05-27.dahlia' })
 
 const MODEL_LABELS: Record<string, string> = {
   model3: 'Model 3', modelY: 'Model Y', modelS: 'Model S',
@@ -14,6 +13,7 @@ export async function POST(req: Request) {
   if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
     return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 })
   }
+  const stripe = getStripe()
 
   const body = await req.text()
   const sig = req.headers.get('stripe-signature')

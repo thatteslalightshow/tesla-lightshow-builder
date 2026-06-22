@@ -1,8 +1,6 @@
 import { createServerSupabase } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
-import Stripe from 'stripe'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-05-27.dahlia' })
+import { getStripe } from '@/lib/stripe'
 
 const EXPORT_PRICE_CENTS = 299 // $2.99
 
@@ -10,6 +8,7 @@ export async function POST(req: Request) {
   if (!process.env.STRIPE_SECRET_KEY) {
     return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 })
   }
+  const stripe = getStripe()
 
   const supabase = createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
