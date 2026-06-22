@@ -160,7 +160,7 @@ export async function POST(req: Request) {
     if (audio) {
       const autoClosures = editData?.autoClosures === true
       frameData = analyzePCM(audio.L, audio.R, audio.sampleRate, modelDef.zones, channels,
-        { autoClosures, model: show.tesla_model as TeslaModel }).frames
+        { autoClosures, model: show.tesla_model as TeslaModel, preset: editData?.mixPreset }).frames
     } else {
       frameData = generateFrames(show.style, show.intensity, bpm, Math.round(durationSec * FPS), modelDef)
     }

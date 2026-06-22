@@ -668,6 +668,7 @@ function BuilderInner() {
   const [closurePulse, setClosurePulse] = useState<{ ch: number; cmd: ClosureCommand; n: number } | null>(null);
   const pulseN = useRef(0);
   const [autoClosures, setAutoClosures] = useState(false);   // opt-in: choreograph closures to the song
+  const [mixPreset, setMixPreset] = useState('balanced');    // genre/vibe preset for the audio engine
   const decodedRef = useRef<AudioBuffer | null>(null);       // last decoded audio, for re-analysis on toggle
 
   // Cycle a closure command: empty → Open → Close → Dance → Stop → empty
@@ -748,13 +749,14 @@ function BuilderInner() {
     setIsPublic(data.is_public); setShareToken(data.share_token);
     setSongTitle(data.song_title ?? ''); setSongArtist(data.song_artist ?? '');
     // Restore manual edits (light beats + closure commands)
-    const ed = data.edit_data as { customBlocks?: Record<string, number[]>; closureBlocks?: ClosureBlocks; autoClosures?: boolean } | null;
+    const ed = data.edit_data as { customBlocks?: Record<string, number[]>; closureBlocks?: ClosureBlocks; autoClosures?: boolean; mixPreset?: string } | null;
     if (ed) {
       setCustomBlocks(Object.fromEntries(Object.entries(ed.customBlocks ?? {}).map(([ch, arr]) => [Number(ch), new Set(arr)])));
       setClosureBlocks(ed.closureBlocks ?? {});
       setAutoClosures(ed.autoClosures ?? false);
+      setMixPreset(ed.mixPreset ?? 'balanced');
     } else {
-      setCustomBlocks({}); setClosureBlocks({}); setAutoClosures(false);
+      setCustomBlocks({}); setClosureBlocks({}); setAutoClosures(false); setMixPreset('balanced');
     }
     const { data: audio } = await supabase.from('audio_files').select('id').eq('show_id', id).limit(1);
     if (audio?.length) setAudioUploaded(true);
@@ -853,7 +855,7 @@ function BuilderInner() {
           // Convert to WAV at 44.1 kHz (Tesla requires it — 48 kHz won't sync).
           try { wavBlobRef.current = audioBufferToWav(await resampleTo44100(ab2)); } catch { wavBlobRef.current = null; }
           decodedRef.current = ab2;
-          const result = await analyzeAudioToFrames(ab2, MODELS[model], { autoClosures, model });
+          const result = await analyzeAudioToFrames(ab2, MODELS[model], { autoClosures, model, preset: mixPreset });
           setAudioFrames(result.frames);
           setAudioTriggers(result.triggerFrames);
           setWaveformData(result.waveformData);
@@ -870,12 +872,12 @@ function BuilderInner() {
     if (!decodedRef.current) return;
     let cancelled = false;
     setAnalyzing(true);
-    analyzeAudioToFrames(decodedRef.current, MODELS[model], { autoClosures, model })
+    analyzeAudioToFrames(decodedRef.current, MODELS[model], { autoClosures, model, preset: mixPreset })
       .then(r => { if (!cancelled) { setAudioFrames(r.frames); setAudioTriggers(r.triggerFrames); } })
       .finally(() => { if (!cancelled) setAnalyzing(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoClosures]);
+  }, [autoClosures, mixPreset]);
 
   // ── Audio preview ─────────────────────────────────────────────────────────
   const stopPreview = useCallback(() => {
@@ -990,12 +992,13 @@ function BuilderInner() {
 
   async function save(): Promise<string | null> {
     setSaving(true); setSaveMsg('');
-    const editData = (Object.keys(customBlocks).length || Object.keys(closureBlocks).length || autoClosures)
+    const editData = (Object.keys(customBlocks).length || Object.keys(closureBlocks).length || autoClosures || mixPreset !== 'balanced')
       ? {
           customBlocks: Object.fromEntries(Object.entries(customBlocks).map(([ch, set]) => [ch, [...set]])),
           closureBlocks,
           beats: VISIBLE_BEATS,
           autoClosures,
+          mixPreset,
         }
       : null;
     const fullPayload = { user_id: userId, name, tesla_model: model, style, intensity, bpm, is_public: isPublic, song_title: songTitle || null, song_artist: songArtist || null, edit_data: editData, duration_sec: audioDurationRef.current ?? undefined, updated_at: new Date().toISOString() };
@@ -1257,6 +1260,25 @@ function BuilderInner() {
             {!analyzing && audioFrames && (
               <div style={{ marginTop: 6, fontSize: 11, color: 'var(--green)' }}>
                 ✓ Audio analyzed · {audioFrames.length} frames generated
+              </div>
+            )}
+
+            {/* Music vibe preset — retunes the audio engine for the song's genre */}
+            {(audioFrames || audioFile) && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', color: 'var(--muted2)', textTransform: 'uppercase', marginBottom: 5 }}>Music Vibe</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {([['balanced', 'Balanced'], ['edm', 'EDM'], ['hiphop', 'Hip-Hop'], ['rock', 'Rock'], ['pop', 'Pop'], ['cinematic', 'Cinematic']] as const).map(([k, label]) => (
+                    <button key={k} onClick={() => setMixPreset(k)} disabled={analyzing}
+                      style={{ padding: '4px 9px', fontSize: 11, borderRadius: 6, cursor: analyzing ? 'default' : 'pointer',
+                        background: mixPreset === k ? 'rgba(232,64,74,0.18)' : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${mixPreset === k ? 'var(--red)' : 'var(--border)'}`,
+                        color: mixPreset === k ? 'var(--text)' : 'var(--muted)' }}>{label}</button>
+                  ))}
+                </div>
+                <div style={{ fontSize: 10.5, color: 'var(--muted2)', marginTop: 4, lineHeight: 1.4 }}>
+                  Retunes the lights to the song — e.g. <strong>EDM</strong> hits the bass hard with explosive drops; <strong>Cinematic</strong> rides the swells gently.
+                </div>
               </div>
             )}
 

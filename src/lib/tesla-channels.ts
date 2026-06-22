@@ -260,6 +260,7 @@ export interface EditData {
   closureBlocks: Record<number, Record<number, ClosureCommand>> // closure channel → beat → command
   beats: number                                                 // loop length in beats
   autoClosures?: boolean                                        // opt-in: auto-choreograph closures to the song
+  mixPreset?: string                                            // genre/vibe preset key for the audio engine
 }
 
 // True only when there are MANUAL edits (which override the audio engine).

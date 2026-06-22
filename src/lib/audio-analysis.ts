@@ -98,11 +98,11 @@ function detectSections(totalC: number[], FPS: number): { start: number; end: nu
 // drop (pre-fired by its actuation duration), dance through the big section if it
 // can, then close — all within Tesla's per-closure limits, dance support, ~30s
 // thermal cap, and the Model-X windows-during-doors safety rule.
-function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number, model: TeslaModel, zones: LightZone[]): void {
+function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number, model: TeslaModel, zones: LightZone[], maxSections: number): void {
   const all = detectSections(totalC, FPS) // already in time order
   if (!all.length) return
-  // Keep only the ~6 most prominent sections (tasteful), still time-ordered.
-  const peakCut = [...all].sort((a, b) => b.peak - a.peak)[Math.min(all.length - 1, 5)]?.peak ?? 0
+  // Keep only the most prominent sections (count set by the vibe preset), time-ordered.
+  const peakCut = [...all].sort((a, b) => b.peak - a.peak)[Math.min(all.length - 1, Math.max(1, maxSections) - 1)]?.peak ?? 0
   const sections = all.filter(s => s.peak >= peakCut)
 
   const families = MODEL_CLOSURES[model]
@@ -146,12 +146,29 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number
   }
 }
 
+// ─── Phase 4: genre/vibe presets that retune the mapping ────────────────────────
+// bassWeight: how hard bass-driven fixtures hit · punch: transient emphasis ·
+// sparkle: high-band (turns/markers) intensity · contrast: gamma (lower = darker
+// builds, more explosive peaks) · closureSections: how many drops trigger closures.
+export interface MixParams {
+  bassWeight: number; punch: number; sparkle: number; contrast: number; closureSections: number
+}
+export const MIX_PRESETS: Record<string, MixParams> = {
+  balanced:  { bassWeight: 1.0,  punch: 1.0, sparkle: 1.0,  contrast: 0.72, closureSections: 6 }, // = original
+  edm:       { bassWeight: 1.3,  punch: 1.5, sparkle: 1.3,  contrast: 0.62, closureSections: 8 }, // big drops
+  hiphop:    { bassWeight: 1.45, punch: 1.3, sparkle: 0.85, contrast: 0.70, closureSections: 4 }, // 808-forward
+  rock:      { bassWeight: 1.05, punch: 1.6, sparkle: 1.1,  contrast: 0.74, closureSections: 4 }, // punchy drums
+  pop:       { bassWeight: 1.0,  punch: 1.1, sparkle: 1.25, contrast: 0.78, closureSections: 4 }, // bright, melodic
+  cinematic: { bassWeight: 0.85, punch: 0.7, sparkle: 0.8,  contrast: 0.85, closureSections: 2 }, // swell-led, gentle
+}
+
 // Core engine — takes raw channel data. Works in the browser and on the server.
 export function analyzePCM(
   left: Float32Array, right: Float32Array, sampleRate: number,
   zones: LightZone[], channelCount: number,
-  opts?: { autoClosures?: boolean; model?: TeslaModel },
+  opts?: { autoClosures?: boolean; model?: TeslaModel; preset?: string },
 ): AudioAnalysisResult {
+  const P = MIX_PRESETS[opts?.preset ?? 'balanced'] ?? MIX_PRESETS.balanced
   const FPS = 50
   const frameSize = Math.floor(sampleRate / FPS)
   const totalFrames = Math.max(1, Math.floor(Math.min(left.length, right.length) / frameSize))
@@ -216,8 +233,8 @@ export function analyzePCM(
   }
 
   // Build frames: each fixture glows with its band's energy on its own side,
-  // punched by transients, gated by density.
-  const curve = (v: number) => Math.pow(Math.min(1, Math.max(0, v)), 0.72)
+  // punched by transients, gated by density — shaped by the chosen vibe preset.
+  const curve = (v: number) => Math.pow(Math.min(1, Math.max(0, v)), P.contrast)
   const frames: Uint8Array[] = Array.from({ length: totalFrames }, (_, f) => {
     const frame = new Uint8Array(channelCount)
     const dens = density[f]
@@ -228,10 +245,10 @@ export function analyzePCM(
       const punch = O[band][f]
       let b: number
       switch (zone.type) {
-        case 'turn_front': case 'turn_rear': b = punch * 1.5 * (0.4 + 0.6 * dens); break
-        case 'marker': b = (energy * 0.45 + punch * 0.9) * (0.3 + 0.7 * dens); break
-        case 'drl': case 'highbeam': b = energy * 0.95 + punch * 0.5; break
-        default: b = energy * 0.9 + punch * 1.0; break
+        case 'turn_front': case 'turn_rear': b = punch * 1.5 * P.sparkle * (0.4 + 0.6 * dens); break
+        case 'marker': b = (energy * 0.45 + punch * 0.9) * P.sparkle * (0.3 + 0.7 * dens); break
+        case 'drl': case 'highbeam': b = energy * 0.95 + punch * 0.5 * P.punch; break
+        default: b = (energy * 0.9 + punch * 1.0 * P.punch) * P.bassWeight; break
       }
       frame[zone.channel] = Math.round(curve(b) * 255)
     })
@@ -239,7 +256,7 @@ export function analyzePCM(
   })
 
   // Phase 3: auto-choreograph closures to the song structure (opt-in per show).
-  if (opts?.autoClosures && opts.model) choreographClosures(frames, totalC, FPS, opts.model, zones)
+  if (opts?.autoClosures && opts.model) choreographClosures(frames, totalC, FPS, opts.model, zones, P.closureSections)
 
   // High-res amplitude envelope for the waveform display.
   const WF_FPS = 100
@@ -255,7 +272,7 @@ export function analyzePCM(
 // Browser entry point — pulls L/R out of the decoded AudioBuffer.
 export async function analyzeAudioToFrames(
   audioBuffer: AudioBuffer, modelDef: ModelDefinition,
-  opts?: { autoClosures?: boolean; model?: TeslaModel },
+  opts?: { autoClosures?: boolean; model?: TeslaModel; preset?: string },
 ): Promise<AudioAnalysisResult> {
   const L = audioBuffer.getChannelData(0)
   const R = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : L
