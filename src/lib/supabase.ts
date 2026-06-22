@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createBrowserClient } from '@supabase/ssr'
 
 export type TeslaModel = 'model3' | 'modelY' | 'modelS' | 'modelX' | 'cybertruck'
@@ -35,13 +35,35 @@ export interface Show {
   updated_at:   string
 }
 
-// Browser client (@supabase/ssr). Persists the session in cookies so server
-// components, route handlers, and middleware can read it. Same public interface
-// as before — the 20 client files that import `supabase` are unchanged.
-export const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+// Browser client (@supabase/ssr), constructed LAZILY on first use.
+//
+// Server route handlers import other helpers from this module (getAdminClient,
+// types). If the browser client were built at module top-level, importing those
+// helpers would construct it during the server build — and @supabase/ssr
+// validates the URL/key EAGERLY, throwing "URL and API key are required" while
+// Next collects page data. Deferring construction to first property access keeps
+// it out of the server build entirely; it only instantiates in the browser.
+let _browser: SupabaseClient | null = null
+function browserClient(): SupabaseClient {
+  if (!_browser) {
+    _browser = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+  }
+  return _browser
+}
+
+// Same `supabase` interface the app already imports (20 files), backed by the
+// lazy client. Methods are bound to the real client so supabase-js internals
+// see the correct `this`.
+export const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
+  get(_t, prop) {
+    const client = browserClient()
+    const value = (client as unknown as Record<string | symbol, unknown>)[prop]
+    return typeof value === 'function' ? value.bind(client) : value
+  },
+})
 
 export function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL
