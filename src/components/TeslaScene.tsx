@@ -331,7 +331,8 @@ function buildLightZones(def: typeof MODELS[TeslaModel], scene: THREE.Scene) {
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(x, y, z);
     mesh.userData.label = zone.label;
-    scene.add(mesh);            // visible — this IS the light the user sees turn on
+    mesh.visible = false;       // shown once the model loads & lights are positioned
+    scene.add(mesh);
     zoneHitboxes.push(mesh);
 
     out.push({ mesh, mat, ch: zone.channel, color: new THREE.Color(zone.color), center: mesh.position, baseOpacity: 0.16, nx: zone.nx, ny: zone.ny, nz: zone.nz });
@@ -543,6 +544,7 @@ export default function TeslaScene({
 
   const lightObjsRef = useRef<ReturnType<typeof buildLightZones>['lightObjs']>([]);
   const closureObjsRef = useRef<ClosureObj[]>([]);
+  const litReadyRef = useRef(false);   // gate lights until the model has loaded
   const pulseRef = useRef<{ ch: number; target: number; until: number } | null>(null);
   const activeFrameRef = useRef<Uint8Array | null>(null);
   const frameDataRef = useRef<Uint8Array[]>([]);
@@ -787,18 +789,23 @@ export default function TeslaScene({
             snapRay.set(from.addScaledVector(dir, -0.5), dir);
             const hit = snapRay.intersectObject(gltfScene, true)[0];
             if (hit) o.mesh.position.copy(hit.point).addScaledVector(dir, -0.015);
+            o.mesh.visible = true;   // now positioned on the real car — reveal it
           });
         }
         // Model S exports real, separable panels — animate them directly.
         if (teslaModel === 'modelS') closureObjsRef.current = buildModelSClosures(gltfScene, scene);
         renderer.shadowMap.needsUpdate = true;  // re-render shadows now the car is in
+        litReadyRef.current = true;   // lights are positioned — stop hiding them
         setGltfStatus('loaded');
       },
       undefined,
       () => {
-        // GLTF failed to load — fall back to the procedural car
+        // GLTF failed to load — fall back to the procedural car (proxy lights at
+        // their default positions are correct for it).
         scene.add(proceduralGroup);
+        lightObjsRef.current.forEach(o => { if (o.mesh) o.mesh.visible = true; });
         renderer.shadowMap.needsUpdate = true;
+        litReadyRef.current = true;
         setGltfStatus('procedural');
       },
     );
@@ -821,6 +828,7 @@ export default function TeslaScene({
     // Closures animate the real GLB panels — populated in the GLTF onLoad for
     // Model S (the only model with separable named nodes); empty otherwise.
     closureObjsRef.current = [];
+    litReadyRef.current = false;   // hide lights until this model finishes loading
     frameDataRef.current = generateFrames(style, intensity, bpm, 40, def);
 
     // ── Raycaster tooltip ─────────────────────────────────────────────────────
@@ -863,10 +871,11 @@ export default function TeslaScene({
           }
           const frame = frames[frameIdx];
           activeFrameRef.current = frame;
-          // Each fixture glows with its channel value (or a click pulse).
+          // Don't drive the lights until the model has loaded — otherwise the
+          // proxy fixtures glow at their pre-positioned spots ("floating lights").
           const lpz = pulseRef.current;
           const activeForPool: { pos: THREE.Vector3; color: THREE.Color; v: number }[] = [];
-          lightObjsRef.current.forEach(({ mat, ch, color, center, baseOpacity }) => {
+          if (litReadyRef.current) lightObjsRef.current.forEach(({ mat, ch, color, center, baseOpacity }) => {
             let v = (frame[ch] ?? 0) / 255;
             if (lpz && lpz.ch === ch && now < lpz.until) v = Math.max(v, lpz.target);
             mat.emissiveIntensity = v * 3.2;
