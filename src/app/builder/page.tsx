@@ -1131,8 +1131,11 @@ function BuilderInner() {
     }
     const fseq = buildFseq(channels, frames, Math.round(1000 / FPS), frameData);
 
-    // Validate FSEQ before packaging
-    const validation = validateFseq(fseq, channels, audioFile?.type);
+    // Validate against the audio we ACTUALLY ship: the converted 44.1kHz WAV
+    // when conversion succeeded, otherwise the original file. (Don't warn
+    // "not WAV" when the package actually contains a WAV.)
+    const shippedAudioMime = wavBlobRef.current ? 'audio/wav' : audioFile?.type;
+    const validation = validateFseq(fseq, channels, shippedAudioMime);
     setFseqValidation(validation);
 
     const zip = new JSZip();

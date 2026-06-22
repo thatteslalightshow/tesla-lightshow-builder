@@ -200,8 +200,12 @@ export default function DashboardPage() {
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button
                     onClick={async () => {
-                      const res = await fetch('/api/subscription/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan: 'monthly' }) });
-                      if (res.ok) { const { url } = await res.json(); window.location.href = url; }
+                      try {
+                        const res = await fetch('/api/subscription/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan: 'monthly' }) });
+                        const data = await res.json().catch(() => ({}));
+                        if (res.ok && data.url) window.location.href = data.url;
+                        else setSubMsg(data.error ? `Checkout error: ${data.error}` : 'Could not start checkout — please try again.');
+                      } catch { setSubMsg('Could not reach checkout — please try again.'); }
                     }}
                     className="btn btn-ghost btn-sm" style={{ borderColor: 'rgba(80,160,255,0.3)', color: 'rgba(80,160,255,0.85)' }}
                   >
@@ -209,8 +213,12 @@ export default function DashboardPage() {
                   </button>
                   <button
                     onClick={async () => {
-                      const res = await fetch('/api/subscription/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan: 'yearly' }) });
-                      if (res.ok) { const { url } = await res.json(); window.location.href = url; }
+                      try {
+                        const res = await fetch('/api/subscription/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan: 'yearly' }) });
+                        const data = await res.json().catch(() => ({}));
+                        if (res.ok && data.url) window.location.href = data.url;
+                        else setSubMsg(data.error ? `Checkout error: ${data.error}` : 'Could not start checkout — please try again.');
+                      } catch { setSubMsg('Could not reach checkout — please try again.'); }
                     }}
                     className="btn btn-primary btn-sm"
                   >
