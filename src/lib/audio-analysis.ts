@@ -8,6 +8,22 @@ export interface AudioAnalysisResult {
   bpm: number
   // Normalized amplitude envelope at 100fps (10ms windows) for waveform display.
   waveformData: Float32Array
+  // Auto-build: the vibe preset the song best fits, and whether it has clear drops
+  // worth choreographing closures to (suggest-and-confirm, since the car moves).
+  suggestedPreset: string
+  closuresRecommended: boolean
+  dropCount: number
+}
+
+// Rule-based vibe classifier over song features (all preset-independent).
+function classifyVibe(f: { bpm: number; bassRatio: number; brightness: number; dynamics: number; transientRate: number; dropCount: number }): string {
+  const { bpm, bassRatio, brightness, dynamics, transientRate, dropCount } = f
+  if (bpm < 100 && transientRate < 150 && dynamics > 0.11) return 'cinematic' // slow, smooth, swelling
+  if (bpm >= 118 && bassRatio > 0.38 && dropCount >= 3 && dynamics > 0.12) return 'edm' // fast, bass-heavy, big drops
+  if (bassRatio > 0.42 && bpm < 118) return 'hiphop'                          // 808-forward, mid tempo
+  if (transientRate > 200 && bassRatio < 0.4) return 'rock'                    // drum/guitar-driven
+  if (brightness > 0.6) return 'pop'                                           // bright, melodic
+  return 'balanced'
 }
 
 // ─── Phase 1: stereo multi-band spectral engine (runs in browser AND Node) ──────
@@ -266,7 +282,24 @@ export function analyzePCM(
   for (let f = 0; f < wfTotal; f++) wfRaw[f] = rms(left, f * wfFrameSize, wfFrameSize)
   const [wfNorm] = normShared([wfRaw])
 
-  return { frames, triggerFrames, bpm, waveformData: new Float32Array(wfNorm) }
+  // ── Auto-build: classify the song's vibe + whether closures fit ──
+  const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / Math.max(1, a.length)
+  const bM = mean(bN_C), mM = mean(mN_C), hM = mean(hN_C), tM = mean(totalC)
+  const denom = bM + mM + hM + 1e-6
+  const dynamics = Math.sqrt(mean(totalC.map(v => (v - tM) * (v - tM))))
+  const dropCount = detectSections(totalC, FPS).length
+  const features = {
+    bpm,
+    bassRatio: bM / denom,
+    brightness: (mM + hM) / denom,
+    dynamics,
+    transientRate: triggerFrames.size / Math.max(0.1, totalFrames / FPS / 60),
+    dropCount,
+  }
+  const suggestedPreset = classifyVibe(features)
+  const closuresRecommended = dropCount >= 2 && dynamics > 0.1
+
+  return { frames, triggerFrames, bpm, waveformData: new Float32Array(wfNorm), suggestedPreset, closuresRecommended, dropCount }
 }
 
 // Browser entry point — pulls L/R out of the decoded AudioBuffer.
