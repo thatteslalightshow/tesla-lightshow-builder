@@ -524,78 +524,6 @@ function buildModelSClosures(gltfScene: THREE.Group, scene: THREE.Scene): Closur
   return out;
 }
 
-// ─── Shared closures for models that aren't fully rigged (Y / X / 3) ─────────────
-// EXPERIMENT: Model Y/X/3 don't ship clean mirror/charge-cap nodes like Model S,
-// but the mirrors/charge port sit in nearly the same place across these cars. So:
-//  • Mirrors (ch 34/35): gather the SMALL meshes clustered at the mirror location
-//    (cap + housing + arm) and fold them together — folds the real mirror, no
-//    doubling, works even when the mirror isn't a single named node.
-//  • Charge port (ch 45): a small body-coloured flap on the rear quarter, invisible
-//    at rest, that flips open when fired (these models have no charge-cap mesh).
-function buildSharedClosures(gltfScene: THREE.Group, scene: THREE.Scene, bodyBox: THREE.Box3, fullBox: THREE.Box3): ClosureObj[] {
-  const out: ClosureObj[] = [];
-  const V = () => new THREE.Vector3();
-  const bc = bodyBox.getCenter(V()), bs = bodyBox.getSize(V());
-  const minY = fullBox.min.y, fullH = fullBox.max.y - fullBox.min.y;
-  // normalized car coords (nx front+, ny up 0..1, nz right+) → world position
-  const worldPos = (nx: number, ny: number, nz: number) =>
-    new THREE.Vector3(bc.x + nx * bs.x / 2, minY + ny * fullH, bc.z + nz * bs.z / 2);
-
-  // ── Mirrors: fold the cluster of small meshes at each mirror spot ──
-  for (const [ch, side] of [[34, -1], [35, 1]] as const) {
-    const target = worldPos(0.55, 0.72, side * 0.98);
-    const parts: THREE.Object3D[] = [];
-    gltfScene.traverse(o => {
-      if (!(o instanceof THREE.Mesh)) return;
-      const b = new THREE.Box3().setFromObject(o);
-      const sz = b.getSize(V());
-      if (Math.max(sz.x, sz.y, sz.z) > 0.28) return;     // skip doors/body/glass (big)
-      if (b.getCenter(V()).distanceTo(target) > 0.32) return; // must cluster at the mirror
-      parts.push(o);
-    });
-    if (!parts.length) continue;
-    const comb = new THREE.Box3();
-    parts.forEach(p => comb.expandByObject(p));
-    const c = comb.getCenter(V());
-    const innerZ = Math.abs(comb.min.z) < Math.abs(comb.max.z) ? comb.min.z : comb.max.z;
-    const pivot = new THREE.Group();
-    pivot.position.set(c.x, c.y, innerZ);
-    scene.add(pivot);
-    parts.forEach(p => pivot.attach(p));
-    out.push({ ch, open: 0, apply: o => { pivot.rotation.y = side * 1.2 * o; } });
-  }
-
-  // ── Charge port: a flap on the rear-left quarter, hidden until fired ──
-  {
-    // sample the body colour from the largest mesh so the flap blends in
-    let bodyColor = new THREE.Color(0x8aa0c0), biggest = 0;
-    gltfScene.traverse(o => {
-      if (!(o instanceof THREE.Mesh)) return;
-      const v = new THREE.Box3().setFromObject(o).getSize(V());
-      const vol = v.x * v.y * v.z;
-      const m = (Array.isArray(o.material) ? o.material[0] : o.material) as THREE.MeshStandardMaterial;
-      if (vol > biggest && m && m.color) { biggest = vol; bodyColor = m.color.clone(); }
-    });
-    const target = worldPos(-0.80, 0.50, -0.90);
-    const ray = new THREE.Raycaster(); ray.far = 2;
-    const dir = new THREE.Vector3(bc.x, target.y, bc.z).sub(target).normalize();
-    ray.set(target.clone().addScaledVector(dir, -0.5), dir);
-    const hit = ray.intersectObject(gltfScene, true)[0];
-    const pos = hit ? hit.point.clone().addScaledVector(dir, -0.01) : target;
-    const side: 1 | -1 = pos.z >= 0 ? 1 : -1;
-    const w = 0.13;
-    const mat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.4, metalness: 0.1, transparent: true, opacity: 0 });
-    const flap = new THREE.Mesh(new THREE.BoxGeometry(w, w, 0.012), mat);
-    flap.position.set(-w / 2, 0, 0);
-    const pivot = new THREE.Group();
-    pivot.position.set(pos.x + w / 2, pos.y, pos.z);
-    scene.add(pivot);
-    pivot.add(flap);
-    out.push({ ch: 45, open: 0, apply: o => { pivot.rotation.y = side * 1.3 * o; mat.opacity = Math.min(1, o * 2); } });
-  }
-  return out;
-}
-
 // bytes: 0 idle · 63 open · 127 dance · 191 close · 255 stop → target openness
 function closureTarget(byte: number, tSec: number): number {
   if (byte < 32) return 0;                          // idle
@@ -863,10 +791,6 @@ export default function TeslaScene({
         }
         // Model S exports real, separable panels — animate them directly.
         if (teslaModel === 'modelS') closureObjsRef.current = buildModelSClosures(gltfScene, scene);
-        // EXPERIMENT: shared mirror-fold + charge-port flap for the near-identical Y/X/3.
-        else if (teslaModel === 'modelY' || teslaModel === 'modelX' || teslaModel === 'model3') {
-          closureObjsRef.current = buildSharedClosures(gltfScene, scene, bodyBox, box);
-        }
         renderer.shadowMap.needsUpdate = true;  // re-render shadows now the car is in
         setGltfStatus('loaded');
       },
