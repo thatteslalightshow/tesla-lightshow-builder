@@ -25,6 +25,7 @@
     "@supabase/supabase-js": "^2.43.0",
     "@vercel/analytics": "^2.0.1",
     "jszip": "^3.10.1",
+    "mpg123-decoder": "^1.0.3",
     "next": "^14.2.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",

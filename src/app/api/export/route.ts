@@ -4,6 +4,7 @@ import { getAuthedUser } from '@/lib/auth'
 import { getChannelCount, generateFrames, buildEditFrames, hasEdits, MODELS, FPS, STEP_MS, type EditData } from '@/lib/tesla-channels'
 import { analyzePCM } from '@/lib/audio-analysis'
 import { sendExportDownload } from '@/lib/email'
+import { MPEGDecoder } from 'mpg123-decoder'
 import JSZip from 'jszip'
 
 // Decode a 16-bit PCM WAV into L/R sample data so the SAME spectral analysis that
@@ -27,6 +28,23 @@ function decodeWavPCM(buf: ArrayBuffer): { L: Float32Array; R: Float32Array; sam
     if (channels > 1) { R[i] = dv.getInt16(p, true) / 32768; p += 2 } else R[i] = L[i]
   }
   return { L, R, sampleRate }
+}
+
+// Decode the show audio (WAV or MP3) to L/R PCM so EVERY export is music-reactive,
+// not just WAV-stored ones. MP3 via a WASM decoder (works in the serverless runtime).
+async function decodeAudioPCM(bytes: ArrayBuffer): Promise<{ L: Float32Array; R: Float32Array; sampleRate: number } | null> {
+  const wav = decodeWavPCM(bytes)
+  if (wav) return wav
+  try {
+    const dec = new MPEGDecoder()
+    await dec.ready
+    const { channelData, samplesDecoded, sampleRate } = dec.decode(new Uint8Array(bytes))
+    dec.free()
+    if (samplesDecoded > 0 && channelData?.[0]?.length) {
+      return { L: channelData[0], R: channelData[1] ?? channelData[0], sampleRate }
+    }
+  } catch { /* not decodable → fall back to style */ }
+  return null
 }
 
 const MODEL_LABELS: Record<string, string> = {
@@ -138,9 +156,9 @@ export async function POST(req: Request) {
     const loop = buildEditFrames(editData!, bpm, channels)
     frameData = Array.from({ length: frames }, (_, f) => loop[f % loop.length])
   } else {
-    const wav = audioBytes ? decodeWavPCM(audioBytes) : null
-    if (wav) {
-      frameData = analyzePCM(wav.L, wav.R, wav.sampleRate, modelDef.zones, channels).frames
+    const audio = audioBytes ? await decodeAudioPCM(audioBytes) : null
+    if (audio) {
+      frameData = analyzePCM(audio.L, audio.R, audio.sampleRate, modelDef.zones, channels).frames
     } else {
       frameData = generateFrames(show.style, show.intensity, bpm, Math.round(durationSec * FPS), modelDef)
     }
