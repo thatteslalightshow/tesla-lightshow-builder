@@ -667,6 +667,8 @@ function BuilderInner() {
   const [closureBlocks, setClosureBlocks] = useState<ClosureBlocks>({});
   const [closurePulse, setClosurePulse] = useState<{ ch: number; cmd: ClosureCommand; n: number } | null>(null);
   const pulseN = useRef(0);
+  const [autoClosures, setAutoClosures] = useState(false);   // opt-in: choreograph closures to the song
+  const decodedRef = useRef<AudioBuffer | null>(null);       // last decoded audio, for re-analysis on toggle
 
   // Cycle a closure command: empty → Open → Close → Dance → Stop → empty
   function onClosureCommand(channel: number, beatIdx: number) {
@@ -746,12 +748,13 @@ function BuilderInner() {
     setIsPublic(data.is_public); setShareToken(data.share_token);
     setSongTitle(data.song_title ?? ''); setSongArtist(data.song_artist ?? '');
     // Restore manual edits (light beats + closure commands)
-    const ed = data.edit_data as { customBlocks?: Record<string, number[]>; closureBlocks?: ClosureBlocks } | null;
+    const ed = data.edit_data as { customBlocks?: Record<string, number[]>; closureBlocks?: ClosureBlocks; autoClosures?: boolean } | null;
     if (ed) {
       setCustomBlocks(Object.fromEntries(Object.entries(ed.customBlocks ?? {}).map(([ch, arr]) => [Number(ch), new Set(arr)])));
       setClosureBlocks(ed.closureBlocks ?? {});
+      setAutoClosures(ed.autoClosures ?? false);
     } else {
-      setCustomBlocks({}); setClosureBlocks({});
+      setCustomBlocks({}); setClosureBlocks({}); setAutoClosures(false);
     }
     const { data: audio } = await supabase.from('audio_files').select('id').eq('show_id', id).limit(1);
     if (audio?.length) setAudioUploaded(true);
@@ -849,7 +852,8 @@ function BuilderInner() {
           await ctx2.close();
           // Convert to WAV at 44.1 kHz (Tesla requires it — 48 kHz won't sync).
           try { wavBlobRef.current = audioBufferToWav(await resampleTo44100(ab2)); } catch { wavBlobRef.current = null; }
-          const result = await analyzeAudioToFrames(ab2, MODELS[model]);
+          decodedRef.current = ab2;
+          const result = await analyzeAudioToFrames(ab2, MODELS[model], { autoClosures, model });
           setAudioFrames(result.frames);
           setAudioTriggers(result.triggerFrames);
           setWaveformData(result.waveformData);
@@ -860,6 +864,18 @@ function BuilderInner() {
     };
     reader.readAsArrayBuffer(file);
   }
+
+  // Re-analyze (without re-decoding) when the auto-closures toggle or model changes.
+  useEffect(() => {
+    if (!decodedRef.current) return;
+    let cancelled = false;
+    setAnalyzing(true);
+    analyzeAudioToFrames(decodedRef.current, MODELS[model], { autoClosures, model })
+      .then(r => { if (!cancelled) { setAudioFrames(r.frames); setAudioTriggers(r.triggerFrames); } })
+      .finally(() => { if (!cancelled) setAnalyzing(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoClosures]);
 
   // ── Audio preview ─────────────────────────────────────────────────────────
   const stopPreview = useCallback(() => {
@@ -974,11 +990,12 @@ function BuilderInner() {
 
   async function save(): Promise<string | null> {
     setSaving(true); setSaveMsg('');
-    const editData = (Object.keys(customBlocks).length || Object.keys(closureBlocks).length)
+    const editData = (Object.keys(customBlocks).length || Object.keys(closureBlocks).length || autoClosures)
       ? {
           customBlocks: Object.fromEntries(Object.entries(customBlocks).map(([ch, set]) => [ch, [...set]])),
           closureBlocks,
           beats: VISIBLE_BEATS,
+          autoClosures,
         }
       : null;
     const fullPayload = { user_id: userId, name, tesla_model: model, style, intensity, bpm, is_public: isPublic, song_title: songTitle || null, song_artist: songArtist || null, edit_data: editData, duration_sec: audioDurationRef.current ?? undefined, updated_at: new Date().toISOString() };
@@ -1506,6 +1523,16 @@ function BuilderInner() {
               {' '}<strong style={{ color: CMD_STYLE.dance.fg }}>Dance</strong> wiggles it open &amp; shut, and
               {' '}<strong style={{ color: CMD_STYLE.stop.fg }}>Stop</strong> halts it mid-motion. Click again past Stop to clear.
             </div>
+            {/* Auto-choreograph closures to the song (opt-in — physical doors move) */}
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', userSelect: 'none', padding: '8px 10px', background: autoClosures ? 'rgba(157,107,255,0.12)' : 'rgba(255,255,255,0.03)', border: `1px solid ${autoClosures ? 'rgba(157,107,255,0.4)' : 'var(--border)'}`, borderRadius: 8 }}>
+              <input type="checkbox" checked={autoClosures} onChange={e => setAutoClosures(e.target.checked)} style={{ accentColor: '#9d6bff', width: 15, height: 15, marginTop: 1 }} />
+              <span style={{ fontSize: 12, lineHeight: 1.5 }}>
+                <strong style={{ color: 'var(--text)' }}>Auto-choreograph closures to the music</strong> — opens your car&apos;s
+                {' '}{MODELS[model].zones.some(z => z.closure === 'falcon_doors') ? 'falcon/front doors' : MODELS[model].zones.some(z => z.closure === 'door_handles') ? 'doors & mirrors' : 'mirrors & windows'} to land open on the drops and dance through big sections,
+                {' '}<strong style={{ color: 'var(--muted)' }}>automatically within Tesla&apos;s limits</strong>.
+                <span style={{ color: '#ffb454', display: 'block', marginTop: 2 }}>⚠ Real doors/closures will move — make sure your Tesla has clearance.</span>
+              </span>
+            </label>
             {Object.keys(closureBlocks).length > 0 && (
               closureWarnings.length > 0 ? (
                 closureWarnings.map((w, i) => (

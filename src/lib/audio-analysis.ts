@@ -1,4 +1,6 @@
-import type { ModelDefinition, LightZone } from './tesla-channels'
+import { CLOSURE_CMD, CLOSURE_LIMITS, CLOSURE_DURATIONS, DANCE_SUPPORTED, MODEL_CLOSURES } from './tesla-channels'
+import type { ModelDefinition, LightZone, ClosureFamily } from './tesla-channels'
+import type { TeslaModel } from './supabase'
 
 export interface AudioAnalysisResult {
   frames: Uint8Array[]
@@ -71,10 +73,84 @@ function bandOf(type: string): Band {
   }
 }
 
+// ─── Phase 3: structure detection + closure choreography ────────────────────────
+// Find the big high-energy sections (choruses/drops) from the smoothed envelope.
+function detectSections(totalC: number[], FPS: number): { start: number; end: number; peak: number }[] {
+  const n = totalC.length
+  const sm = new Array(n).fill(0)
+  let acc = 0
+  for (let f = 0; f < n; f++) { acc = acc * 0.96 + totalC[f] * 0.04; sm[f] = acc } // ~1.5s smoothing
+  const thresh = ([...sm].sort((a, b) => a - b)[Math.floor(n * 0.62)]) || 0.3
+  const minLen = Math.round(FPS * 3)
+  const out: { start: number; end: number; peak: number }[] = []
+  let f = 0
+  while (f < n) {
+    if (sm[f] > thresh) {
+      const start = f; let peak = 0
+      while (f < n && sm[f] > thresh * 0.85) { peak = Math.max(peak, sm[f]); f++ }
+      if (f - start >= minLen) out.push({ start, end: f, peak })
+    } else f++
+  }
+  return out
+}
+
+// Auto-choreograph closures: open the model's hero closure so it lands open ON the
+// drop (pre-fired by its actuation duration), dance through the big section if it
+// can, then close — all within Tesla's per-closure limits, dance support, ~30s
+// thermal cap, and the Model-X windows-during-doors safety rule.
+function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number, model: TeslaModel, zones: LightZone[]): void {
+  const all = detectSections(totalC, FPS) // already in time order
+  if (!all.length) return
+  // Keep only the ~6 most prominent sections (tasteful), still time-ordered.
+  const peakCut = [...all].sort((a, b) => b.peak - a.peak)[Math.min(all.length - 1, 5)]?.peak ?? 0
+  const sections = all.filter(s => s.peak >= peakCut)
+
+  const families = MODEL_CLOSURES[model]
+  const chOf = (fam: ClosureFamily) => zones.filter(z => z.closure === fam).map(z => z.channel)
+  let heroOrder: ClosureFamily[] = ['falcon_doors', 'front_doors', 'liftgate', 'door_handles', 'windows', 'mirrors', 'charge_port']
+  if (model === 'modelX') heroOrder = heroOrder.filter(f => f !== 'windows') // false-pinch rule
+  const heroes = heroOrder.filter(f => families.includes(f))
+
+  const used: Partial<Record<ClosureFamily, number>> = {}
+  const busyUntil: Partial<Record<ClosureFamily, number>> = {} // frame a family is free again
+  const HOLD = Math.round(FPS * 0.6)
+  const DANCE_BUDGET = Math.round(FPS * 30)
+  let danceUsed = 0
+  const write = (ch: number, cmd: keyof typeof CLOSURE_CMD, from: number, to: number) => {
+    const v = CLOSURE_CMD[cmd]
+    for (let f = Math.max(0, from); f < Math.min(frames.length, to); f++) frames[f][ch] = v
+  }
+
+  for (const sec of sections) {
+    for (const fam of heroes) {
+      const chans = chOf(fam); if (!chans.length) continue
+      const limit = CLOSURE_LIMITS[fam], dur = Math.round(CLOSURE_DURATIONS[fam] * FPS)
+      const cur = used[fam] ?? 0
+      const openAt = sec.start - dur                 // lands open on the drop
+      if (openAt < HOLD) continue                    // not enough lead time
+      if (openAt < (busyUntil[fam] ?? 0)) continue   // still actuating from a prior section → no overlap
+      if (cur + 2 > limit) continue                  // need open+close budget
+      for (const ch of chans) write(ch, 'open', openAt, openAt + HOLD)
+      used[fam] = cur + 1
+      let closeAt = sec.end
+      if (DANCE_SUPPORTED.has(fam) && (used[fam]! + 2) <= limit && danceUsed < DANCE_BUDGET) {
+        const len = Math.min(sec.end - sec.start, DANCE_BUDGET - danceUsed)
+        for (const ch of chans) write(ch, 'dance', sec.start, sec.start + len)
+        danceUsed += len; used[fam] = used[fam]! + 1; closeAt = sec.start + len
+      }
+      for (const ch of chans) write(ch, 'close', closeAt, closeAt + HOLD)
+      used[fam] = (used[fam] ?? 0) + 1
+      busyUntil[fam] = closeAt + HOLD                // free again only after it closes
+      break                                          // one hero closure per section
+    }
+  }
+}
+
 // Core engine — takes raw channel data. Works in the browser and on the server.
 export function analyzePCM(
   left: Float32Array, right: Float32Array, sampleRate: number,
   zones: LightZone[], channelCount: number,
+  opts?: { autoClosures?: boolean; model?: TeslaModel },
 ): AudioAnalysisResult {
   const FPS = 50
   const frameSize = Math.floor(sampleRate / FPS)
@@ -162,6 +238,9 @@ export function analyzePCM(
     return frame
   })
 
+  // Phase 3: auto-choreograph closures to the song structure (opt-in per show).
+  if (opts?.autoClosures && opts.model) choreographClosures(frames, totalC, FPS, opts.model, zones)
+
   // High-res amplitude envelope for the waveform display.
   const WF_FPS = 100
   const wfFrameSize = Math.floor(sampleRate / WF_FPS)
@@ -174,8 +253,11 @@ export function analyzePCM(
 }
 
 // Browser entry point — pulls L/R out of the decoded AudioBuffer.
-export async function analyzeAudioToFrames(audioBuffer: AudioBuffer, modelDef: ModelDefinition): Promise<AudioAnalysisResult> {
+export async function analyzeAudioToFrames(
+  audioBuffer: AudioBuffer, modelDef: ModelDefinition,
+  opts?: { autoClosures?: boolean; model?: TeslaModel },
+): Promise<AudioAnalysisResult> {
   const L = audioBuffer.getChannelData(0)
   const R = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : L
-  return analyzePCM(L, R, audioBuffer.sampleRate, modelDef.zones, modelDef.channelCount)
+  return analyzePCM(L, R, audioBuffer.sampleRate, modelDef.zones, modelDef.channelCount, opts)
 }

@@ -158,7 +158,9 @@ export async function POST(req: Request) {
   } else {
     const audio = audioBytes ? await decodeAudioPCM(audioBytes) : null
     if (audio) {
-      frameData = analyzePCM(audio.L, audio.R, audio.sampleRate, modelDef.zones, channels).frames
+      const autoClosures = editData?.autoClosures === true
+      frameData = analyzePCM(audio.L, audio.R, audio.sampleRate, modelDef.zones, channels,
+        { autoClosures, model: show.tesla_model as TeslaModel }).frames
     } else {
       frameData = generateFrames(show.style, show.intensity, bpm, Math.round(durationSec * FPS), modelDef)
     }

@@ -37,6 +37,17 @@ export const CLOSURE_LIMITS: Record<ClosureFamily, number> = {
   door_handles: 20, front_doors: 6, falcon_doors: 6,
 }
 
+// Only these can Dance, and a closure must already be OPEN before a dance takes
+// effect (Tesla rule). Used by validation + the auto-choreographer.
+export const DANCE_SUPPORTED: Set<ClosureFamily> = new Set(['liftgate', 'charge_port', 'windows', 'falcon_doors'])
+
+// Approx seconds to fully actuate (Tesla: ~2s mirrors/handles/charge → ~22s front
+// doors). Used to PRE-FIRE an open so the closure lands open exactly on the drop.
+export const CLOSURE_DURATIONS: Record<ClosureFamily, number> = {
+  mirrors: 2, door_handles: 2, charge_port: 2, windows: 4,
+  liftgate: 6, falcon_doors: 12, front_doors: 22,
+}
+
 export interface LightZone {
   id: string
   label: string
@@ -148,7 +159,7 @@ export const CLOSURE_FAMILY_BY_CHANNEL: Record<number, ClosureFamily> = Object.f
 ) as Record<number, ClosureFamily>
 
 // Which closure families exist per model (others are hidden in the timeline)
-const MODEL_CLOSURES: Record<TeslaModel, ClosureFamily[]> = {
+export const MODEL_CLOSURES: Record<TeslaModel, ClosureFamily[]> = {
   model3:     ['mirrors', 'windows', 'charge_port', 'liftgate'],
   modelY:     ['mirrors', 'windows', 'charge_port', 'liftgate'],
   modelS:     ['mirrors', 'windows', 'charge_port', 'liftgate', 'door_handles'],
@@ -248,8 +259,11 @@ export interface EditData {
   customBlocks: Record<number, number[]>                       // light channel → beat indices (full = 255)
   closureBlocks: Record<number, Record<number, ClosureCommand>> // closure channel → beat → command
   beats: number                                                 // loop length in beats
+  autoClosures?: boolean                                        // opt-in: auto-choreograph closures to the song
 }
 
+// True only when there are MANUAL edits (which override the audio engine).
+// `autoClosures` alone does NOT count — it's a flag for the audio-reactive path.
 export function hasEdits(ed?: EditData | null): boolean {
   if (!ed) return false
   return Object.keys(ed.customBlocks ?? {}).length > 0 || Object.keys(ed.closureBlocks ?? {}).length > 0
