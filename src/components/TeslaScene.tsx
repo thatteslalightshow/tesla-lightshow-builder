@@ -699,11 +699,12 @@ export default function TeslaScene({
         const scale = p.bodyL / size.x;
         gltfScene.scale.setScalar(scale);
 
-        // ── Step 4: robust floor — exclude extreme outlier geometry ──────────────
-        // Some Sketchfab models include ground-plane or undercarriage reference
-        // meshes far below the car body. Collect each mesh's world-space min-Y,
-        // sort them, and use the 5th-percentile value (skipping the bottom 5% of
-        // meshes) so those outlier panels don't inflate position.y.
+        // ── Step 4: robust floor — exclude only TRUE outlier geometry ────────────
+        // Some models include a stray ground-plane mesh far below the car. Collect
+        // each mesh's world min-Y; the real floor is the lowest one, UNLESS a mesh
+        // sits far below the rest (detected by a large gap above it) — then it's an
+        // outlier and we step up. The wheels cluster near the body bottom, so they
+        // stay the floor (fixes detailed models whose tyres sank under the ground).
         box = new THREE.Box3().setFromObject(gltfScene);
         const centre = box.getCenter(new THREE.Vector3());
         const meshBottoms: number[] = [];
@@ -714,8 +715,12 @@ export default function TeslaScene({
           }
         });
         meshBottoms.sort((a, b) => a - b);
-        const skipN = Math.max(1, Math.floor(meshBottoms.length * 0.05));
-        const robustFloor = meshBottoms[skipN] ?? box.min.y;
+        const carH = box.max.y - box.min.y;
+        let robustFloor = meshBottoms[0] ?? box.min.y;
+        for (let i = 0; i < meshBottoms.length - 1; i++) {
+          if (meshBottoms[i + 1] - meshBottoms[i] > carH * 0.12) robustFloor = meshBottoms[i + 1];
+          else break;
+        }
         console.log(`[GLTF ${teslaModel}] meshes=${meshBottoms.length} floor=${robustFloor.toFixed(3)} (raw min=${box.min.y.toFixed(3)}) size=${size.x.toFixed(2)}x${size.y.toFixed(2)}x${size.z.toFixed(2)}`);
         gltfScene.position.x = -centre.x;
         gltfScene.position.y = -robustFloor;
