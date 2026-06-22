@@ -686,13 +686,19 @@ export default function TeslaScene({
         // it's model-agnostic (models without a headlight node are unaffected).
         const hls: THREE.Object3D[] = [];
         gltfScene.traverse(o => { if (o.name && /head\s*light/i.test(o.name)) hls.push(o); });
+        // Model-specific front/back override for models with no headlight node to
+        // auto-detect from (the generic orient leaves Model Y's front at -X, so
+        // front light channels were lighting the rear). Add 180°.
+        const MODEL_EXTRA_YAW: Partial<Record<TeslaModel, number>> = { modelY: Math.PI };
+        let yaw = MODEL_EXTRA_YAW[teslaModel] ?? 0;
         if (hls.length) {
           const hc = new THREE.Box3().setFromObject(hls[0]).getCenter(new THREE.Vector3());
-          if (hc.x < 0) {
-            gltfScene.rotation.y += Math.PI;
-            box = new THREE.Box3().setFromObject(gltfScene);
-            size = box.getSize(new THREE.Vector3());
-          }
+          if (hc.x < 0) yaw += Math.PI;
+        }
+        if (yaw) {
+          gltfScene.rotation.y += yaw;
+          box = new THREE.Box3().setFromObject(gltfScene);
+          size = box.getSize(new THREE.Vector3());
         }
 
         // ── Step 3: scale so car length (X after orientation fix) = bodyL ────────
