@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation'
-import { cookies } from 'next/headers'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createServerSupabase } from '@/lib/supabase-server'
 import { getAdminClient } from '@/lib/supabase'
 import Link from 'next/link'
 import type { Metadata } from 'next'
@@ -48,12 +47,12 @@ function Table({ cols, rows }: { cols: string[]; rows: (string | number | null |
 
 export default async function AdminPage() {
   // Verify session
-  const supabaseAuth = createServerComponentClient({ cookies })
-  const { data: { session } } = await supabaseAuth.auth.getSession()
-  if (!session) redirect('/auth')
+  const supabaseAuth = createServerSupabase()
+  const { data: { user } } = await supabaseAuth.auth.getUser()
+  if (!user) redirect('/auth')
 
   // Verify admin flag
-  const { data: profile } = await supabaseAuth.from('profiles').select('is_admin, display_name').eq('id', session.user.id).single()
+  const { data: profile } = await supabaseAuth.from('profiles').select('is_admin, display_name').eq('id', user.id).single()
   if (!profile?.is_admin) redirect('/dashboard')
 
   // All stats via admin client (bypasses RLS)
@@ -103,7 +102,7 @@ export default async function AdminPage() {
           <span style={{ padding: '2px 10px', background: 'rgba(232,64,74,0.15)', border: '1px solid rgba(232,64,74,0.3)', borderRadius: 20, fontSize: 11, fontWeight: 700, color: 'var(--red)', letterSpacing: '.08em' }}>ADMIN</span>
         </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <span style={{ fontSize: 13, color: 'var(--muted)' }}>{profile.display_name ?? session.user.email}</span>
+          <span style={{ fontSize: 13, color: 'var(--muted)' }}>{profile.display_name ?? user.email}</span>
           <Link href="/dashboard" style={{ fontSize: 13, color: 'var(--muted)', padding: '5px 12px', border: '1px solid var(--border)', borderRadius: 8 }}>Dashboard</Link>
         </div>
       </header>

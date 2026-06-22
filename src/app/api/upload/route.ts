@@ -1,5 +1,4 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createServerSupabase } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import { getAdminClient, validateAudioMeta, sanitizeFileName } from '@/lib/supabase'
 
@@ -9,9 +8,9 @@ import { getAdminClient, validateAudioMeta, sanitizeFileName } from '@/lib/supab
 // full-song WAV (~10MB/min), so streaming it here would always fail. The browser
 // PUTs to Supabase Storage, then calls /api/upload/commit to record the row.
 export async function POST(req: Request) {
-  const supabase = createRouteHandlerClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const supabase = createServerSupabase()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let body: { show_id?: string; file_name?: string; file_size?: number }
   try { body = await req.json() }
@@ -25,7 +24,7 @@ export async function POST(req: Request) {
 
   const admin = getAdminClient()
   const { data: show, error: showErr } = await admin
-    .from('shows').select('id').eq('id', showId).eq('user_id', session.user.id).single()
+    .from('shows').select('id').eq('id', showId).eq('user_id', user.id).single()
   if (showErr || !show) return NextResponse.json({ error: 'Show not found' }, { status: 404 })
 
   // Remove any previous audio for this show so we don't orphan files
@@ -37,7 +36,7 @@ export async function POST(req: Request) {
   }
 
   const safeName = sanitizeFileName(fileName)
-  const storagePath = `${session.user.id}/${showId}/${Date.now()}-${safeName}`
+  const storagePath = `${user.id}/${showId}/${Date.now()}-${safeName}`
 
   const { data, error } = await admin.storage
     .from('audio-files').createSignedUploadUrl(storagePath)

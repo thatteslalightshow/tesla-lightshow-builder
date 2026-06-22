@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
 
 export type TeslaModel = 'model3' | 'modelY' | 'modelS' | 'modelX' | 'cybertruck'
 export type ShowStyle  = 'energetic' | 'wave' | 'strobe' | 'chase' | 'pulse' | 'ripple' | 'bounce' | 'twinkle'
@@ -35,7 +35,13 @@ export interface Show {
   updated_at:   string
 }
 
-export const supabase = createClientComponentClient()
+// Browser client (@supabase/ssr). Persists the session in cookies so server
+// components, route handlers, and middleware can read it. Same public interface
+// as before — the 20 client files that import `supabase` are unchanged.
+export const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL

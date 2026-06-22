@@ -1,5 +1,4 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createServerSupabase } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 
@@ -14,9 +13,9 @@ export async function GET(req: Request) {
   const sessionId = searchParams.get('session_id')
   if (!sessionId) return NextResponse.json({ error: 'Missing session_id' }, { status: 400 })
 
-  const supabase = createRouteHandlerClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const supabase = createServerSupabase()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let checkoutSession: Stripe.Checkout.Session
   try {
@@ -29,7 +28,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Payment not completed', status: checkoutSession.payment_status }, { status: 402 })
   }
 
-  if (checkoutSession.metadata?.user_id !== session.user.id) {
+  if (checkoutSession.metadata?.user_id !== user.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
 

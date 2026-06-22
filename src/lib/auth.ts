@@ -1,5 +1,4 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createServerSupabase } from './supabase-server'
 import { getAdminClient } from './supabase'
 
 export interface AuthedUser {
@@ -30,11 +29,12 @@ export async function getAuthedUser(req: Request): Promise<AuthedUser | null> {
     }
   }
 
-  // 2. Cookie session (web)
-  const supabase = createRouteHandlerClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (session) {
-    return { id: session.user.id, email: session.user.email ?? null }
+  // 2. Cookie session (web). getUser() revalidates the token with the Supabase
+  // Auth server (more secure than trusting the cookie via getSession()).
+  const supabase = createServerSupabase()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user) {
+    return { id: user.id, email: user.email ?? null }
   }
 
   return null

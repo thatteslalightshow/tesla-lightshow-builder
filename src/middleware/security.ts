@@ -1,4 +1,4 @@
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
@@ -94,12 +94,32 @@ export async function middleware(req: NextRequest) {
     if (hasBearer) {
       rateKey = authHeader!.slice(7).trim()
     } else {
-      const supabase = createMiddlewareClient({ req, res })
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
+      // @supabase/ssr server client over the middleware req/res cookie jar.
+      // Writing refreshed auth cookies to BOTH req (for any later read in this
+      // pass) and res (so the browser receives the rotated session) keeps the
+      // session alive across requests. getUser() revalidates with Supabase Auth.
+      const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          cookies: {
+            getAll() {
+              return req.cookies.getAll()
+            },
+            setAll(cookiesToSet) {
+              cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value))
+              cookiesToSet.forEach(({ name, value, options }) =>
+                res.cookies.set(name, value, options)
+              )
+            },
+          },
+        }
+      )
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
-      rateKey = session.user.id
+      rateKey = user.id
     }
 
     const routeLimit = RATE_LIMITS[req.nextUrl.pathname]

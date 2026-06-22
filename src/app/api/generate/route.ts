@@ -1,5 +1,4 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createServerSupabase } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import { getAdminClient, type ShowStyle } from '@/lib/supabase'
 
@@ -16,9 +15,9 @@ function recommendIntensity(bpm: number): number {
 }
 
 export async function POST(req: Request) {
-  const supabase = createRouteHandlerClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const supabase = createServerSupabase()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let body: { show_id: string; bpm?: number }
   try {
@@ -33,7 +32,7 @@ export async function POST(req: Request) {
     .from('shows')
     .select('*')
     .eq('id', body.show_id)
-    .eq('user_id', session.user.id)
+    .eq('user_id', user.id)
     .single()
   if (showErr || !show) return NextResponse.json({ error: 'Show not found' }, { status: 404 })
 
