@@ -142,6 +142,11 @@ const CHANNELS: ChannelSpec[] = [
 // Closure channel indices and the set of closure families a model actually has.
 export const CLOSURE_CHANNELS = CHANNELS.filter(c => c.type === 'closure').map(c => c.index)
 
+// Channel index → closure family, for enforcing per-closure actuation limits.
+export const CLOSURE_FAMILY_BY_CHANNEL: Record<number, ClosureFamily> = Object.fromEntries(
+  CHANNELS.filter(c => c.closure).map(c => [c.index, c.closure!]),
+) as Record<number, ClosureFamily>
+
 // Which closure families exist per model (others are hidden in the timeline)
 const MODEL_CLOSURES: Record<TeslaModel, ClosureFamily[]> = {
   model3:     ['mirrors', 'windows', 'charge_port', 'liftgate'],
@@ -268,7 +273,18 @@ export function buildEditFrames(ed: EditData, bpm: number, channelCount: number)
   }
   for (const [chStr, lane] of Object.entries(ed.closureBlocks ?? {})) {
     const ch = Number(chStr)
-    for (const [beatStr, cmd] of Object.entries(lane)) {
+    const family = CLOSURE_FAMILY_BY_CHANNEL[ch]
+    const limit = family ? CLOSURE_LIMITS[family] : Infinity
+    // Hard cap: keep the EARLIEST actuations within Tesla's per-closure limit and
+    // drop the rest, so an exported show can never exceed the published parameters
+    // (Open/Close/Dance count; Stop does not). The UI also warns before this.
+    let used = 0
+    const ordered = Object.entries(lane).sort((a, b) => Number(a[0]) - Number(b[0]))
+    for (const [beatStr, cmd] of ordered) {
+      if (cmd !== 'stop') {
+        if (used >= limit) continue
+        used++
+      }
       const [s, e] = span(Number(beatStr))
       for (let f = s; f < e; f++) frames[f][ch] = CLOSURE_CMD[cmd]
     }
