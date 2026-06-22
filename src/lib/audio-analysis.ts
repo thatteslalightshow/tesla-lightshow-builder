@@ -168,14 +168,48 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number
 // builds, more explosive peaks) · closureSections: how many drops trigger closures.
 export interface MixParams {
   bassWeight: number; punch: number; sparkle: number; contrast: number; closureSections: number
+  phrasing: number  // strength of beat-synced structure: L↔R ping-pong + L→R sweep (0 = off)
 }
 export const MIX_PRESETS: Record<string, MixParams> = {
-  balanced:  { bassWeight: 1.0,  punch: 1.0, sparkle: 1.0,  contrast: 0.72, closureSections: 6 }, // = original
-  edm:       { bassWeight: 1.3,  punch: 1.5, sparkle: 1.3,  contrast: 0.62, closureSections: 8 }, // big drops
-  hiphop:    { bassWeight: 1.45, punch: 1.3, sparkle: 0.85, contrast: 0.70, closureSections: 4 }, // 808-forward
-  rock:      { bassWeight: 1.05, punch: 1.6, sparkle: 1.1,  contrast: 0.74, closureSections: 4 }, // punchy drums
-  pop:       { bassWeight: 1.0,  punch: 1.1, sparkle: 1.25, contrast: 0.78, closureSections: 4 }, // bright, melodic
-  cinematic: { bassWeight: 0.85, punch: 0.7, sparkle: 0.8,  contrast: 0.85, closureSections: 2 }, // swell-led, gentle
+  balanced:  { bassWeight: 1.0,  punch: 1.0, sparkle: 1.0,  contrast: 0.72, closureSections: 6, phrasing: 0.5 }, // = original feel
+  edm:       { bassWeight: 1.3,  punch: 1.5, sparkle: 1.3,  contrast: 0.62, closureSections: 8, phrasing: 0.9 }, // big drops, lots of movement
+  hiphop:    { bassWeight: 1.45, punch: 1.3, sparkle: 0.85, contrast: 0.70, closureSections: 4, phrasing: 0.6 }, // 808-forward
+  rock:      { bassWeight: 1.05, punch: 1.6, sparkle: 1.1,  contrast: 0.74, closureSections: 4, phrasing: 0.7 }, // punchy drums
+  pop:       { bassWeight: 1.0,  punch: 1.1, sparkle: 1.25, contrast: 0.78, closureSections: 4, phrasing: 0.7 }, // bright, melodic
+  cinematic: { bassWeight: 0.85, punch: 0.7, sparkle: 0.8,  contrast: 0.85, closureSections: 2, phrasing: 0.2 }, // smooth, minimal
+}
+
+// ─── Phase 2: musical phrasing + deliberate asymmetry ───────────────────────────
+// Layered on top of the reactive base, aligned to the beat grid (anchored to the
+// first detected onset). Two effects: (1) ping-pong — the accent fixtures (turn
+// signals + markers) alternate LEFT↔RIGHT each beat; (2) sweep — a highlight runs
+// L→R across the front/rear bars over two beats. Both gated by energy (so quiet
+// parts stay calm) and scaled by the vibe's `phrasing`.
+function applyPhrasing(frames: Uint8Array[], totalC: number[], bpm: number, FPS: number, zones: LightZone[], phrasing: number, anchor: number): void {
+  if (phrasing <= 0) return
+  const fpb = Math.max(1, (60 / bpm) * FPS)
+  const lights = zones.filter(z => z.type !== 'closure')
+  const span = fpb * 2 // sweep period = 2 beats
+  for (let f = 0; f < frames.length; f++) {
+    const energy = totalC[f]
+    if (energy < 0.15) continue
+    const rel = f - anchor
+    const beatIdx = Math.floor(rel / fpb)
+    const ppSide = beatIdx % 2 === 0 ? -1 : 1                          // accents fire this side this beat
+    const head = -1 + 2 * (((rel % span) + span) % span) / span        // sweep head -1(L)→+1(R)
+    for (const z of lights) {
+      const ch = z.channel
+      let v = frames[f][ch]
+      if (z.type === 'turn_front' || z.type === 'turn_rear' || z.type === 'marker') {
+        const onSide = Math.abs(z.nz) < 0.12 || (z.nz < 0 ? ppSide < 0 : ppSide > 0)
+        if (!onSide) v = Math.round(v * (1 - phrasing * 0.75))         // suppress the off-side → L↔R bounce
+      } else if (z.type === 'drl' || z.type === 'headlight' || z.type === 'tail') {
+        const near = Math.max(0, 1 - Math.abs(z.nz - head) * 2)        // highlight near the moving head
+        v = Math.min(255, v + Math.round(near * phrasing * energy * 170))
+      }
+      frames[f][ch] = v
+    }
+  }
 }
 
 // Core engine — takes raw channel data. Works in the browser and on the server.
@@ -270,6 +304,9 @@ export function analyzePCM(
     })
     return frame
   })
+
+  // Phase 2: layer beat-synced phrasing (ping-pong + sweep) over the reactive base.
+  applyPhrasing(frames, totalC, bpm, FPS, zones, P.phrasing, triggerFrames.size ? Math.min(...triggerFrames) : 0)
 
   // Phase 3: auto-choreograph closures to the song structure (opt-in per show).
   if (opts?.autoClosures && opts.model) choreographClosures(frames, totalC, FPS, opts.model, zones, P.closureSections)
