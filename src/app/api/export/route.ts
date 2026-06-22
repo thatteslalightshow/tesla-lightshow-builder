@@ -2,8 +2,32 @@ import { NextResponse } from 'next/server'
 import { getAdminClient, type TeslaModel } from '@/lib/supabase'
 import { getAuthedUser } from '@/lib/auth'
 import { getChannelCount, generateFrames, buildEditFrames, hasEdits, MODELS, FPS, STEP_MS, type EditData } from '@/lib/tesla-channels'
+import { analyzePCM } from '@/lib/audio-analysis'
 import { sendExportDownload } from '@/lib/email'
 import JSZip from 'jszip'
+
+// Decode a 16-bit PCM WAV into L/R sample data so the SAME spectral analysis that
+// drives the live preview also drives the exported file (matches the song on-car).
+function decodeWavPCM(buf: ArrayBuffer): { L: Float32Array; R: Float32Array; sampleRate: number } | null {
+  const dv = new DataView(buf)
+  if (dv.byteLength < 44 || dv.getUint32(0, false) !== 0x52494646 || dv.getUint32(8, false) !== 0x57415645) return null
+  let off = 12, channels = 0, sampleRate = 0, bits = 0, dataOff = -1, dataLen = 0
+  while (off + 8 <= dv.byteLength) {
+    const id = dv.getUint32(off, false), sz = dv.getUint32(off + 4, true)
+    if (id === 0x666d7420) { channels = dv.getUint16(off + 10, true); sampleRate = dv.getUint32(off + 12, true); bits = dv.getUint16(off + 22, true) }
+    else if (id === 0x64617461) { dataOff = off + 8; dataLen = sz }
+    off += 8 + sz + (sz & 1)
+  }
+  if (dataOff < 0 || bits !== 16 || channels < 1 || sampleRate < 8000) return null
+  const n = Math.floor(dataLen / 2 / channels)
+  const L = new Float32Array(n), R = new Float32Array(n)
+  let p = dataOff
+  for (let i = 0; i < n; i++) {
+    L[i] = dv.getInt16(p, true) / 32768; p += 2
+    if (channels > 1) { R[i] = dv.getInt16(p, true) / 32768; p += 2 } else R[i] = L[i]
+  }
+  return { L, R, sampleRate }
+}
 
 const MODEL_LABELS: Record<string, string> = {
   model3: 'Model 3', modelY: 'Model Y', modelS: 'Model S',
@@ -100,21 +124,28 @@ export async function POST(req: Request) {
     }
   }
   const durationSec = wavDurationSec ?? audioRecord?.duration_sec ?? show.duration_sec ?? 30
-  const frames = Math.round(durationSec * FPS)
   const channels = getChannelCount(show.tesla_model as TeslaModel)
   const bpm = show.bpm ?? 120
+  const modelDef = MODELS[show.tesla_model as TeslaModel]
 
-  // Manual timeline edits (light beats + closure commands) take priority over
-  // the auto-generated style; tile the edited loop across the full duration.
+  // Priority: manual timeline edits > music-reactive analysis (from the WAV) >
+  // generic style. The analysis is the SAME engine the live preview uses, so the
+  // exported file matches what the user heard/saw.
   const editData = show.edit_data as EditData | null
   let frameData: Uint8Array[]
   if (hasEdits(editData)) {
+    const frames = Math.round(durationSec * FPS)
     const loop = buildEditFrames(editData!, bpm, channels)
     frameData = Array.from({ length: frames }, (_, f) => loop[f % loop.length])
   } else {
-    frameData = generateFrames(show.style, show.intensity, bpm, frames, MODELS[show.tesla_model as TeslaModel])
+    const wav = audioBytes ? decodeWavPCM(audioBytes) : null
+    if (wav) {
+      frameData = analyzePCM(wav.L, wav.R, wav.sampleRate, modelDef.zones, channels).frames
+    } else {
+      frameData = generateFrames(show.style, show.intensity, bpm, Math.round(durationSec * FPS), modelDef)
+    }
   }
-  const fseq = buildFseq(channels, frames, Math.round(STEP_MS), frameData)
+  const fseq = buildFseq(channels, frameData.length, Math.round(STEP_MS), frameData)
 
   // ── Build ZIP ─────────────────────────────────────────────────────────────
   const zip = new JSZip()
