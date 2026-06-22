@@ -353,55 +353,65 @@ function buildMeshLights(
   bodyBox: THREE.Box3,
   fullBox: THREE.Box3,
 ): LightObj[] | null {
-  const lightsMesh = gltfScene.getObjectByName('Lights');
-  if (!(lightsMesh instanceof THREE.Mesh)) return null;
-  lightsMesh.updateWorldMatrix(true, false);
-  const m4 = lightsMesh.matrixWorld;
-  const geo = lightsMesh.geometry as THREE.BufferGeometry;
-  const pos = geo.attributes.position as THREE.BufferAttribute;
-  const idx = geo.index;
-  const triN = idx ? idx.count / 3 : pos.count / 3;
-  if (triN < 1) return null;
+  // Collect the car's real lens meshes: a single 'Lights' mesh (Model S) OR
+  // light-named nodes like headlight/backlight/tail (other models). Match the
+  // mesh's own name or any ancestor's name.
+  const LIGHT_RX = /light|lamp/i;
+  const lightMeshes: THREE.Mesh[] = [];
+  gltfScene.traverse(obj => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    for (let n: THREE.Object3D | null = obj; n; n = n.parent) {
+      if (n.name && LIGHT_RX.test(n.name)) { lightMeshes.push(obj); break; }
+    }
+  });
+  if (!lightMeshes.length) return null;
 
   const bc = bodyBox.getCenter(new THREE.Vector3());
   const bs = bodyBox.getSize(new THREE.Vector3());
   const minY = fullBox.min.y, fullH = fullBox.max.y - fullBox.min.y;
-  const ti = (t: number, k: number) => (idx ? idx.getX(t * 3 + k) : t * 3 + k);
   const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3(), cen = new THREE.Vector3();
 
-  // Assign each triangle to its nearest channel; collect vertex indices per channel.
+  // Assign each triangle to its nearest channel; collect WORLD-space vertex coords
+  // per channel (meshes may have different world matrices, so we bake positions).
   const buckets = new Map<number, number[]>();
-  for (let t = 0; t < triN; t++) {
-    const i0 = ti(t, 0), i1 = ti(t, 1), i2 = ti(t, 2);
-    vA.fromBufferAttribute(pos, i0).applyMatrix4(m4);
-    vB.fromBufferAttribute(pos, i1).applyMatrix4(m4);
-    vC.fromBufferAttribute(pos, i2).applyMatrix4(m4);
-    cen.copy(vA).add(vB).add(vC).multiplyScalar(1 / 3);
-    const nx = (cen.x - bc.x) / (bs.x / 2);
-    const ny = (cen.y - minY) / fullH;
-    const nz = (cen.z - bc.z) / (bs.z / 2);
-    let best = -1, bestD = Infinity;
-    for (const c of channels) {
-      const dx = nx - c.nx, dy = (ny - c.ny) * 0.6, dz = nz - c.nz;
-      const d = dx * dx + dy * dy + dz * dz;
-      if (d < bestD) { bestD = d; best = c.ch; }
+  for (const mesh of lightMeshes) {
+    mesh.updateWorldMatrix(true, false);
+    const m4 = mesh.matrixWorld;
+    const geo = mesh.geometry as THREE.BufferGeometry;
+    const pos = geo.attributes.position as THREE.BufferAttribute;
+    const idx = geo.index;
+    const triN = idx ? idx.count / 3 : pos.count / 3;
+    const ti = (t: number, k: number) => (idx ? idx.getX(t * 3 + k) : t * 3 + k);
+    for (let t = 0; t < triN; t++) {
+      vA.fromBufferAttribute(pos, ti(t, 0)).applyMatrix4(m4);
+      vB.fromBufferAttribute(pos, ti(t, 1)).applyMatrix4(m4);
+      vC.fromBufferAttribute(pos, ti(t, 2)).applyMatrix4(m4);
+      cen.copy(vA).add(vB).add(vC).multiplyScalar(1 / 3);
+      const nx = (cen.x - bc.x) / (bs.x / 2);
+      const ny = (cen.y - minY) / fullH;
+      const nz = (cen.z - bc.z) / (bs.z / 2);
+      let best = -1, bestD = Infinity;
+      for (const c of channels) {
+        const dx = nx - c.nx, dy = (ny - c.ny) * 0.6, dz = nz - c.nz;
+        const d = dx * dx + dy * dy + dz * dz;
+        if (d < bestD) { bestD = d; best = c.ch; }
+      }
+      let arr = buckets.get(best);
+      if (!arr) { arr = []; buckets.set(best, arr); }
+      arr.push(vA.x, vA.y, vA.z, vB.x, vB.y, vB.z, vC.x, vC.y, vC.z);
     }
-    const arr = buckets.get(best);
-    if (arr) arr.push(i0, i1, i2); else buckets.set(best, [i0, i1, i2]);
   }
 
   const out: LightObj[] = [];
-  buckets.forEach((idxs, ch) => {
+  buckets.forEach((coords, ch) => {
     const chan = channels.find(c => c.ch === ch);
     if (!chan) return;
-    const positions = new Float32Array(idxs.length * 3);
-    const v = new THREE.Vector3(); const center = new THREE.Vector3();
-    for (let k = 0; k < idxs.length; k++) {
-      v.fromBufferAttribute(pos, idxs[k]).applyMatrix4(m4);
-      positions[k * 3] = v.x; positions[k * 3 + 1] = v.y; positions[k * 3 + 2] = v.z;
-      center.add(v);
-    }
-    center.multiplyScalar(1 / idxs.length);
+    // <3 triangles (27 floats) = a stray; leave uncovered.
+    if (coords.length < 27) return;
+    const positions = new Float32Array(coords);
+    const center = new THREE.Vector3();
+    for (let k = 0; k < coords.length; k += 3) { center.x += coords[k]; center.y += coords[k + 1]; center.z += coords[k + 2]; }
+    center.multiplyScalar(3 / coords.length);
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     g.computeVertexNormals();
@@ -668,6 +678,21 @@ export default function TeslaScene({
           // Re-measure after rotation so scale uses the true car length
           box = new THREE.Box3().setFromObject(gltfScene);
           size = box.getSize(new THREE.Vector3());
+        }
+
+        // ── Step 2b: front/back — ensure headlights face +X (front) ─────────────
+        // The generic orient can leave a model backwards. If the car exposes a
+        // headlight node and it ends up at -X, flip 180°. Uses real geometry, so
+        // it's model-agnostic (models without a headlight node are unaffected).
+        const hls: THREE.Object3D[] = [];
+        gltfScene.traverse(o => { if (o.name && /head\s*light/i.test(o.name)) hls.push(o); });
+        if (hls.length) {
+          const hc = new THREE.Box3().setFromObject(hls[0]).getCenter(new THREE.Vector3());
+          if (hc.x < 0) {
+            gltfScene.rotation.y += Math.PI;
+            box = new THREE.Box3().setFromObject(gltfScene);
+            size = box.getSize(new THREE.Vector3());
+          }
         }
 
         // ── Step 3: scale so car length (X after orientation fix) = bodyL ────────
