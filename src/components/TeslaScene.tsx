@@ -524,42 +524,6 @@ function buildModelSClosures(gltfScene: THREE.Group, scene: THREE.Scene): Closur
   return out;
 }
 
-// ─── Model Y closures: fold the side mirrors ─────────────────────────────────────
-// Real Tesla Model Y light shows actuate mirrors / windows / charge port / liftgate
-// — NOT doors (so the timeline offers no door channel). This model only exposes
-// separable side mirrors, so we fold those (ch 34/35). The two side mirrors are
-// nodes named *mirror* out at the sides; a third 'mirror' node is the interior
-// rear-view at the centre — skipped by the |z| filter.
-function buildModelYClosures(gltfScene: THREE.Group, scene: THREE.Scene): ClosureObj[] {
-  const out: ClosureObj[] = [];
-  const worldBox = (o: THREE.Object3D) => new THREE.Box3().setFromObject(o);
-
-  // Outermost mirror nodes only (skip mirror meshes nested under a mirror group).
-  const mirrorNodes: THREE.Object3D[] = [];
-  gltfScene.traverse(o => {
-    if (!o.name || !/mirror/i.test(o.name)) return;
-    for (let a = o.parent; a; a = a.parent) if (a.name && /mirror/i.test(a.name)) return;
-    mirrorNodes.push(o);
-  });
-
-  for (const node of mirrorNodes) {
-    const b = worldBox(node);
-    if (b.min.x >= b.max.x) continue;
-    const c = b.getCenter(new THREE.Vector3());
-    if (Math.abs(c.z) < 0.25) continue;               // interior rear-view mirror → skip
-    const side: 1 | -1 = c.z >= 0 ? 1 : -1;           // right (+z) / left (-z)
-    const ch = side > 0 ? 35 : 34;                    // mirror_r : mirror_l
-    // Hinge at the inner (body-side) vertical edge; fold inward.
-    const innerZ = Math.abs(b.min.z) < Math.abs(b.max.z) ? b.min.z : b.max.z;
-    const pivot = new THREE.Group();
-    pivot.position.set(c.x, c.y, innerZ);
-    scene.add(pivot);
-    pivot.attach(node);
-    out.push({ ch, open: 0, apply: o => { pivot.rotation.y = side * 1.3 * o; } });
-  }
-  return out;
-}
-
 // bytes: 0 idle · 63 open · 127 dance · 191 close · 255 stop → target openness
 function closureTarget(byte: number, tSec: number): number {
   if (byte < 32) return 0;                          // idle
@@ -827,7 +791,6 @@ export default function TeslaScene({
         }
         // Model S exports real, separable panels — animate them directly.
         if (teslaModel === 'modelS') closureObjsRef.current = buildModelSClosures(gltfScene, scene);
-        else if (teslaModel === 'modelY') closureObjsRef.current = buildModelYClosures(gltfScene, scene);
         renderer.shadowMap.needsUpdate = true;  // re-render shadows now the car is in
         setGltfStatus('loaded');
       },
