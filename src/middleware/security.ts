@@ -55,6 +55,7 @@ export async function middleware(req: NextRequest) {
   Object.entries(SECURITY_HEADERS).forEach(([k, v]) => res.headers.set(k, v))
 
   const origin = req.headers.get('origin') || ''
+  const host = req.headers.get('host') || ''
   const allowedOrigins = [
     process.env.NEXT_PUBLIC_APP_URL || '',
     'http://localhost:3000',
@@ -62,11 +63,20 @@ export async function middleware(req: NextRequest) {
     'http://localhost',
   ].filter(Boolean)
 
+  // A page calling its own API is same-origin and always allowed. This covers
+  // production, Vercel preview deployments, and custom domains without pinning
+  // every URL in the allowlist (which only needs explicit cross-origin callers
+  // like the Capacitor mobile shell). Without this, a mismatch between the
+  // visited URL and NEXT_PUBLIC_APP_URL 403s every same-origin /api request.
+  let sameOrigin = false
+  try { sameOrigin = !!origin && new URL(origin).host === host } catch { sameOrigin = false }
+  const originAllowed = sameOrigin || allowedOrigins.includes(origin)
+
   if (req.method === 'OPTIONS') {
     return new NextResponse(null, {
       status: 204,
       headers: {
-        'Access-Control-Allow-Origin': allowedOrigins.includes(origin) ? origin : '',
+        'Access-Control-Allow-Origin': originAllowed ? origin : '',
         'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         'Access-Control-Max-Age': '86400',
@@ -75,7 +85,7 @@ export async function middleware(req: NextRequest) {
   }
 
   if (req.nextUrl.pathname.startsWith('/api/')) {
-    if (origin && !allowedOrigins.includes(origin)) {
+    if (origin && !originAllowed) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
