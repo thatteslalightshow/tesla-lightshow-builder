@@ -37,22 +37,31 @@ export async function POST(req: Request) {
   catch { body = {} }
 
   const plan = PLANS[body.plan ?? 'monthly']
-  const priceId = await getOrCreatePrice(plan)
-
   const origin = req.headers.get('origin') ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
-  const checkoutSession = await stripe.checkout.sessions.create({
-    mode: 'subscription',
-    line_items: [{ price: priceId, quantity: 1 }],
-    metadata: { user_id: user.id },
-    customer_email: user.email ?? undefined,
-    success_url: `${origin}/dashboard?subscription_success=1`,
-    cancel_url: `${origin}/dashboard?subscription_cancelled=1`,
-    allow_promotion_codes: true,
-    subscription_data: {
-      metadata: { user_id: user.id },
-    },
-  })
+  try {
+    const priceId = await getOrCreatePrice(plan)
 
-  return NextResponse.json({ url: checkoutSession.url })
+    const checkoutSession = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      line_items: [{ price: priceId, quantity: 1 }],
+      metadata: { user_id: user.id },
+      customer_email: user.email ?? undefined,
+      success_url: `${origin}/dashboard?subscription_success=1`,
+      cancel_url: `${origin}/dashboard?subscription_cancelled=1`,
+      allow_promotion_codes: true,
+      subscription_data: {
+        metadata: { user_id: user.id },
+      },
+    })
+
+    return NextResponse.json({ url: checkoutSession.url })
+  } catch (e) {
+    // Surface the real Stripe error (e.g. account not activated for live mode,
+    // restricted key) so the UI can show why checkout failed instead of the
+    // button silently doing nothing.
+    console.error('subscription checkout failed:', e)
+    const message = e instanceof Error ? e.message : 'Could not start checkout'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 }
