@@ -1051,12 +1051,14 @@ function BuilderInner() {
     setExporting(true);
     setCheckoutMsg('');
 
-    // If the show isn't saved yet, save it first so Stripe can reference it
-    let showId = savedShowId;
-    if (!showId) {
-      showId = await save();
-      if (!showId) { setSaveMsg('Save failed — please try again.'); setExporting(false); return; }
-    }
+    // Always persist the current builder state before exporting. The server
+    // /api/export reads edit_data from the DB, so any change made since the last
+    // save — enabling Auto-choreograph closures, switching the vibe preset,
+    // editing blocks — must be saved first or it won't appear in the exported
+    // show. (Previously this only saved brand-new shows, so toggling closures on
+    // an already-saved show shipped a download with no closures.)
+    const showId = await save();
+    if (!showId) { setSaveMsg('Save failed — please try again.'); setExporting(false); return; }
 
     // Non-admin, non-subscriber, used free export → Stripe per-export checkout
     if (exportCount > 0 && !isAdmin && !isSubscribed) {
