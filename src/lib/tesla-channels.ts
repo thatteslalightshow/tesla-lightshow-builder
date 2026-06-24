@@ -1,6 +1,9 @@
 // Tesla light-show channels — matches the OFFICIAL teslamotors/light-show xLights
 // model (Model S "All Lights and Closures" superset, used for every vehicle).
-// Channel order is authoritative; do not reorder. 48 total (46 named + 2 pad).
+// Channel order is authoritative; do not reorder. 46 named channels (0-45):
+// lights 0-29, closures 30-45. The fseq is padded to 200 channels — the car only
+// ACTUATES closures in the 200-channel format; a 48-channel file plays lights but
+// silently ignores closures. (Verified against Tesla's official 200-ch examples.)
 // Coordinate system: X = front(+)/rear(-), Y = up(+), Z = right(+)/left(-), metres.
 
 import type { TeslaModel, ShowStyle } from '@/lib/supabase'
@@ -8,7 +11,10 @@ import type { TeslaModel, ShowStyle } from '@/lib/supabase'
 // Frame rate. Tesla supports 15–100ms steps; 20ms (50fps) recommended.
 export const FPS = 50
 export const STEP_MS = 1000 / FPS   // 20ms
-export const CHANNEL_COUNT = 48     // Tesla validator requires exactly 48 (or 200)
+// 200 = Tesla's "All Lights and Closures" format. REQUIRED for the car to
+// actuate closures (doors/windows/mirrors/etc.). Data lives in channels 0-45;
+// 46-199 are zero padding. The official validator accepts 48 or 200.
+export const CHANNEL_COUNT = 200
 
 export type LightType =
   | 'headlight' | 'highbeam' | 'drl' | 'fog'
@@ -141,12 +147,12 @@ const CHANNELS: ChannelSpec[] = [
   { index: 36, id: 'window_fl',     label: 'Left Front Window',     type: 'closure', color: C.closure, closure: 'windows', nx: +0.35, ny: 0.78, nz: -0.95 },
   { index: 37, id: 'window_rl',     label: 'Left Rear Window',      type: 'closure', color: C.closure, closure: 'windows', nx: -0.20, ny: 0.78, nz: -0.95 },
   { index: 38, id: 'window_fr',     label: 'Right Front Window',    type: 'closure', color: C.closure, closure: 'windows', nx: +0.35, ny: 0.78, nz: +0.95 },
-  { index: 39, id: 'window_rr',     label: 'Right Rear Window',     type: 'closure', color: C.closure, closure: 'windows', nx: -0.20, ny: 0.78, nz: +0.95 },
+  { index: 39, id: 'handle_rr',     label: 'Right Rear Door Handle', type: 'closure', color: C.closure, closure: 'door_handles', nx: -0.20, ny: 0.55, nz: +0.97 },
   { index: 40, id: 'liftgate',      label: 'Liftgate',              type: 'closure', color: C.closure, closure: 'liftgate', nx: -0.92, ny: 0.82, nz: +0.00 },
   { index: 41, id: 'handle_fl',     label: 'Left Front Door Handle',  type: 'closure', color: C.closure, closure: 'door_handles', nx: +0.35, ny: 0.55, nz: -0.97 },
   { index: 42, id: 'handle_rl',     label: 'Left Rear Door Handle',   type: 'closure', color: C.closure, closure: 'door_handles', nx: -0.20, ny: 0.55, nz: -0.97 },
   { index: 43, id: 'handle_fr',     label: 'Right Front Door Handle', type: 'closure', color: C.closure, closure: 'door_handles', nx: +0.35, ny: 0.55, nz: +0.97 },
-  { index: 44, id: 'handle_rr',     label: 'Right Rear Door Handle',  type: 'closure', color: C.closure, closure: 'door_handles', nx: -0.20, ny: 0.55, nz: +0.97 },
+  { index: 44, id: 'window_rr',     label: 'Right Rear Window',       type: 'closure', color: C.closure, closure: 'windows', nx: -0.20, ny: 0.78, nz: +0.95 },
   { index: 45, id: 'charge_port',   label: 'Charge Port',           type: 'closure', color: C.closure, closure: 'charge_port', nx: -0.80, ny: 0.50, nz: -0.90 },
 ]
 
