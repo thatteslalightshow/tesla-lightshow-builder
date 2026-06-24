@@ -271,7 +271,12 @@ export default function DashboardPage() {
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                   <div>
                     <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15, marginBottom: 3 }}>{show.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{modelLabels[show.tesla_model] ?? show.tesla_model}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      {modelLabels[show.tesla_model] ?? show.tesla_model}
+                      {show.source_show_id && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 10, background: 'rgba(157,107,255,0.15)', border: '1px solid rgba(157,107,255,0.35)', color: '#b89bff', letterSpacing: '.02em' }}>FROM COMMUNITY</span>
+                      )}
+                    </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                     <span className="badge badge-red">{styleLabels[show.style] ?? show.style}</span>

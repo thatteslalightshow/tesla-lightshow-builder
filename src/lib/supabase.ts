@@ -31,6 +31,7 @@ export interface Show {
   like_count:   number
   song_title:   string | null
   song_artist:  string | null
+  source_show_id: string | null  // set when this show was acquired from a community show
   created_at:   string
   updated_at:   string
 }
