@@ -26,7 +26,9 @@ async function listAllFiles(admin: ReturnType<typeof getAdminClient>, prefix = '
       if (e.id === null) {
         out.push(...await listAllFiles(admin, full))           // folder → recurse
       } else {
-        out.push({ path: full, size: (e.metadata?.size as number) ?? 0, createdAt: new Date(e.created_at).getTime() })
+        // Unknown created_at → treat as brand-new (Date.now()) so the grace
+        // window never lets us delete a file whose age we can't verify.
+        out.push({ path: full, size: (e.metadata?.size as number) ?? 0, createdAt: e.created_at ? new Date(e.created_at).getTime() : Date.now() })
       }
     }
     if (data.length < 1000) break
