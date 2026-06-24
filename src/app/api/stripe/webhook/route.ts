@@ -94,7 +94,8 @@ async function upsertSubscription(
   const item = sub.items?.data?.[0]
   const priceId = item?.price?.id ?? null
   const lookupKey = item?.price?.lookup_key ?? null
-  const plan = lookupKey === 'creator_yearly' ? 'creator_yearly' : 'creator_monthly'
+  // Store the tier from the lookup key; handles both old and _v2 keys.
+  const plan = lookupKey?.startsWith('creator_yearly') ? 'creator_yearly' : 'creator_monthly'
 
   // current_period_end lives on the subscription (older API versions) OR on the
   // line item (newer versions). Read whichever exists; never throw on a bad value.

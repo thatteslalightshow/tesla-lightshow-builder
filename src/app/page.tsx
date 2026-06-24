@@ -304,8 +304,8 @@ export default function Home() {
             <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,#e8404a,#ff6030)' }} />
             <div style={{ position:'absolute', top:14, right:14, fontSize:9, fontWeight:700, letterSpacing:'.05em', color:'#fff', background:'#e8404a', padding:'3px 8px', borderRadius:10 }}>BEST VALUE</div>
             <div style={{ fontSize:12, fontWeight:600, letterSpacing:'.12em', color:'#e8404a', textTransform:'uppercase', marginBottom:20 }}>Creator</div>
-            <div style={{ fontFamily:'var(--font-display)', fontSize:'3.2rem', fontWeight:700, letterSpacing:'-2px', marginBottom:4 }}>$4.99<span style={{ fontSize:'1rem', fontWeight:500, color:'rgba(255,255,255,0.3)', letterSpacing:0 }}>/mo</span></div>
-            <div style={{ fontSize:13, color:'rgba(255,255,255,0.3)', marginBottom:'2rem', paddingBottom:'2rem', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>or $39.99/yr — save 33%</div>
+            <div style={{ fontFamily:'var(--font-display)', fontSize:'3.2rem', fontWeight:700, letterSpacing:'-2px', marginBottom:4 }}>$6.99<span style={{ fontSize:'1rem', fontWeight:500, color:'rgba(255,255,255,0.3)', letterSpacing:0 }}>/mo</span></div>
+            <div style={{ fontSize:13, color:'rgba(255,255,255,0.3)', marginBottom:'2rem', paddingBottom:'2rem', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>or $49.99/yr — save 40%</div>
             {['Everything in Per Export','Unlimited exports','Email delivery','Remix any public show','Cancel anytime'].map(f=>(
               <div key={f} style={{ display:'flex', gap:10, fontSize:14, color:'rgba(255,255,255,0.5)', marginBottom:10, alignItems:'center' }}>
                 <span style={{ color:'#00e887', fontSize:12 }}>✓</span>{f}

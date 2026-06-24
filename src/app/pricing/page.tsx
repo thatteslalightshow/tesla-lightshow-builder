@@ -5,7 +5,7 @@ import BrandLogo from '@/components/BrandLogo'
 
 export const metadata: Metadata = {
   title: 'Pricing',
-  description: 'Build and preview Tesla light shows free. Pay $2.99 per export, or go unlimited with Creator at $4.99/mo.',
+  description: 'Build and preview Tesla light shows free. Pay $2.99 per export, or go unlimited with Creator at $6.99/mo.',
 }
 
 const FREE_FEATURES = [
@@ -42,7 +42,7 @@ const FAQ = [
   },
   {
     q: 'Should I pay per export or subscribe?',
-    a: 'If you only need a show or two, pay $2.99 per export — no commitment. If you create regularly (new shows for holidays, meetups, seasons), Creator at $4.99/mo pays for itself after two exports a month, and the annual plan ($39.99/yr) is the best value.',
+    a: 'If you only need a show or two, pay $2.99 per export — no commitment. If you create regularly (new shows for holidays, meetups, seasons), Creator at $6.99/mo pays for itself after about three shows a month, and the annual plan ($49.99/yr — save 40%) is the best value.',
   },
   {
     q: 'Can I cancel the Creator subscription anytime?',
@@ -138,10 +138,10 @@ export default function PricingPage() {
             <div style={{ position: 'absolute', top: 14, right: 14, fontSize: 10, fontWeight: 700, letterSpacing: '.05em', color: '#fff', background: 'var(--red)', padding: '3px 8px', borderRadius: 10 }}>BEST VALUE</div>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, color: 'var(--red)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 18 }}>Creator</div>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, marginBottom: 6 }}>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: '2.6rem', fontWeight: 700, lineHeight: 1 }}>$4.99</span>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: '2.6rem', fontWeight: 700, lineHeight: 1 }}>$6.99</span>
               <span style={{ fontSize: 14, color: 'var(--muted)', paddingBottom: 6 }}>/ month</span>
             </div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: '1.75rem' }}>or $39.99/year — save 33%</div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: '1.75rem' }}>or $49.99/year — save 40%</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: '1.75rem' }}>
               {CREATOR_FEATURES.map(f => <Feature key={f} text={f} />)}
             </div>
@@ -157,7 +157,7 @@ export default function PricingPage() {
             Start free. Upgrade only if you love it.
           </div>
           <p style={{ color: 'var(--muted)', fontSize: 14, maxWidth: 520, margin: '0 auto', lineHeight: 1.7 }}>
-            Every account gets a free export to try the whole flow end to end. Pay $2.99 for the occasional show, or subscribe to Creator once you&apos;re building regularly — two exports a month already beats per-export pricing.
+            Every account gets a free export to try the whole flow end to end. Pay $2.99 for the occasional show, or subscribe to Creator once you&apos;re building regularly — about three shows a month already beats per-export pricing.
           </p>
         </div>
 

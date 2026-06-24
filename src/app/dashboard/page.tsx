@@ -210,7 +210,7 @@ export default function DashboardPage() {
                     }}
                     className="btn btn-ghost btn-sm" style={{ borderColor: 'rgba(80,160,255,0.3)', color: 'rgba(80,160,255,0.85)' }}
                   >
-                    $4.99/mo
+                    $6.99/mo
                   </button>
                   <button
                     onClick={async () => {
@@ -224,7 +224,7 @@ export default function DashboardPage() {
                     }}
                     className="btn btn-primary btn-sm"
                   >
-                    $39.99/yr — best value
+                    $49.99/yr — best value
                   </button>
                 </div>
               </>

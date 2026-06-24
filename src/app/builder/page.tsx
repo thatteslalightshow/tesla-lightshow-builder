@@ -1703,10 +1703,10 @@ function BuilderInner() {
               style={{ width: '100%', textAlign: 'left', padding: '12px 14px', marginBottom: 10, borderRadius: 10, background: 'var(--red)', border: '1px solid var(--red)', color: '#fff', cursor: payBusy ? 'default' : 'pointer', opacity: payBusy && payBusy !== 'yearly' ? 0.5 : 1 }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700, fontSize: 14 }}>{payBusy === 'yearly' ? 'Redirecting…' : 'Go Unlimited — $39.99/yr'}</span>
+                <span style={{ fontWeight: 700, fontSize: 14 }}>{payBusy === 'yearly' ? 'Redirecting…' : 'Go Unlimited — $49.99/yr'}</span>
                 <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(255,255,255,0.22)', padding: '2px 7px', borderRadius: 20 }}>BEST VALUE</span>
               </div>
-              <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>Unlimited exports · save 33%</div>
+              <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>Unlimited exports · save 40%</div>
             </button>
 
             {/* Monthly */}
@@ -1715,7 +1715,7 @@ function BuilderInner() {
               disabled={!!payBusy}
               style={{ width: '100%', textAlign: 'left', padding: '12px 14px', marginBottom: 10, borderRadius: 10, background: 'rgba(80,160,255,0.1)', border: '1px solid rgba(80,160,255,0.4)', color: 'var(--text)', cursor: payBusy ? 'default' : 'pointer', opacity: payBusy && payBusy !== 'monthly' ? 0.5 : 1 }}
             >
-              <div style={{ fontWeight: 700, fontSize: 14 }}>{payBusy === 'monthly' ? 'Redirecting…' : 'Unlimited — $4.99/mo'}</div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{payBusy === 'monthly' ? 'Redirecting…' : 'Unlimited — $6.99/mo'}</div>
               <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Export as many shows as you want</div>
             </button>
 
