@@ -29,6 +29,8 @@ export default function DashboardPage() {
       setEmail(session.user.email ?? '');
       setUserId(session.user.id);
       loadShows();
+      // Record coarse location once (country/region; no IP). Fire-and-forget.
+      fetch('/api/geo/track', { method: 'POST' }).catch(() => null);
       const [{ data: profile }, { data: sub }] = await Promise.all([
         supabase.from('profiles').select('is_admin, display_name').eq('id', session.user.id).single(),
         supabase.from('subscriptions').select('status, plan, current_period_end').eq('user_id', session.user.id).in('status', ['active', 'trialing', 'past_due']).maybeSingle(),

@@ -74,6 +74,7 @@ export default async function AdminPage() {
     { data: purchaseUsers },
     { count: acquiredCount },
     { data: sweeps },
+    { data: profileGeo },
   ] = await Promise.all([
     db.from('profiles').select('*', { count: 'exact', head: true }),
     db.from('shows').select('*', { count: 'exact', head: true }),
@@ -88,6 +89,7 @@ export default async function AdminPage() {
     db.from('show_purchases').select('user_id'),
     db.from('shows').select('*', { count: 'exact', head: true }).not('source_show_id', 'is', null),
     db.from('storage_sweeps').select('*').order('run_at', { ascending: false }).limit(10),
+    db.from('profiles').select('country, region'),
   ])
 
   const revenue = (purchases ?? []).reduce((sum, p) => sum + (p.amount_cents ?? 0), 0)
@@ -104,6 +106,16 @@ export default async function AdminPage() {
   ;(allShows ?? []).forEach(s => {
     modelCounts[s.tesla_model] = (modelCounts[s.tesla_model] ?? 0) + 1
     styleCounts[s.style] = (styleCounts[s.style] ?? 0) + 1
+  })
+
+  // Where users are (coarse geo). profileGeo is null until the country/region
+  // migration is run — handled gracefully (empty).
+  const regionCounts: Record<string, number> = {}
+  ;(profileGeo as { country?: string | null; region?: string | null }[] | null ?? []).forEach(p => {
+    if (p?.country) {
+      const key = p.region ? `${p.country} · ${p.region}` : p.country
+      regionCounts[key] = (regionCounts[key] ?? 0) + 1
+    }
   })
 
   const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
@@ -153,6 +165,19 @@ export default async function AdminPage() {
             Finds audio files no show references (orphans), older than the grace window. A dry-run reports what would be removed; cleanup moves them to <code>trash/</code> (recoverable 30 days). The quarterly cron logs dry-run reports automatically.
           </p>
           <AdminSweepPanel initial={sweeps ?? []} />
+        </section>
+
+        {/* Where users are (coarse geo) */}
+        <section style={{ padding: '1.5rem', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Where users are</div>
+          <div style={{ fontSize: 12, color: 'var(--muted2)', marginBottom: 16 }}>Coarse location (country · region), captured once per user. No IP stored. Anonymous traffic geo is in your Vercel Analytics.</div>
+          {Object.entries(regionCounts).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([r, n]) => (
+            <div key={r} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 13 }}>
+              <span style={{ color: 'var(--muted)' }}>{r}</span>
+              <span style={{ fontWeight: 600 }}>{n}</span>
+            </div>
+          ))}
+          {Object.keys(regionCounts).length === 0 && <div style={{ fontSize: 13, color: 'var(--muted2)' }}>No location data yet — it&apos;s collected as users visit after the migration is run.</div>}
         </section>
 
         {/* Breakdowns */}
