@@ -5,6 +5,7 @@ import { getAdminClient } from '@/lib/supabase'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import AdminSweepPanel from './AdminSweepPanel'
+import { fetchRecentSentryIssues } from '@/lib/sentry-issues'
 
 export const metadata: Metadata = { title: 'Admin' }
 export const revalidate = 0
@@ -118,6 +119,9 @@ export default async function AdminPage() {
     }
   })
 
+  // Recent Sentry errors (null = not configured → show connect prompt).
+  const sentryIssues = await fetchRecentSentryIssues()
+
   const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
 
   return (
@@ -178,6 +182,39 @@ export default async function AdminPage() {
             </div>
           ))}
           {Object.keys(regionCounts).length === 0 && <div style={{ fontSize: 13, color: 'var(--muted2)' }}>No location data yet — it&apos;s collected as users visit after the migration is run.</div>}
+        </section>
+
+        {/* Recent errors (Sentry) */}
+        <section>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em' }}>Recent errors</div>
+            <a href="https://us.sentry.io/organizations/thatteslalightshow/issues/" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: 'var(--muted)' }}>Open in Sentry →</a>
+          </div>
+          {sentryIssues === null ? (
+            <div style={{ padding: '1.25rem', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', fontSize: 13, color: 'var(--muted)' }}>
+              Not connected. Add a Sentry read-only API token as <code>SENTRY_AUTH_TOKEN</code> to show recent errors here.
+            </div>
+          ) : sentryIssues.length === 0 ? (
+            <div style={{ padding: '1.25rem', background: 'var(--bg2)', border: '1px solid rgba(0,232,135,0.2)', borderRadius: 'var(--radius-lg)', fontSize: 13, color: 'var(--muted)' }}>
+              ✓ No unresolved errors in the last 14 days.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {sentryIssues.map(issue => (
+                <a key={issue.id} href={issue.permalink} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 16px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, textDecoration: 'none' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{issue.title}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{issue.culprit}</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, fontSize: 12, color: 'var(--muted)' }}>
+                    <span style={{ padding: '2px 8px', borderRadius: 20, background: issue.level === 'error' || issue.level === 'fatal' ? 'rgba(232,64,74,0.15)' : 'rgba(255,255,255,0.06)', color: issue.level === 'error' || issue.level === 'fatal' ? '#ff8a8a' : 'var(--muted)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{issue.level ?? 'error'}</span>
+                    <span>{issue.count ?? 0}×</span>
+                    <span>{issue.lastSeen ? new Date(issue.lastSeen).toLocaleDateString() : ''}</span>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Breakdowns */}
