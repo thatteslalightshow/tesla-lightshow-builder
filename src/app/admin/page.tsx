@@ -4,6 +4,7 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { getAdminClient } from '@/lib/supabase'
 import Link from 'next/link'
 import type { Metadata } from 'next'
+import AdminSweepPanel from './AdminSweepPanel'
 
 export const metadata: Metadata = { title: 'Admin' }
 export const revalidate = 0
@@ -69,6 +70,10 @@ export default async function AdminPage() {
     { data: recentShows },
     { data: recentPurchases },
     { data: allShows },
+    { data: activeSubs },
+    { data: purchaseUsers },
+    { count: acquiredCount },
+    { data: sweeps },
   ] = await Promise.all([
     db.from('profiles').select('*', { count: 'exact', head: true }),
     db.from('shows').select('*', { count: 'exact', head: true }),
@@ -79,10 +84,19 @@ export default async function AdminPage() {
     db.from('shows').select('id, name, tesla_model, style, is_public, created_at').order('created_at', { ascending: false }).limit(15),
     db.from('show_purchases').select('stripe_session_id, amount_cents, created_at, show_id').order('created_at', { ascending: false }).limit(10),
     db.from('shows').select('tesla_model, style'),
+    db.from('subscriptions').select('user_id').in('status', ['active', 'trialing']),
+    db.from('show_purchases').select('user_id'),
+    db.from('shows').select('*', { count: 'exact', head: true }).not('source_show_id', 'is', null),
+    db.from('storage_sweeps').select('*').order('run_at', { ascending: false }).limit(10),
   ])
 
   const revenue = (purchases ?? []).reduce((sum, p) => sum + (p.amount_cents ?? 0), 0)
   const revenueStr = `$${(revenue / 100).toFixed(2)}`
+
+  // Conversion: distinct paying users (active sub OR any purchase) over total users.
+  const subscriberCount = new Set((activeSubs ?? []).map(s => s.user_id)).size
+  const payingUsers = new Set([...(activeSubs ?? []).map(s => s.user_id), ...(purchaseUsers ?? []).map(p => p.user_id)]).size
+  const conversionPct = userCount ? ((payingUsers / userCount) * 100).toFixed(1) : '0'
 
   // Model breakdown
   const modelCounts: Record<string, number> = {}
@@ -119,6 +133,26 @@ export default async function AdminPage() {
             <StatCard label="Exports Purchased" value={purchaseCount ?? 0} />
             <StatCard label="Revenue" value={revenueStr} sub={purchaseCount ? `avg $${((revenue / 100) / purchaseCount).toFixed(2)}/export` : undefined} />
           </div>
+        </section>
+
+        {/* Conversion */}
+        <section>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 16 }}>Conversion</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+            <StatCard label="Subscribers" value={subscriberCount} sub="active / trialing" />
+            <StatCard label="Community Acquired" value={acquiredCount ?? 0} sub="shows added from gallery" />
+            <StatCard label="Paying Users" value={payingUsers} sub={`of ${userCount ?? 0} total`} />
+            <StatCard label="Paid Conversion" value={`${conversionPct}%`} sub="paid or subscribed" />
+          </div>
+        </section>
+
+        {/* Storage cleanup */}
+        <section>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 16 }}>Storage cleanup</div>
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16, maxWidth: 660, lineHeight: 1.6 }}>
+            Finds audio files no show references (orphans), older than the grace window. A dry-run reports what would be removed; cleanup moves them to <code>trash/</code> (recoverable 30 days). The quarterly cron logs dry-run reports automatically.
+          </p>
+          <AdminSweepPanel initial={sweeps ?? []} />
         </section>
 
         {/* Breakdowns */}
