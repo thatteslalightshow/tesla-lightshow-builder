@@ -48,6 +48,17 @@ const STYLES: { value: ShowStyle; label: string; desc: string }[] = [
   { value: 'twinkle', label: 'Twinkle', desc: 'Sparkling random shimmer' },
 ];
 
+// Starter templates — a one-tap vibe + style + intensity so new users don't
+// stare at a blank canvas. Each maps to an audio-engine preset (the "vibe").
+const TEMPLATES: { id: string; emoji: string; name: string; desc: string; preset: string; style: ShowStyle; intensity: number }[] = [
+  { id: 'edm',       emoji: '🔊', name: 'EDM Drop',    desc: 'Big builds, explosive drops', preset: 'edm',       style: 'strobe',    intensity: 95 },
+  { id: 'pop',       emoji: '✨', name: 'Pop Party',    desc: 'Bright, bouncy, fun',          preset: 'pop',       style: 'energetic', intensity: 85 },
+  { id: 'hiphop',    emoji: '🎤', name: 'Hip-Hop',      desc: '808-forward, punchy',          preset: 'hiphop',    style: 'pulse',     intensity: 85 },
+  { id: 'rock',      emoji: '🎸', name: 'Rock Anthem',  desc: 'Driving, punchy drums',        preset: 'rock',      style: 'chase',     intensity: 90 },
+  { id: 'cinematic', emoji: '🎬', name: 'Cinematic',    desc: 'Smooth, swelling, elegant',    preset: 'cinematic', style: 'wave',      intensity: 70 },
+  { id: 'holiday',   emoji: '🎄', name: 'Holiday',      desc: 'Festive sparkle',              preset: 'balanced',  style: 'twinkle',   intensity: 80 },
+];
+
 const PREVIEW_DURATION = 30;
 const VISIBLE_BEATS = 16;
 
@@ -615,6 +626,7 @@ function BuilderInner() {
   const [model, setModel] = useState<TeslaModel>('model3');
   const [style, setStyle] = useState<ShowStyle>('energetic');
   const [intensity, setIntensity] = useState(80);
+  const [activeTemplate, setActiveTemplate] = useState<string | null>(null);
   const [bpm, setBpm] = useState(120);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioError, setAudioError] = useState('');
@@ -815,6 +827,15 @@ function BuilderInner() {
   const sceneFrames: Uint8Array[] | null = hasCustom
     ? customBlocksToFrames(customBlocks, VISIBLE_BEATS, bpm, getChannelCount(model), closureBlocks)
     : audioFrames;
+
+  // Apply a starter template — sets the vibe + style + intensity and locks the
+  // vibe so song auto-detection won't override the user's deliberate choice.
+  function applyTemplate(t: typeof TEMPLATES[number]) {
+    setStyle(t.style); setIntensity(t.intensity); setMixPreset(t.preset);
+    vibeUserSet.current = true;
+    setActiveTemplate(t.id);
+    if (!name || name === 'My Light Show') setName(t.name);
+  }
 
   // ── Audio file selection ──────────────────────────────────────────────────
   function onAudioChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1275,6 +1296,25 @@ function BuilderInner() {
       <div className="builder-grid">
         {/* ── Left panel ─────────────────────────────────────────────────── */}
         <aside className="builder-sidebar" style={{ borderRight: '1px solid var(--border)', padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Starter templates — shown before a song is added */}
+          {!audioFile && (
+            <div>
+              <div className="label">Start from a template</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {TEMPLATES.map(t => (
+                  <button key={t.id} onClick={() => applyTemplate(t)}
+                    style={{ textAlign: 'left', padding: '10px 11px', borderRadius: 10, cursor: 'pointer',
+                      background: activeTemplate === t.id ? 'rgba(232,64,74,0.15)' : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${activeTemplate === t.id ? 'rgba(232,64,74,0.45)' : 'var(--border)'}` }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{t.emoji} {t.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 1 }}>{t.desc}</div>
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 8 }}>Pick a vibe, then add your song — or just upload and we&apos;ll auto-detect it.</div>
+            </div>
+          )}
+
           {/* Audio */}
           <div>
             <div className="label">Audio file</div>

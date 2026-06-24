@@ -273,14 +273,24 @@ export function analyzePCM(
   let bpm = 120
   {
     const minLag = Math.round(FPS * 60 / 180), maxLag = Math.round(FPS * 60 / 60)
+    const corrs: number[] = []
     let bestLag = 0, bestCorr = -1
     for (let lag = minLag; lag <= maxLag; lag++) {
       let corr = 0
       for (let f = 0; f + lag < totalFrames; f++) corr += onset[f] * onset[f + lag]
       corr /= (totalFrames - lag)
+      corrs[lag] = corr
       if (corr > bestCorr) { bestCorr = corr; bestLag = lag }
     }
-    if (bestLag > 0) bpm = Math.max(60, Math.min(200, Math.round(60 / (bestLag / FPS))))
+    // Octave correction: autocorrelation favors sub-harmonics — it locks onto the
+    // HALF tempo because every other beat also aligns, so a ~130 BPM song reads as
+    // ~65. If the half-lag (double BPM) still correlates nearly as strongly, that's
+    // the real tempo — prefer it. The 0.80 threshold leaves genuinely slow songs
+    // (where the double-tempo lag is weak) alone.
+    let lag = bestLag
+    const half = Math.round(bestLag / 2)
+    if (half >= minLag && corrs[half] !== undefined && corrs[half] >= bestCorr * 0.80) lag = half
+    if (lag > 0) bpm = Math.max(60, Math.min(200, Math.round(60 / (lag / FPS))))
   }
   const beatFrames = (60 / bpm) * FPS
 
