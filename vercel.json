@@ -1,0 +1,5 @@
+{
+  "crons": [
+    { "path": "/api/admin/storage-sweep", "schedule": "0 9 1 1,4,7,10 *" }
+  ]
+}
