@@ -59,7 +59,7 @@ export default function PrivacyPage() {
       <p>We may update this policy from time to time. We will revise the &quot;last updated&quot; date above, and significant changes will be communicated where appropriate.</p>
 
       <h2>Contact</h2>
-      <p>Questions about this policy? Email us at <strong>support@thatteslalightshow.com</strong>.</p>
+      <p>Questions about this policy, or want to access or delete your data? Reach us on Instagram or TikTok at <strong>@ThatTeslaLightshow</strong>.</p>
     </LegalPage>
   )
 }

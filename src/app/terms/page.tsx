@@ -61,7 +61,7 @@ export default function TermsPage() {
       <p>We may update these terms. We will update the &quot;last updated&quot; date, and continued use after changes means you accept them.</p>
 
       <h2>13. Contact</h2>
-      <p>Questions? Email <strong>support@thatteslalightshow.com</strong>.</p>
+      <p>Questions? Reach us on Instagram or TikTok at <strong>@ThatTeslaLightshow</strong>.</p>
     </LegalPage>
   )
 }

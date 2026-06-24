@@ -20,7 +20,7 @@ export default function FaqPage() {
   return (
     <LegalPage
       title="Frequently asked questions"
-      intro="Everything you need to know about building a show and running it on your Tesla. Still stuck? Check the step-by-step guide or email us."
+      intro="Everything you need to know about building a show and running it on your Tesla. Still stuck? Check the step-by-step guide or reach out to us on social."
     >
       <Q q="What is ThatTeslaLightshow?">
         It&apos;s a web app that builds custom light shows for your Tesla, synced to your music. You pick a song, our engine choreographs the lights (and optionally the doors, windows, and other closures) to the beat, and you export a file package you load onto a USB drive to run on your car.
