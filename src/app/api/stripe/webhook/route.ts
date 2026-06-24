@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { getAdminClient } from '@/lib/supabase'
+import { getAdminClient, type TeslaModel } from '@/lib/supabase'
+import { cloneCommunityShow } from '@/lib/community'
 import { sendExportReceipt } from '@/lib/email'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-05-27.dahlia' })
@@ -33,26 +34,35 @@ export async function POST(req: Request) {
     const session = event.data.object as Stripe.Checkout.Session
 
     if (session.mode === 'payment') {
-      const { show_id, user_id } = session.metadata ?? {}
-      if (show_id && user_id && session.payment_status === 'paid') {
-        await admin.from('show_purchases').insert({
-          user_id, show_id,
-          stripe_session_id: session.id,
-          stripe_payment_intent_id: session.payment_intent,
-          amount_cents: session.amount_total,
-          created_at: new Date().toISOString(),
-        }).then(() => null, () => null)
+      const meta = session.metadata ?? {}
 
-        const email = session.customer_email
-        if (email) {
-          const origin = process.env.NEXT_PUBLIC_APP_URL ?? 'https://lightshowbuilder.com'
-          const { data: show } = await admin.from('shows').select('name, tesla_model').eq('id', show_id).single()
-          await sendExportReceipt({
-            to: email,
-            showName: show?.name ?? 'your show',
-            model: MODEL_LABELS[show?.tesla_model ?? ''] ?? 'Tesla',
-            builderUrl: `${origin}/builder?id=${show_id}&checkout_session=${session.id}`,
-          }).catch(() => null)
+      // Community show purchase → clone it into the buyer's library, tailored to
+      // their model (their own private copy; the listing isn't re-published).
+      if (meta.kind === 'community' && meta.source_show_id && meta.user_id && session.payment_status === 'paid') {
+        await cloneCommunityShow(meta.source_show_id, meta.user_id, (meta.tesla_model as TeslaModel) || 'model3')
+      } else {
+        // Per-export purchase → unlock the buyer's own show for export.
+        const { show_id, user_id } = meta
+        if (show_id && user_id && session.payment_status === 'paid') {
+          await admin.from('show_purchases').insert({
+            user_id, show_id,
+            stripe_session_id: session.id,
+            stripe_payment_intent_id: session.payment_intent,
+            amount_cents: session.amount_total,
+            created_at: new Date().toISOString(),
+          }).then(() => null, () => null)
+
+          const email = session.customer_email
+          if (email) {
+            const origin = process.env.NEXT_PUBLIC_APP_URL ?? 'https://lightshowbuilder.com'
+            const { data: show } = await admin.from('shows').select('name, tesla_model').eq('id', show_id).single()
+            await sendExportReceipt({
+              to: email,
+              showName: show?.name ?? 'your show',
+              model: MODEL_LABELS[show?.tesla_model ?? ''] ?? 'Tesla',
+              builderUrl: `${origin}/builder?id=${show_id}&checkout_session=${session.id}`,
+            }).catch(() => null)
+          }
         }
       }
     }

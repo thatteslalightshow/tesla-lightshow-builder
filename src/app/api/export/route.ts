@@ -143,32 +143,32 @@ export async function POST(req: Request) {
 
   const admin = getAdminClient()
 
-  // ── Authorization check ──────────────────────────────────────────────────
+  // ── Load show + authorization (in one round-trip) ─────────────────────────
   const [
+    { data: show, error: showErr },
     { data: profile },
     { count: exportCount },
     { data: subscription },
     { data: purchase },
   ] = await Promise.all([
+    admin.from('shows').select('*').eq('id', body.show_id).eq('user_id', user.id).single(),
     admin.from('profiles').select('is_admin').eq('id', user.id).single(),
     admin.from('exports').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
     admin.from('subscriptions').select('status').eq('user_id', user.id).in('status', ['active', 'trialing']).maybeSingle(),
     admin.from('show_purchases').select('id').eq('user_id', user.id).eq('show_id', body.show_id).maybeSingle(),
   ])
+  if (showErr || !show) return NextResponse.json({ error: 'Show not found' }, { status: 404 })
 
   const isAdmin = profile?.is_admin === true
   const isSubscribed = !!subscription
   const hasPaid = !!purchase
   const isFreeExport = (exportCount ?? 0) === 0
+  // A show acquired from the community was already paid for at acquisition time.
+  const isAcquired = !!show.source_show_id
 
-  if (!isAdmin && !isSubscribed && !hasPaid && !isFreeExport) {
+  if (!isAdmin && !isSubscribed && !hasPaid && !isFreeExport && !isAcquired) {
     return NextResponse.json({ error: 'subscription_required' }, { status: 402 })
   }
-
-  // ── Load show ─────────────────────────────────────────────────────────────
-  const { data: show, error: showErr } = await admin
-    .from('shows').select('*').eq('id', body.show_id).eq('user_id', user.id).single()
-  if (showErr || !show) return NextResponse.json({ error: 'Show not found' }, { status: 404 })
 
   // ── Load audio (each show has at most one row; no fragile column ordering) ──
   const { data: audioRows } = await admin
