@@ -110,70 +110,161 @@ function detectSections(totalC: number[], FPS: number): { start: number; end: nu
   return out
 }
 
-// Auto-choreograph closures: open the model's hero closure so it lands open ON the
-// drop (pre-fired by its actuation duration), dance through the big section if it
-// can, then close — all within Tesla's per-closure limits, dance support, ~30s
-// thermal cap, and the Model-X windows-during-doors safety rule.
-function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number, model: TeslaModel, zones: LightZone[], maxSections: number): void {
-  const all = detectSections(totalC, FPS) // already in time order
-  if (!all.length) return
-  // Keep only the most prominent sections (count set by the vibe preset), time-ordered.
-  const peakCut = [...all].sort((a, b) => b.peak - a.peak)[Math.min(all.length - 1, Math.max(1, maxSections) - 1)]?.peak ?? 0
-  const sections = all.filter(s => s.peak >= peakCut)
+// Approximate seconds for a closure to fully CLOSE (open durations live in
+// CLOSURE_DURATIONS). We hold every command for its full travel time rather than
+// firing a brief pulse — a real Model X showed the falcon doors stalling ~1 inch
+// in on a 0.6s open "blip" then erroring when the next command arrived. Holding
+// the command for the whole travel guarantees the closure actually commits.
+const CLOSE_SECONDS: Record<ClosureFamily, number> = {
+  liftgate: 4, falcon_doors: 8, front_doors: 3, windows: 4,
+  mirrors: 2, door_handles: 2, charge_port: 2,
+}
 
+// Auto-choreograph closures — built to feel UNIQUE per song and to stay safely
+// inside Tesla's rules. Three layers:
+//   1. Hero moments  — a dramatic closure lands on each big drop. Which one is
+//      picked rotates per-song (seeded from tempo + structure) so two songs never
+//      get the same sequence: charge-port rainbow, liftgate/windows dance, and
+//      (1–2× on the biggest drops) the Model-X falcon doors dance — but ONLY after
+//      a guaranteed full open.
+//   2. Rhythm closures — mirrors (and door handles on S/3/Y) fold/pop on the beat
+//      through the busy sections. Their big budgets + low risk carry the per-song
+//      movement: this layer follows the actual beat grid.
+//   3. Finale — everything left open buttons up, with windows closing clear of any
+//      door motion (Model-X false-pinch rule).
+// Enforced throughout: per-closure command limits, ~28s total dance + ≤8s per
+// dance (thermal), EVERY command held for its full travel (no stalling blips),
+// at most ONE door family per show, and on Model X the windows never move while a
+// door is moving — in either direction.
+function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number, model: TeslaModel, zones: LightZone[], maxSections: number, bpm: number): void {
+  const all = detectSections(totalC, FPS)
+  if (!all.length) return
+  const N = frames.length
   const families = MODEL_CLOSURES[model]
   const chOf = (fam: ClosureFamily) => zones.filter(z => z.closure === fam).map(z => z.channel)
-  let heroOrder: ClosureFamily[] = ['falcon_doors', 'front_doors', 'liftgate', 'door_handles', 'windows', 'mirrors', 'charge_port']
-  if (model === 'modelX') heroOrder = heroOrder.filter(f => f !== 'windows') // false-pinch rule
-  const heroes = heroOrder.filter(f => families.includes(f))
+  const has = (fam: ClosureFamily) => families.includes(fam) && chOf(fam).length > 0
+  const isDoorFam = (fam: ClosureFamily) => fam === 'falcon_doors' || fam === 'front_doors'
 
-  const busyUntil: Partial<Record<ClosureFamily, number>> = {} // frame a family is free again
-  const HOLD = Math.round(FPS * 0.6)
-  const DANCE_BUDGET = Math.round(FPS * 30)
-  let danceUsed = 0
-  const write = (ch: number, cmd: keyof typeof CLOSURE_CMD, from: number, to: number) => {
+  // ── budget + safety bookkeeping ──
+  const used: Partial<Record<ClosureFamily, number>> = {}
+  const room = (fam: ClosureFamily, n: number) => (used[fam] ?? 0) + n <= CLOSURE_LIMITS[fam]
+  const spend = (fam: ClosureFamily, n: number) => { used[fam] = (used[fam] ?? 0) + n }
+  // Movement intervals we must keep apart on Model X (false-pinch rule works both
+  // ways: no window during door motion, no door during window motion).
+  const doorBusy: [number, number][] = []
+  const windowBusy: [number, number][] = []
+  const overlaps = (list: [number, number][], from: number, to: number) => list.some(([a, b]) => from < b && to > a)
+  const PULSE = Math.round(FPS * 0.6)
+  const SETTLE = Math.round(FPS * 2)                             // margin so a door is fully open before it dances
+  const DANCE_TOTAL = Math.round(FPS * 28), DANCE_MAX = Math.round(FPS * 8)
+  let danceUsed = 0, doorFamUsed = false                        // ≤1 door family per show
+  const secs = (fam: ClosureFamily) => Math.round(CLOSURE_DURATIONS[fam] * FPS)   // open travel (frames)
+  const write = (ch: number, cmd: keyof typeof CLOSURE_CMD, from: number, len: number) => {
     const v = CLOSURE_CMD[cmd]
-    for (let f = Math.max(0, from); f < Math.min(frames.length, to); f++) frames[f][ch] = v
+    for (let f = Math.max(0, from); f < Math.min(N, from + len); f++) frames[f][ch] = v
+  }
+  // Hold a command continuously for `len` frames across both L/R channels.
+  const hold = (fam: ClosureFamily, cmd: keyof typeof CLOSURE_CMD, at: number, len: number) => {
+    for (const ch of chOf(fam)) write(ch, cmd, at, len)
   }
 
-  // During the show each hero closure OPENS (and dances if able) on a drop and
-  // STAYS OPEN — we never close mid-show, so windows keep the music audible to
-  // onlookers throughout (Tesla's recommendation). Everything is buttoned up
-  // together in the finale below.
-  const opened: { chans: number[]; readyAt: number }[] = []
-  for (const sec of sections) {
-    for (const fam of heroes) {
-      const chans = chOf(fam); if (!chans.length) continue
-      if (busyUntil[fam]) continue                   // each family used once (stays open until the finale)
-      const limit = CLOSURE_LIMITS[fam], dur = Math.round(CLOSURE_DURATIONS[fam] * FPS)
-      const willDance = DANCE_SUPPORTED.has(fam) && danceUsed < DANCE_BUDGET
-      if (2 + (willDance ? 1 : 0) > limit) continue  // budget: open + (dance) + finale close
-      // Dancers must be FULLY OPEN before the drop (Tesla ignores Dance unless
-      // already open), so pre-fire them an extra settle so the open completes.
-      const settle = willDance ? HOLD : 0
-      const openAt = sec.start - dur - settle        // open lands by the drop (dancers a touch earlier)
-      if (openAt < HOLD) continue                    // not enough lead before the drop
-      if (openAt + dur + HOLD >= frames.length) continue // no room to open + finale-close cleanly
-      for (const ch of chans) write(ch, 'open', openAt, openAt + HOLD)
-      if (willDance) {
-        const len = Math.min(sec.end - sec.start, DANCE_BUDGET - danceUsed)
-        for (const ch of chans) write(ch, 'dance', sec.start, sec.start + len)
-        danceUsed += len
+  const byPeak = [...all].sort((a, b) => b.peak - a.peak)
+  const byTime = [...all].sort((a, b) => a.start - b.start)
+  const topPeak = byPeak[0]?.peak ?? 0
+  // Per-song seed → rotates which hero lands on which drop. Different tempo/
+  // structure ⇒ different rotation ⇒ a different show.
+  const seed = (Math.round(bpm) * 2654435761 + all.length * 40503 + Math.round(topPeak * 1e4)) >>> 0
+  const finaleAt = N - Math.round(FPS * 4)
+  const opened: { fam: ClosureFamily }[] = []                    // closures to button up in the finale
+
+  // ════ Layer 1 — hero moments on the biggest drops ════
+  const palette: ClosureFamily[] = (['charge_port', 'liftgate', 'windows', 'falcon_doors', 'front_doors'] as ClosureFamily[]).filter(has)
+  const heroCount = Math.min(byPeak.length, Math.max(1, maxSections))
+  let p = palette.length ? seed % palette.length : 0
+  for (let i = 0; i < heroCount && palette.length; i++) {
+    const sec = byPeak[i]
+    for (let tries = 0; tries < palette.length; tries++) {
+      const fam = palette[(p + tries) % palette.length]
+
+      if (fam === 'windows') {
+        // Windows dance directly (the one closure that dances without opening),
+        // through the drop — but never while a Model-X door is in motion.
+        const len = Math.min(sec.end - sec.start, DANCE_MAX, DANCE_TOTAL - danceUsed)
+        if (len < FPS || !room('windows', 2)) continue
+        const mv: [number, number] = [sec.start - PULSE, sec.start + len]
+        if (model === 'modelX' && overlaps(doorBusy, mv[0], mv[1])) continue
+        hold('windows', 'dance', sec.start, len); spend('windows', 1); danceUsed += len
+        windowBusy.push(mv); opened.push({ fam })
+      } else if (isDoorFam(fam)) {
+        // One door family per show. Hold the OPEN continuously until fully open,
+        // then (falcon only, ≤2×, biggest drops) dance. Skip entirely if there
+        // isn't room for a guaranteed full open — a half-open door is what errored.
+        if (doorFamUsed || !room(fam, 2)) continue
+        const travel = secs(fam)
+        const wantDance = fam === 'falcon_doors' && i < 2 && danceUsed < DANCE_TOTAL && room(fam, 3)
+        const danceAt = sec.start
+        const openAt = danceAt - travel - SETTLE                  // commanded-open right up to the dance ⇒ fully open
+        if (openAt < PULSE) continue
+        const danceLen = wantDance ? Math.min(sec.end - sec.start, DANCE_MAX, DANCE_TOTAL - danceUsed) : 0
+        const mv: [number, number] = [openAt, danceAt + danceLen]
+        if (overlaps(windowBusy, mv[0], mv[1]) || overlaps(doorBusy, mv[0], mv[1])) continue
+        hold(fam, 'open', openAt, danceAt - openAt); spend(fam, 1)  // continuous open ⇒ no stalling blip
+        if (wantDance && danceLen >= FPS) { hold(fam, 'dance', danceAt, danceLen); spend(fam, 1); danceUsed += danceLen }
+        doorBusy.push(mv); doorFamUsed = true; opened.push({ fam })
+      } else {
+        // liftgate / charge-port: hold open until fully open, then dance through
+        // the drop (rainbow for the charge port), close in the finale.
+        const travel = secs(fam)
+        const canDance = DANCE_SUPPORTED.has(fam) && danceUsed < DANCE_TOTAL && room(fam, 3)
+        const danceAt = sec.start
+        const openAt = danceAt - travel - SETTLE
+        if (openAt < PULSE || !room(fam, 2)) continue
+        hold(fam, 'open', openAt, danceAt - openAt); spend(fam, 1)
+        if (canDance) {
+          const len = Math.min(sec.end - sec.start, DANCE_MAX, DANCE_TOTAL - danceUsed)
+          hold(fam, 'dance', danceAt, len); spend(fam, 1); danceUsed += len
+        }
+        opened.push({ fam })
       }
-      busyUntil[fam] = frames.length                 // used; stays open through the show
-      opened.push({ chans, readyAt: openAt + dur + HOLD })
-      break                                          // one hero closure per section
+      p = (p + tries + 1) % palette.length
+      break
     }
   }
 
-  // Finale — button up the show: every closure left open closes together a few
-  // seconds before the end, so the car never ends a show with doors/windows
-  // hanging open. (Close commands finish even after the fseq ends.)
-  const finaleAt = frames.length - Math.round(FPS * 4)
-  for (const o of opened) {
-    const at = Math.max(finaleAt, o.readyAt)         // never before it finished opening
-    if (at >= frames.length - 1) continue
-    for (const ch of o.chans) write(ch, 'close', at, at + HOLD)
+  // ════ Layer 2 — rhythm closures: mirrors + door handles flap to the beat ════
+  // Big budgets, low risk → the main per-song movement. Each command is held for
+  // its full ~2s travel; we cap well under the limit so it stays musical, not
+  // machine-gun. Mirrors aren't a pinch risk, so they may move during door motion.
+  if (bpm > 0) {
+    const fpb = (60 / bpm) * FPS
+    const half = Math.max(Math.round(FPS * 2), Math.round(fpb * 2))    // ≥2s per fold/unfold, beat-aligned
+    for (const fam of ['mirrors', 'door_handles'] as ClosureFamily[]) {
+      if (!has(fam)) continue
+      const cap = Math.min(CLOSURE_LIMITS[fam] - 1, 12)                 // headroom + taste
+      for (const sec of byTime) {
+        if (sec.peak < topPeak * 0.55) continue                        // only the energetic sections
+        for (let t = sec.start; t + half * 2 < sec.end; t += half * 2) {
+          if ((used[fam] ?? 0) + 2 > cap) break
+          hold(fam, 'open', Math.round(t), half); spend(fam, 1)
+          hold(fam, 'close', Math.round(t + half), half); spend(fam, 1)
+        }
+      }
+    }
+  }
+
+  // ════ Layer 3 — finale: button up, windows clear of door motion ════
+  // Doors close at the very end (close commands finish even after the fseq ends).
+  // Any open window closes a few seconds EARLIER so it's done moving before the
+  // doors start — preserving the Model-X separation.
+  const doorCloseAt = finaleAt
+  const winCloseAt = doorCloseAt - Math.round(FPS * 6)
+  const haveDoorClose = opened.some(o => isDoorFam(o.fam))
+  for (const { fam } of opened) {
+    if (!room(fam, 1)) continue
+    const len = Math.round(CLOSE_SECONDS[fam] * FPS)
+    let at = (fam === 'windows' && haveDoorClose && model === 'modelX') ? winCloseAt : doorCloseAt
+    at = Math.max(0, Math.min(at, N - 2))
+    hold(fam, 'close', at, len); spend(fam, 1)
   }
 }
 
@@ -223,6 +314,57 @@ function applyPhrasing(frames: Uint8Array[], totalC: number[], bpm: number, FPS:
         v = Math.min(255, v + Math.round(near * phrasing * energy * 170))
       }
       frames[f][ch] = v
+    }
+  }
+}
+
+// Phase 4: cinematic ramping on the Inner Main Beam (channels 2 & 3) — the one
+// light Tesla ramps on EVERY supported model (S/X/3/Y/CT). Where the engine holds
+// the beam on through a sustained, CALM passage we swap the instant-on for a 2s
+// fade-up and trail a 2s fade-down into the gap after — a gentle swell instead of
+// a snap. Short or busy sections stay instant/punchy.
+//
+// The ramp command values come straight from Tesla's xLights guide (0-255 scale).
+// We pick the ON ramp so it COMPLETES within the on-run (a 2s ramp on a 0.6s run
+// would only reach ~30% then cut — a dim flicker; worse than instant):
+//   on; 500ms = 178 (70%)  ·  on; 1000ms = 204 (80%)  ·  on; 2000ms = 229 (90%)
+//   off; 2000ms = 76 (30%)  ← graceful fade-out tail
+// These degrade gracefully on cars/channels WITHOUT ramping (178/204/229 all read
+// as ON since >50%, 76 as OFF since <50%) — so a non-ramping vehicle renders the
+// exact same on/off show. Zero-regression against the validated behavior; only
+// ramp-capable cars gain the fade.
+//
+// (Channels 4-6 also ramp on S/X/3/Y but with a fiddly "Channel 4 sets the
+//  duration for all three" leader rule — deferred to a follow-up after the inner
+//  beam is validated on a real car.)
+const RAMP_OFF = 76
+function applyRamping(frames: Uint8Array[], density: number[], FPS: number): void {
+  const N = frames.length
+  if (!N) return
+  const ON = 127                          // engine "on" threshold
+  const minRun = Math.round(FPS * 0.6)    // "sustained" = held >= ~0.6s (ramp can finish)
+  const tail = Math.round(FPS * 2.0)      // 2s graceful fade-out window
+  for (const ch of [2, 3]) {              // L / R inner main beam
+    let f = 0
+    while (f < N) {
+      if (frames[f][ch] <= ON) { f++; continue }
+      let e = f
+      while (e < N && frames[e][ch] > ON) e++   // extent of this on-run
+      const runLen = e - f
+      // Fade only a SUSTAINED beam that's emerging from a calmer moment — a swell.
+      // A beam snapping on mid-drop (high density at the onset) stays instant/punchy.
+      const emerging = (density[f] ?? 0) < 0.5
+      if (runLen >= minRun && emerging) {
+        // Pick the longest ramp that still finishes inside the run, so the beam
+        // actually reaches full brightness before the run ends.
+        const onVal = runLen >= FPS * 2.05 ? 229 : runLen >= FPS * 1.05 ? 204 : 178
+        for (let k = f; k < e; k++) frames[k][ch] = onVal           // fade up + hold
+        for (let k = e; k < Math.min(N, e + tail); k++) {            // fade down...
+          if (frames[k][ch] > ON) break                             // ...unless it re-fires
+          frames[k][ch] = RAMP_OFF
+        }
+      }
+      f = e
     }
   }
 }
@@ -334,7 +476,12 @@ export function analyzePCM(
   applyPhrasing(frames, totalC, bpm, FPS, zones, P.phrasing, triggerFrames.size ? Math.min(...triggerFrames) : 0)
 
   // Phase 3: auto-choreograph closures to the song structure (opt-in per show).
-  if (opts?.autoClosures && opts.model) choreographClosures(frames, totalC, FPS, opts.model, zones, P.closureSections)
+  if (opts?.autoClosures && opts.model) choreographClosures(frames, totalC, FPS, opts.model, zones, P.closureSections, bpm)
+
+  // Phase 4: graceful ramping on the inner main beam (cinematic fades; runs last
+  // so it sees the final on/off pattern). Degrades to the same on/off show on
+  // cars without ramping, so it's safe across every model.
+  applyRamping(frames, density, FPS)
 
   // High-res amplitude envelope for the waveform display.
   const WF_FPS = 100
