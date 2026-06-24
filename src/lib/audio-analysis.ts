@@ -127,7 +127,6 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number
   if (model === 'modelX') heroOrder = heroOrder.filter(f => f !== 'windows') // false-pinch rule
   const heroes = heroOrder.filter(f => families.includes(f))
 
-  const used: Partial<Record<ClosureFamily, number>> = {}
   const busyUntil: Partial<Record<ClosureFamily, number>> = {} // frame a family is free again
   const HOLD = Math.round(FPS * 0.6)
   const DANCE_BUDGET = Math.round(FPS * 30)
@@ -137,34 +136,44 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number
     for (let f = Math.max(0, from); f < Math.min(frames.length, to); f++) frames[f][ch] = v
   }
 
+  // During the show each hero closure OPENS (and dances if able) on a drop and
+  // STAYS OPEN — we never close mid-show, so windows keep the music audible to
+  // onlookers throughout (Tesla's recommendation). Everything is buttoned up
+  // together in the finale below.
+  const opened: { chans: number[]; readyAt: number }[] = []
   for (const sec of sections) {
     for (const fam of heroes) {
       const chans = chOf(fam); if (!chans.length) continue
+      if (busyUntil[fam]) continue                   // each family used once (stays open until the finale)
       const limit = CLOSURE_LIMITS[fam], dur = Math.round(CLOSURE_DURATIONS[fam] * FPS)
-      const cur = used[fam] ?? 0
-      if (cur + 2 > limit) continue                  // need open+close budget
-      // Will this closure also dance? (dance-capable family + budget for
-      // open+dance+close + thermal budget left.) Dancers must be FULLY OPEN
-      // before the drop — Tesla ignores Dance unless already open — so pre-fire
-      // them an extra settle so the open completes first.
-      const willDance = DANCE_SUPPORTED.has(fam) && (cur + 3) <= limit && danceUsed < DANCE_BUDGET
+      const willDance = DANCE_SUPPORTED.has(fam) && danceUsed < DANCE_BUDGET
+      if (2 + (willDance ? 1 : 0) > limit) continue  // budget: open + (dance) + finale close
+      // Dancers must be FULLY OPEN before the drop (Tesla ignores Dance unless
+      // already open), so pre-fire them an extra settle so the open completes.
       const settle = willDance ? HOLD : 0
       const openAt = sec.start - dur - settle        // open lands by the drop (dancers a touch earlier)
-      if (openAt < HOLD) continue                    // not enough lead time
-      if (openAt < (busyUntil[fam] ?? 0)) continue   // still actuating from a prior section → no overlap
+      if (openAt < HOLD) continue                    // not enough lead before the drop
+      if (openAt + dur + HOLD >= frames.length) continue // no room to open + finale-close cleanly
       for (const ch of chans) write(ch, 'open', openAt, openAt + HOLD)
-      used[fam] = cur + 1
-      let closeAt = sec.end
       if (willDance) {
         const len = Math.min(sec.end - sec.start, DANCE_BUDGET - danceUsed)
         for (const ch of chans) write(ch, 'dance', sec.start, sec.start + len)
-        danceUsed += len; used[fam] = used[fam]! + 1; closeAt = sec.start + len
+        danceUsed += len
       }
-      for (const ch of chans) write(ch, 'close', closeAt, closeAt + HOLD)
-      used[fam] = (used[fam] ?? 0) + 1
-      busyUntil[fam] = closeAt + HOLD                // free again only after it closes
+      busyUntil[fam] = frames.length                 // used; stays open through the show
+      opened.push({ chans, readyAt: openAt + dur + HOLD })
       break                                          // one hero closure per section
     }
+  }
+
+  // Finale — button up the show: every closure left open closes together a few
+  // seconds before the end, so the car never ends a show with doors/windows
+  // hanging open. (Close commands finish even after the fseq ends.)
+  const finaleAt = frames.length - Math.round(FPS * 4)
+  for (const o of opened) {
+    const at = Math.max(finaleAt, o.readyAt)         // never before it finished opening
+    if (at >= frames.length - 1) continue
+    for (const ch of o.chans) write(ch, 'close', at, at + HOLD)
   }
 }
 
