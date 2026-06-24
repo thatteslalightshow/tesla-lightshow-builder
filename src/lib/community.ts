@@ -43,21 +43,20 @@ export async function cloneCommunityShow(
   }).select('id').single()
   if (cloneErr || !clone) return { error: cloneErr?.message ?? 'Could not create your copy' }
 
-  // Copy the audio into the buyer's own storage so their purchase is durable
-  // (survives the original owner deleting their show). Server-side copy within
-  // the bucket — no download/re-upload. Falls back to referencing the original
-  // path if the copy fails, so the clone always has audio.
+  // HYBRID storage: reference the canonical community audio (one shared file per
+  // listing — no per-buyer duplication, so storage scales with listings, not
+  // sales). Durability is preserved because (1) deleting a show doesn't remove
+  // its storage file, and (2) the upload route won't remove a file that another
+  // show still references. So the buyer's copy stays playable without copying
+  // ~46MB per purchase.
   const { data: srcAudio } = await admin
     .from('audio_files').select('*').eq('show_id', sourceShowId).limit(1).maybeSingle()
   if (srcAudio?.storage_path) {
-    const filename = srcAudio.storage_path.split('/').pop() || 'lightshow.wav'
-    const destPath = `${buyerId}/${clone.id}/${filename}`
-    const { error: copyErr } = await admin.storage.from('audio-files').copy(srcAudio.storage_path, destPath)
     await admin.from('audio_files').insert({
       user_id: buyerId,
       show_id: clone.id,
       original_name: srcAudio.original_name,
-      storage_path: copyErr ? srcAudio.storage_path : destPath,
+      storage_path: srcAudio.storage_path,
       file_size_bytes: srcAudio.file_size_bytes,
       mime_type: srcAudio.mime_type,
     }).then(() => null, () => null)

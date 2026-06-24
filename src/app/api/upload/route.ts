@@ -28,11 +28,19 @@ export async function POST(req: Request) {
     .from('shows').select('id').eq('id', showId).eq('user_id', session.user.id).single()
   if (showErr || !show) return NextResponse.json({ error: 'Show not found' }, { status: 404 })
 
-  // Remove any previous audio for this show so we don't orphan files
+  // Remove any previous audio for this show so we don't orphan files — but NOT
+  // a file that another show still references (hybrid community storage: buyers'
+  // copies share the canonical file, so re-uploading must never yank it out from
+  // under them). Only delete storage objects unreferenced by any other show.
   const { data: existing } = await admin
     .from('audio_files').select('storage_path').eq('show_id', showId)
   if (existing?.length) {
-    await admin.storage.from('audio-files').remove(existing.map(r => r.storage_path))
+    const paths = existing.map(r => r.storage_path)
+    const { data: otherRefs } = await admin
+      .from('audio_files').select('storage_path').in('storage_path', paths).neq('show_id', showId)
+    const shared = new Set((otherRefs ?? []).map(r => r.storage_path))
+    const removable = paths.filter(p => !shared.has(p))
+    if (removable.length) await admin.storage.from('audio-files').remove(removable)
     await admin.from('audio_files').delete().eq('show_id', showId)
   }
 
