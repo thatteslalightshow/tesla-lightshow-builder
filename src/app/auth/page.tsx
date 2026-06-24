@@ -14,8 +14,10 @@ function AuthForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(searchParams.get('error') ?? '');
   const [message, setMessage] = useState('');
+
+  const callbackUrl = () => `${window.location.origin}/auth/callback`;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,7 +26,9 @@ function AuthForm() {
     setLoading(true);
     try {
       if (mode === 'signup') {
-        const { data, error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp({
+          email, password, options: { emailRedirectTo: callbackUrl() },
+        });
         if (error) setError(error.message);
         else if (data.session) router.push('/dashboard');
         else setMessage('Check your email for a confirmation link.');
@@ -36,6 +40,29 @@ function AuthForm() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Continue with Google → redirects to Google, back to /auth/callback.
+  const handleGoogle = async () => {
+    setError(''); setMessage(''); setLoading(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: callbackUrl() },
+    });
+    if (error) { setError(error.message); setLoading(false); }
+    // on success the browser navigates away to Google
+  };
+
+  // Passwordless magic link → emails a one-tap sign-in link.
+  const handleMagicLink = async () => {
+    if (!email) { setError('Enter your email first, then tap the magic link.'); return; }
+    setError(''); setMessage(''); setLoading(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      email, options: { emailRedirectTo: callbackUrl() },
+    });
+    setLoading(false);
+    if (error) setError(error.message);
+    else setMessage('Check your email for a magic sign-in link.');
   };
 
   return (
@@ -90,6 +117,28 @@ function AuthForm() {
           {mode === 'signin' ? 'Sign in to access your shows.' : 'Create your account to start building.'}
         </p>
 
+        <button
+          type="button"
+          onClick={handleGoogle}
+          disabled={loading}
+          className="btn btn-full"
+          style={{ background: '#fff', color: '#1f1f1f', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, fontWeight: 500, marginBottom: '1rem' }}
+        >
+          <svg width="17" height="17" viewBox="0 0 48 48" aria-hidden>
+            <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.9 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.1 17.7 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.5 3-2.2 5.5-4.7 7.2l7.3 5.7c4.3-4 6.8-9.9 6.8-17.4z"/>
+            <path fill="#FBBC05" d="M10.5 28.3c-.5-1.4-.7-2.9-.7-4.3s.3-2.9.7-4.3l-7.9-6.1C1 16.7 0 20.2 0 24s1 7.3 2.6 10.4l7.9-6.1z"/>
+            <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.3-5.7c-2 1.4-4.7 2.3-8.6 2.3-6.3 0-11.6-3.6-13.5-8.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/>
+          </svg>
+          Continue with Google
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '0 0 1rem' }}>
+          <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>or</span>
+          <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+        </div>
+
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
             <label className="label">Email</label>
@@ -135,6 +184,16 @@ function AuthForm() {
             style={{ marginTop: '.25rem' }}
           >
             {loading ? 'Loading…' : mode === 'signin' ? 'Sign in' : 'Create account'}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleMagicLink}
+            disabled={loading}
+            className="btn btn-ghost btn-full"
+            style={{ fontSize: 13 }}
+          >
+            Email me a magic link instead
           </button>
         </form>
 
