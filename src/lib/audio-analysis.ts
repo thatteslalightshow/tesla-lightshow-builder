@@ -142,14 +142,20 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number
       const chans = chOf(fam); if (!chans.length) continue
       const limit = CLOSURE_LIMITS[fam], dur = Math.round(CLOSURE_DURATIONS[fam] * FPS)
       const cur = used[fam] ?? 0
-      const openAt = sec.start - dur                 // lands open on the drop
+      if (cur + 2 > limit) continue                  // need open+close budget
+      // Will this closure also dance? (dance-capable family + budget for
+      // open+dance+close + thermal budget left.) Dancers must be FULLY OPEN
+      // before the drop — Tesla ignores Dance unless already open — so pre-fire
+      // them an extra settle so the open completes first.
+      const willDance = DANCE_SUPPORTED.has(fam) && (cur + 3) <= limit && danceUsed < DANCE_BUDGET
+      const settle = willDance ? HOLD : 0
+      const openAt = sec.start - dur - settle        // open lands by the drop (dancers a touch earlier)
       if (openAt < HOLD) continue                    // not enough lead time
       if (openAt < (busyUntil[fam] ?? 0)) continue   // still actuating from a prior section → no overlap
-      if (cur + 2 > limit) continue                  // need open+close budget
       for (const ch of chans) write(ch, 'open', openAt, openAt + HOLD)
       used[fam] = cur + 1
       let closeAt = sec.end
-      if (DANCE_SUPPORTED.has(fam) && (used[fam]! + 2) <= limit && danceUsed < DANCE_BUDGET) {
+      if (willDance) {
         const len = Math.min(sec.end - sec.start, DANCE_BUDGET - danceUsed)
         for (const ch of chans) write(ch, 'dance', sec.start, sec.start + len)
         danceUsed += len; used[fam] = used[fam]! + 1; closeAt = sec.start + len

@@ -49,9 +49,13 @@ export const DANCE_SUPPORTED: Set<ClosureFamily> = new Set(['liftgate', 'charge_
 
 // Approx seconds to fully actuate (Tesla: ~2s mirrors/handles/charge → ~22s front
 // doors). Used to PRE-FIRE an open so the closure lands open exactly on the drop.
+// OPEN durations (seconds) — Tesla's official "Closure Movement Durations".
+// Used to pre-fire Open so the closure is fully open by the drop, AND so a Dance
+// request (which Tesla ignores unless the closure is already open) lands after
+// the open completes. (liftgate open 14s, falcon 20s, front doors 22s.)
 export const CLOSURE_DURATIONS: Record<ClosureFamily, number> = {
   mirrors: 2, door_handles: 2, charge_port: 2, windows: 4,
-  liftgate: 6, falcon_doors: 12, front_doors: 22,
+  liftgate: 14, falcon_doors: 20, front_doors: 22,
 }
 
 export interface LightZone {
@@ -166,7 +170,8 @@ export const CLOSURE_FAMILY_BY_CHANNEL: Record<number, ClosureFamily> = Object.f
 
 // Which closure families exist per model (others are hidden in the timeline)
 export const MODEL_CLOSURES: Record<TeslaModel, ClosureFamily[]> = {
-  model3:     ['mirrors', 'windows', 'charge_port', 'liftgate'],
+  // Model 3 has a manual trunk (no power liftgate), so no liftgate closure.
+  model3:     ['mirrors', 'windows', 'charge_port'],
   modelY:     ['mirrors', 'windows', 'charge_port', 'liftgate'],
   modelS:     ['mirrors', 'windows', 'charge_port', 'liftgate', 'door_handles'],
   modelX:     ['mirrors', 'windows', 'charge_port', 'liftgate', 'front_doors', 'falcon_doors'],
