@@ -11,6 +11,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: '/pricing', priority: 0.8, changeFrequency: 'monthly' as const },
     { path: '/gallery', priority: 0.7, changeFrequency: 'weekly' as const },
     { path: '/guide', priority: 0.6, changeFrequency: 'monthly' as const },
+    { path: '/faq', priority: 0.6, changeFrequency: 'monthly' as const },
+    { path: '/privacy', priority: 0.3, changeFrequency: 'yearly' as const },
+    { path: '/terms', priority: 0.3, changeFrequency: 'yearly' as const },
   ]
   return routes.map((r) => ({
     url: `${BASE_URL}${r.path}`,
