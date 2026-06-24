@@ -5,6 +5,12 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import BrandLogo from '@/components/BrandLogo';
 
+// Magic link is fully built, but its email delivery needs custom SMTP + a
+// verified sending domain for production (Supabase's default email is
+// rate-limited and often spam-filtered). Keep the button hidden until SMTP is
+// configured, then flip this to true — no other change needed.
+const MAGIC_LINK_ENABLED = false;
+
 function AuthForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -186,15 +192,17 @@ function AuthForm() {
             {loading ? 'Loading…' : mode === 'signin' ? 'Sign in' : 'Create account'}
           </button>
 
-          <button
-            type="button"
-            onClick={handleMagicLink}
-            disabled={loading}
-            className="btn btn-ghost btn-full"
-            style={{ fontSize: 13 }}
-          >
-            Email me a magic link instead
-          </button>
+          {MAGIC_LINK_ENABLED && (
+            <button
+              type="button"
+              onClick={handleMagicLink}
+              disabled={loading}
+              className="btn btn-ghost btn-full"
+              style={{ fontSize: 13 }}
+            >
+              Email me a magic link instead
+            </button>
+          )}
         </form>
 
         <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--muted)', marginTop: '1.5rem' }}>
