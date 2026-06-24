@@ -49,6 +49,10 @@ export default function DashboardPage() {
       if (params.get('subscription_cancelled')) {
         window.history.replaceState({}, '', '/dashboard');
       }
+      if (params.get('community_added')) {
+        setSubMsg('🎉 Show added to your library! It\'s below — give it a moment and refresh if you don\'t see it yet.');
+        window.history.replaceState({}, '', '/dashboard');
+      }
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || !session) router.replace('/auth');

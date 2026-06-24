@@ -42,6 +42,10 @@ export default function ShowPreview({ show, audioUrl, audioName }: Props) {
   const [liked, setLiked]         = useState(false);
   const [likeBusy, setLikeBusy]   = useState(false);
   const [signedIn, setSignedIn]   = useState(false);
+  const [viewerId, setViewerId]   = useState<string | null>(null);
+  const [acquiring, setAcquiring] = useState(false);
+  const [acqError, setAcqError]   = useState('');
+  const [pickModel, setPickModel] = useState<string>(show.tesla_model);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rafRef   = useRef<number>(0);
@@ -56,6 +60,7 @@ export default function ShowPreview({ show, audioUrl, audioName }: Props) {
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSignedIn(!!session);
+      setViewerId(session?.user?.id ?? null);
       const res = await fetch(`/api/shows/like?show_id=${show.id}`).catch(() => null);
       if (res?.ok) {
         const { liked, like_count } = await res.json();
@@ -82,6 +87,37 @@ export default function ShowPreview({ show, audioUrl, audioName }: Props) {
       setLikeCount(like_count);
     }
     setLikeBusy(false);
+  }
+
+  // Add this community show to my library, tailored to the chosen Tesla model.
+  async function handleAcquire() {
+    if (!signedIn) { router.push(`/auth?mode=signup`); return; }
+    setAcquiring(true); setAcqError('');
+    try {
+      const res = await fetch('/api/community/acquire', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ show_id: show.id, tesla_model: pickModel }),
+      });
+      if (res.status === 401) { router.push('/auth?mode=signup'); return; }
+      const data = await res.json().catch(() => ({}));
+      if (data.needs_payment) {
+        // Not a subscriber → $2.99 one-time checkout, then the webhook clones it.
+        const c = await fetch('/api/community/checkout', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ show_id: show.id, tesla_model: pickModel }),
+        });
+        const cd = await c.json().catch(() => ({}));
+        if (c.ok && cd.url) { window.location.href = cd.url; return; }
+        setAcqError(cd.error ? `Checkout error: ${cd.error}` : 'Could not start checkout — please try again.');
+      } else if (data.show_id) {
+        // Free (subscriber/admin or already owned) → open their copy.
+        router.push(`/builder?id=${data.show_id}`);
+        return;
+      } else {
+        setAcqError(data.error || 'Could not add this show — please try again.');
+      }
+    } catch { setAcqError('Network error — please try again.'); }
+    setAcquiring(false);
   }
 
   // Build audio element once
@@ -209,6 +245,28 @@ export default function ShowPreview({ show, audioUrl, audioName }: Props) {
             {likeCount.toLocaleString()}
           </button>
         </div>
+
+        {/* Acquire CTA — run this community show on your own Tesla */}
+        {viewerId !== show.user_id && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem', borderRadius: 14, background: 'rgba(232,64,74,0.06)', border: '1px solid rgba(232,64,74,0.25)' }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, marginBottom: 2 }}>Run this on your Tesla</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)' }}>We tailor the doors, windows &amp; lights to your model. Free with Creator · $2.99 otherwise.</div>
+            </div>
+            <select
+              value={pickModel}
+              onChange={e => setPickModel(e.target.value)}
+              disabled={acquiring}
+              style={{ padding: '9px 12px', borderRadius: 9, background: 'var(--bg3)', color: 'var(--text)', border: '1px solid var(--border)', fontSize: 13, cursor: 'pointer' }}
+            >
+              {Object.entries(MODEL_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+            <button onClick={handleAcquire} disabled={acquiring} className="btn btn-primary btn-sm">
+              {acquiring ? 'Adding…' : 'Add to my library'}
+            </button>
+            {acqError && <div style={{ width: '100%', fontSize: 12, color: '#ff8a8a' }}>{acqError}</div>}
+          </div>
+        )}
 
         {/* Scene with play overlay + watermark */}
         <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', border: `1px solid ${playing ? 'rgba(0,232,135,0.2)' : 'rgba(255,255,255,0.08)'}`, transition: 'border-color .4s', background: '#09090f' }}>
