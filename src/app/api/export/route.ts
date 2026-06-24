@@ -47,6 +47,60 @@ async function decodeAudioPCM(bytes: ArrayBuffer): Promise<{ L: Float32Array; R:
   return null
 }
 
+// Read a WAV header's sample rate + data duration without decoding the audio.
+function wavInfo(buf: ArrayBuffer): { sampleRate: number; durationSec: number } | null {
+  if (buf.byteLength < 44) return null
+  const dv = new DataView(buf)
+  if (dv.getUint32(0, false) !== 0x52494646 || dv.getUint32(8, false) !== 0x57415645) return null // "RIFF"/"WAVE"
+  let off = 12, sampleRate = 0, byteRate = 0, dataSize = 0, haveFmt = false
+  while (off + 8 <= dv.byteLength) {
+    const id = dv.getUint32(off, false), sz = dv.getUint32(off + 4, true)
+    if (id === 0x666d7420) { sampleRate = dv.getUint32(off + 12, true); byteRate = dv.getUint32(off + 16, true); haveFmt = true }
+    else if (id === 0x64617461) { dataSize = sz }
+    off += 8 + sz + (sz & 1)
+  }
+  if (!haveFmt || sampleRate === 0) return null
+  return { sampleRate, durationSec: byteRate > 0 ? dataSize / byteRate : 0 }
+}
+
+// Linear-interpolation resampler. Tesla needs 44.1kHz; this is plenty for keeping
+// the audio length aligned to the fseq's time-based frames (sync, not hi-fi).
+function resamplePCM(data: Float32Array, srcRate: number, dstRate: number): Float32Array {
+  if (srcRate === dstRate) return data
+  const ratio = srcRate / dstRate
+  const outLen = Math.max(1, Math.round(data.length / ratio))
+  const out = new Float32Array(outLen)
+  for (let i = 0; i < outLen; i++) {
+    const pos = i * ratio, i0 = Math.floor(pos), i1 = Math.min(i0 + 1, data.length - 1)
+    const frac = pos - i0
+    out[i] = data[i0] * (1 - frac) + data[i1] * frac
+  }
+  return out
+}
+
+// Encode L/R PCM to a 16-bit stereo WAV (the format Tesla plays sample-accurately).
+function encodeWav(L: Float32Array, R: Float32Array, sampleRate: number): Uint8Array {
+  const numFrames = Math.min(L.length, R.length)
+  const blockAlign = 2 * 2 // 2ch * 16-bit
+  const dataSize = numFrames * blockAlign
+  const out = new Uint8Array(44 + dataSize)
+  const view = new DataView(out.buffer)
+  const writeStr = (o: number, s: string) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)) }
+  writeStr(0, 'RIFF'); view.setUint32(4, 36 + dataSize, true); writeStr(8, 'WAVE')
+  writeStr(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true)
+  view.setUint16(22, 2, true); view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * blockAlign, true); view.setUint16(32, blockAlign, true); view.setUint16(34, 16, true)
+  writeStr(36, 'data'); view.setUint32(40, dataSize, true)
+  let off = 44
+  for (let i = 0; i < numFrames; i++) {
+    let l = Math.max(-1, Math.min(1, L[i])); l = l < 0 ? l * 0x8000 : l * 0x7fff
+    let r = Math.max(-1, Math.min(1, R[i])); r = r < 0 ? r * 0x8000 : r * 0x7fff
+    view.setInt16(off, l, true); off += 2
+    view.setInt16(off, r, true); off += 2
+  }
+  return out
+}
+
 const MODEL_LABELS: Record<string, string> = {
   model3: 'Model 3', modelY: 'Model Y', modelS: 'Model S',
   modelX: 'Model X', cybertruck: 'Cybertruck',
@@ -128,57 +182,61 @@ export async function POST(req: Request) {
     if (!dlErr && audioData) audioBytes = await audioData.arrayBuffer()
   }
 
-  // ── Generate FSEQ ─────────────────────────────────────────────────────────
-  // Prefer the audio's REAL length so the fseq matches the song. For our WAVs
-  // (canonical 44-byte header) duration = dataSize / byteRate, no decoding needed.
-  let wavDurationSec: number | null = null
-  if (audioBytes && audioBytes.byteLength > 44) {
-    const head = new Uint8Array(audioBytes.slice(0, 4))
-    if (head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46) { // "RIFF"
-      const dv = new DataView(audioBytes)
-      const byteRate = dv.getUint32(28, true)
-      const dataSize = dv.getUint32(40, true)
-      if (byteRate > 0 && dataSize > 0) wavDurationSec = dataSize / byteRate
-    }
-  }
-  const durationSec = wavDurationSec ?? audioRecord?.duration_sec ?? show.duration_sec ?? 30
+  // ── Generate FSEQ + guarantee 44.1kHz WAV audio ───────────────────────────
   const channels = getChannelCount(show.tesla_model as TeslaModel)
   const bpm = show.bpm ?? 120
   const modelDef = MODELS[show.tesla_model as TeslaModel]
-
-  // Priority: manual timeline edits > music-reactive analysis (from the WAV) >
-  // generic style. The analysis is the SAME engine the live preview uses, so the
-  // exported file matches what the user heard/saw.
   const editData = show.edit_data as EditData | null
+
+  // Tesla needs 44.1kHz audio or the show drifts out of sync. The browser
+  // converts on upload, but that can fail — so the SERVER is the source of
+  // truth. Decode the stored audio once (reused for analysis), then ship a
+  // 44.1kHz WAV: pass through if it already is one, else transcode the PCM.
+  const wav = audioBytes ? wavInfo(audioBytes) : null
+  const storedIsWav44 = wav?.sampleRate === 44100
+  // Decode when needed for analysis (no manual edits) OR to transcode the audio.
+  const audio = audioBytes && (!hasEdits(editData) || !storedIsWav44)
+    ? await decodeAudioPCM(audioBytes) : null
+
+  // Show length: prefer the real decoded length, else the WAV header, else stored.
+  const durationSec = (audio ? audio.L.length / audio.sampleRate : null)
+    ?? (wav && wav.durationSec > 0 ? wav.durationSec : null)
+    ?? audioRecord?.duration_sec ?? show.duration_sec ?? 30
+
+  // Priority: manual timeline edits > music-reactive analysis > generic style.
   let frameData: Uint8Array[]
   if (hasEdits(editData)) {
     const frames = Math.round(durationSec * FPS)
     const loop = buildEditFrames(editData!, bpm, channels)
     frameData = Array.from({ length: frames }, (_, f) => loop[f % loop.length])
+  } else if (audio) {
+    const autoClosures = editData?.autoClosures === true
+    frameData = analyzePCM(audio.L, audio.R, audio.sampleRate, modelDef.zones, channels,
+      { autoClosures, model: show.tesla_model as TeslaModel, preset: editData?.mixPreset }).frames
   } else {
-    const audio = audioBytes ? await decodeAudioPCM(audioBytes) : null
-    if (audio) {
-      const autoClosures = editData?.autoClosures === true
-      frameData = analyzePCM(audio.L, audio.R, audio.sampleRate, modelDef.zones, channels,
-        { autoClosures, model: show.tesla_model as TeslaModel, preset: editData?.mixPreset }).frames
-    } else {
-      frameData = generateFrames(show.style, show.intensity, bpm, Math.round(durationSec * FPS), modelDef)
-    }
+    frameData = generateFrames(show.style, show.intensity, bpm, Math.round(durationSec * FPS), modelDef)
   }
   const fseq = buildFseq(channels, frameData.length, Math.round(STEP_MS), frameData)
+
+  // Shipped audio — guaranteed 44.1kHz WAV whenever we can decode it.
+  let shipped: { data: ArrayBuffer | Uint8Array; ext: 'wav' | 'mp3' } | null = null
+  if (storedIsWav44 && audioBytes) {
+    shipped = { data: audioBytes, ext: 'wav' }                        // already perfect — pass through
+  } else if (audio) {
+    const L = audio.sampleRate === 44100 ? audio.L : resamplePCM(audio.L, audio.sampleRate, 44100)
+    const R = audio.sampleRate === 44100 ? audio.R : resamplePCM(audio.R, audio.sampleRate, 44100)
+    shipped = { data: encodeWav(L, R, 44100), ext: 'wav' }            // transcoded to 44.1kHz
+  } else if (audioBytes) {
+    const head = new Uint8Array(audioBytes.slice(0, 4))               // undecodable — last resort
+    const isWav = head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46
+    shipped = { data: audioBytes, ext: isWav ? 'wav' : 'mp3' }
+  }
 
   // ── Build ZIP ─────────────────────────────────────────────────────────────
   const zip = new JSZip()
   const folder = zip.folder('LightShow')!
   folder.file('lightshow.fseq', fseq)
-  if (audioBytes) {
-    // Tesla accepts .mp3 or .wav, and the audio filename must match the fseq.
-    // Ship the file with the extension matching its REAL format (detected from
-    // the bytes), so an uploaded MP3 isn't mislabeled as .wav and rejected.
-    const head = new Uint8Array(audioBytes.slice(0, 4))
-    const isWav = head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46 // "RIFF"
-    folder.file(`lightshow.${isWav ? 'wav' : 'mp3'}`, audioBytes)
-  }
+  if (shipped) folder.file(`lightshow.${shipped.ext}`, shipped.data)
 
   const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
 
