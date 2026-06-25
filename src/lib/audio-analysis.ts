@@ -157,7 +157,7 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number
   const PULSE = Math.round(FPS * 0.6)
   const SETTLE = Math.round(FPS * 2)                             // margin so a door is fully open before it dances
   const DANCE_TOTAL = Math.round(FPS * 28), DANCE_MAX = Math.round(FPS * 8)
-  let danceUsed = 0, doorFamUsed = false                        // ≤1 door family per show
+  let danceUsed = 0, doorHeroes = 0                             // ≤2 door events/show, strictly time-separated
   const secs = (fam: ClosureFamily) => Math.round(CLOSURE_DURATIONS[fam] * FPS)   // open travel (frames)
   const write = (ch: number, cmd: keyof typeof CLOSURE_CMD, from: number, len: number) => {
     const v = CLOSURE_CMD[cmd]
@@ -196,10 +196,11 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number
         hold('windows', 'dance', sec.start, len); spend('windows', 1); danceUsed += len
         windowBusy.push(mv); opened.push({ fam })
       } else if (isDoorFam(fam)) {
-        // One door family per show. Hold the OPEN continuously until fully open,
-        // then (falcon only, ≤2×, biggest drops) dance. Skip entirely if there
-        // isn't room for a guaranteed full open — a half-open door is what errored.
-        if (doorFamUsed || !room(fam, 2)) continue
+        // Up to 2 door events per show (falcon AND/OR front), each at its own
+        // time-separated drop. Hold the OPEN continuously until fully open, then
+        // (falcon only, ≤2×, biggest drops) dance. Skip entirely if there isn't
+        // room for a guaranteed full open — a half-open door is what errored.
+        if (doorHeroes >= 2 || !room(fam, 2)) continue
         const travel = secs(fam)
         const wantDance = fam === 'falcon_doors' && i < 2 && danceUsed < DANCE_TOTAL && room(fam, 3)
         const danceAt = sec.start
@@ -210,7 +211,7 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number
         if (overlaps(windowBusy, mv[0], mv[1]) || overlaps(doorBusy, mv[0], mv[1])) continue
         hold(fam, 'open', openAt, danceAt - openAt); spend(fam, 1)  // continuous open ⇒ no stalling blip
         if (wantDance && danceLen >= FPS) { hold(fam, 'dance', danceAt, danceLen); spend(fam, 1); danceUsed += danceLen }
-        doorBusy.push(mv); doorFamUsed = true; opened.push({ fam })
+        doorBusy.push(mv); doorHeroes++; opened.push({ fam })
       } else {
         // liftgate / charge-port: hold open until fully open, then dance through
         // the drop (rainbow for the charge port), close in the finale.
