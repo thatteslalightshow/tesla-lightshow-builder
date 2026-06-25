@@ -192,12 +192,13 @@ interface TimelineProps {
   onToggleBeat?: (channel: number, beat: number) => void;
   closureBlocks?: ClosureBlocks;
   onClosureCommand?: (channel: number, beat: number) => void;
+  beats?: number;   // total beats to render — spans the WHOLE song when audio is loaded
 }
 
 function Timeline({
   model, bpm, style, intensity, playheadFraction,
   audioFrames, audioTriggers, waveformData, editMode, symmetry, customBlocks, onToggleBeat,
-  closureBlocks, onClosureCommand,
+  closureBlocks, onClosureCommand, beats,
 }: TimelineProps) {
   const def = MODELS[model];
   const zones = def.zones;
@@ -215,8 +216,12 @@ function Timeline({
   const ROW_H    = isMobile ? 40  : 22;
   const GROUP_H  = isMobile ? 32  : 26;
   const HEADER_H = isMobile ? 28  : 24;
-  const CELL_W   = isMobile ? 38  : null; // null → flex:1 on desktop
-  const BEATS = VISIBLE_BEATS;
+  // Span the whole song when audio is loaded (caller passes the song's beat count).
+  const BEATS = beats && beats > 0 ? beats : VISIBLE_BEATS;
+  // A full-song timeline lays out at a fixed cell width so it's wide + scrolls
+  // horizontally; the short no-audio default still flexes to fill the panel.
+  const fullSong = BEATS > VISIBLE_BEATS;
+  const CELL_W   = isMobile ? 38 : (fullSong ? 26 : null); // null → flex:1 on desktop
   const FPS = 50;
   const fpb = (60 / bpm) * FPS;
 
@@ -822,10 +827,17 @@ function BuilderInner() {
     });
   }
 
+  // Total beats to lay out in the timeline: the WHOLE song once audio is loaded
+  // (so customers can see/edit every channel across the entire track, scrolling
+  // horizontally), otherwise the short no-audio default.
+  const timelineBeats = audioFrames && audioFrames.length
+    ? Math.max(VISIBLE_BEATS, Math.ceil(audioFrames.length / ((60 / bpm) * 50)))
+    : VISIBLE_BEATS;
+
   // Frames fed to the 3D scene: custom blocks > audio > null (uses internal generateFrames)
   const hasCustom = Object.keys(customBlocks).length > 0 || Object.keys(closureBlocks).length > 0;
   const sceneFrames: Uint8Array[] | null = hasCustom
-    ? customBlocksToFrames(customBlocks, VISIBLE_BEATS, bpm, getChannelCount(model), closureBlocks)
+    ? customBlocksToFrames(customBlocks, timelineBeats, bpm, getChannelCount(model), closureBlocks)
     : audioFrames;
 
   // Apply a starter template — sets the vibe + style + intensity and locks the
@@ -1035,7 +1047,7 @@ function BuilderInner() {
       ? {
           customBlocks: Object.fromEntries(Object.entries(customBlocks).map(([ch, set]) => [ch, [...set]])),
           closureBlocks,
-          beats: VISIBLE_BEATS,
+          beats: timelineBeats,
           autoClosures,
           mixPreset,
         }
@@ -1625,6 +1637,7 @@ function BuilderInner() {
               onToggleBeat={onToggleBeat}
               closureBlocks={closureBlocks}
               onClosureCommand={onClosureCommand}
+              beats={timelineBeats}
             />
           </div>
 
