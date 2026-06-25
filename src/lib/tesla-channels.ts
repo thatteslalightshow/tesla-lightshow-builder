@@ -58,6 +58,23 @@ export const CLOSURE_DURATIONS: Record<ClosureFamily, number> = {
   liftgate: 14, falcon_doors: 20, front_doors: 22,
 }
 
+// ─── Interior RGB segments (full-color cabin lighting) ──────────────────────────
+// 3 channels each (R, G, B), idx 175-192. Extracted from the official xLights model
+// (xlights_rgbeffects.xml StartChannel="!Model S:N" → idx N-1). Additive: separate
+// from the lights (0-29) and closures (30-45), so writing color here can never
+// affect the validated exterior show. The Center Front DISPLAY (the screen) is on
+// every supported car and lights the whole cabin (visible from outside); the 5
+// accent segments exist only on cars with Interior Accent Lights (ignored otherwise).
+export interface RgbSegment { id: string; side: 'L' | 'R' | 'C'; display?: boolean; rgb: [number, number, number] }
+export const INTERIOR_RGB: RgbSegment[] = [
+  { id: 'display', side: 'C', display: true, rgb: [175, 176, 177] }, // center front display / screen
+  { id: 'center',  side: 'C', rgb: [184, 185, 186] },               // center front accent
+  { id: 'front_l', side: 'L', rgb: [187, 188, 189] },
+  { id: 'front_r', side: 'R', rgb: [181, 182, 183] },
+  { id: 'rear_l',  side: 'L', rgb: [190, 191, 192] },
+  { id: 'rear_r',  side: 'R', rgb: [178, 179, 180] },
+]
+
 export interface LightZone {
   id: string
   label: string

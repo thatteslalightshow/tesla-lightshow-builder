@@ -1,4 +1,4 @@
-import { CLOSURE_CMD, CLOSURE_LIMITS, CLOSURE_DURATIONS, DANCE_SUPPORTED, MODEL_CLOSURES } from './tesla-channels'
+import { CLOSURE_CMD, CLOSURE_LIMITS, CLOSURE_DURATIONS, DANCE_SUPPORTED, MODEL_CLOSURES, INTERIOR_RGB } from './tesla-channels'
 import type { ModelDefinition, LightZone, ClosureFamily } from './tesla-channels'
 import type { TeslaModel } from './supabase'
 
@@ -394,6 +394,54 @@ function applyRamping(frames: Uint8Array[], density: number[], FPS: number): voi
   }
 }
 
+// HSV (h in degrees, s/v in 0-1) → R,G,B 0-255. For the interior color wash.
+function hsv2rgb(h: number, s: number, v: number): [number, number, number] {
+  h = ((h % 360) + 360) % 360
+  const c = v * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = v - c
+  let r = 0, g = 0, b = 0
+  if (h < 60) { r = c; g = x } else if (h < 120) { r = x; g = c } else if (h < 180) { g = c; b = x }
+  else if (h < 240) { g = x; b = c } else if (h < 300) { r = x; b = c } else { r = c; b = x }
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)]
+}
+
+// Phase 5: INTERIOR RGB — a music-reactive color wash across the cabin (the center
+// screen + 5 accent segments, channels 175-192). The hue evolves with the song:
+// each detected section gets its own color identity (a fresh color when the beat
+// drops), nudged by the spectral balance (bass→warm, treble→cool) and a slow drift
+// so it's never static. Brightness pulses with per-side energy (left segments to
+// the left channel, right to the right) and the screen rides brightest. Purely
+// additive on dedicated channels — cars without accent lights just ignore them, so
+// this can't touch the validated exterior show.
+function choreographInteriorRGB(
+  frames: Uint8Array[], E: Record<Band, Record<Side, number[]>>, totalC: number[],
+  density: number[], FPS: number, seed: number,
+): void {
+  const N = frames.length
+  if (!N) return
+  const baseHue = seed % 360
+  // a distinct hue offset per section, stepped at each drop
+  const secHue = new Array<number>(N).fill(0)
+  const sections = detectSections(totalC, FPS)
+  for (let i = 0; i < sections.length; i++) {
+    const off = (i * 67) % 360                                   // ~golden spacing → varied, non-repeating colors
+    for (let f = sections[i].start; f < (sections[i + 1]?.start ?? N); f++) secHue[f] = off
+  }
+  const sideE = (side: Side, f: number) => Math.min(1, (E.bass[side][f] + E.mid[side][f] + E.high[side][f]) / 2.2)
+  for (let f = 0; f < N; f++) {
+    const tilt = E.high.C[f] - E.bass.C[f]                       // −1 (bassy) … +1 (bright)
+    const drift = (f / FPS) * 6                                  // ~6°/s gentle hue drift
+    const sat = Math.max(0.5, Math.min(1, 0.55 + 0.45 * density[f]))
+    for (const seg of INTERIOR_RGB) {
+      const e = seg.side === 'C' ? totalC[f] : sideE(seg.side, f)
+      let val = Math.min(1, 0.16 + 0.9 * e)                      // floor so the cabin always glows a little
+      if (seg.display) val = Math.min(1, val * 1.15)             // the screen is brightest
+      const hue = baseHue + secHue[f] + drift + tilt * 38 + (seg.side === 'L' ? -16 : seg.side === 'R' ? 16 : 0)
+      const [r, g, b] = hsv2rgb(hue, sat, val)
+      frames[f][seg.rgb[0]] = r; frames[f][seg.rgb[1]] = g; frames[f][seg.rgb[2]] = b
+    }
+  }
+}
+
 // Core engine — takes raw channel data. Works in the browser and on the server.
 export function analyzePCM(
   left: Float32Array, right: Float32Array, sampleRate: number,
@@ -507,6 +555,10 @@ export function analyzePCM(
   // so it sees the final on/off pattern). Degrades to the same on/off show on
   // cars without ramping, so it's safe across every model.
   applyRamping(frames, density, FPS)
+
+  // Phase 5: interior RGB color wash (additive on channels 175-192 — color on every
+  // car's cabin screen, accents where present; never touches the exterior lights).
+  choreographInteriorRGB(frames, E, totalC, density, FPS, Math.round(bpm * 7 + totalFrames))
 
   // High-res amplitude envelope for the waveform display.
   const WF_FPS = 100
