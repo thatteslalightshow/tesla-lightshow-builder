@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next'
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://tesla-lightshow-builder-1yo3.vercel.app'
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://thatteslalightshow.com'
 
 // App Router metadata file → served at /sitemap.xml.
 // Public, indexable marketing/content pages only (auth-gated and per-user

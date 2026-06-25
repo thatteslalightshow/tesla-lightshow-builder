@@ -54,7 +54,7 @@ export async function POST(req: Request) {
 
           const email = session.customer_email
           if (email) {
-            const origin = process.env.NEXT_PUBLIC_APP_URL ?? 'https://lightshowbuilder.com'
+            const origin = process.env.NEXT_PUBLIC_APP_URL ?? 'https://thatteslalightshow.com'
             const { data: show } = await admin.from('shows').select('name, tesla_model').eq('id', show_id).single()
             await sendExportReceipt({
               to: email,

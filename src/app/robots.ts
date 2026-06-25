@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next'
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://tesla-lightshow-builder-1yo3.vercel.app'
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://thatteslalightshow.com'
 
 // App Router metadata file → served at /robots.txt
 export default function robots(): MetadataRoute.Robots {

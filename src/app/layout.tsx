@@ -4,7 +4,7 @@ import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_APP_URL ?? "https://tesla-lightshow-builder-1yo3.vercel.app"
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://thatteslalightshow.com"
   ),
   title: {
     default: "ThatTeslaLightshow — Tesla Light Show Builder",

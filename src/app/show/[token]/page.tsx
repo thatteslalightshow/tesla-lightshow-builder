@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     modelX: 'Model X', cybertruck: 'Cybertruck',
   }
 
-  const url = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://lightshowbuilder.com'}/show/${params.token}`
+  const url = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://thatteslalightshow.com'}/show/${params.token}`
 
   return {
     title: show.name,
