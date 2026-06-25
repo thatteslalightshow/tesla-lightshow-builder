@@ -120,22 +120,29 @@ const CLOSE_SECONDS: Record<ClosureFamily, number> = {
   mirrors: 2, door_handles: 2, charge_port: 2,
 }
 
-// Auto-choreograph closures — built to feel UNIQUE per song and to stay safely
-// inside Tesla's rules. Three layers:
-//   1. Hero moments  — a dramatic closure lands on each big drop. Which one is
-//      picked rotates per-song (seeded from tempo + structure) so two songs never
-//      get the same sequence: charge-port rainbow, liftgate/windows dance, and
-//      (1–2× on the biggest drops) the Model-X falcon doors dance — but ONLY after
-//      a guaranteed full open.
-//   2. Rhythm closures — mirrors (and door handles on S/3/Y) fold/pop on the beat
-//      through the busy sections. Their big budgets + low risk carry the per-song
-//      movement: this layer follows the actual beat grid.
-//   3. Finale — everything left open buttons up, with windows closing clear of any
-//      door motion (Model-X false-pinch rule).
-// Enforced throughout: per-closure command limits, ~28s total dance + ≤8s per
-// dance (thermal), EVERY command held for its full travel (no stalling blips),
-// at most ONE door family per show, and on Model X the windows never move while a
-// door is moving — in either direction.
+// Auto-choreograph closures — the "exclamation point" on the song's biggest
+// moments. Closures bloom open as the band builds, hit fully-open ON the drop,
+// dance through the climax, and button up at the end — scaled to the song's genre
+// and energy so each show feels written for that track, not stamped from a mold.
+//
+// Movement GRAMMAR (the safety rules, from real Model-X testing):
+//   • Any number of closures may be OPENING at once — a synchronized bloom (falcon
+//     + both front doors + trunk all opening together is fine).
+//   • A DANCE or CLOSE may NOT overlap an in-progress OPEN — you don't wiggle or
+//     shut one closure while another is still swinging open.
+//   • On Model X, window motion and door motion are mutually exclusive (false-pinch).
+//   • Every command is HELD for its full travel (a brief blip stalls heavy doors).
+//
+// Layers:
+//   1a. CLIMAX BLOOM — on the loudest drop, a genre-sized set of big closures opens
+//       in an anticipatory cascade (slow doors start earlier in the build, all land
+//       open on the hit), then the dancers dance through the climax.
+//   1b. ACCENTS — colorful one-offs (charge-port rainbow, window dance) on the other
+//       drops, rotated per song.
+//   2.  RHYTHM — mirrors / door-handles fold & pop to the beat (low-risk, exempt
+//       from the grammar; carries the groove between the big moments).
+//   3.  FINALE — everything buttons up, windows clear of door motion.
+// Always inside per-closure command limits + ~30s/≤8s thermal dance budget.
 function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number, model: TeslaModel, zones: LightZone[], maxSections: number, bpm: number): void {
   const all = detectSections(totalC, FPS)
   if (!all.length) return
@@ -145,90 +152,97 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number
   const has = (fam: ClosureFamily) => families.includes(fam) && chOf(fam).length > 0
   const isDoorFam = (fam: ClosureFamily) => fam === 'falcon_doors' || fam === 'front_doors'
 
-  // ── budget + safety bookkeeping ──
+  // ── budget bookkeeping ──
   const used: Partial<Record<ClosureFamily, number>> = {}
   const room = (fam: ClosureFamily, n: number) => (used[fam] ?? 0) + n <= CLOSURE_LIMITS[fam]
   const spend = (fam: ClosureFamily, n: number) => { used[fam] = (used[fam] ?? 0) + n }
-  // Movement intervals we must keep apart on Model X (false-pinch rule works both
-  // ways: no window during door motion, no door during window motion).
-  const doorBusy: [number, number][] = []
-  const windowBusy: [number, number][] = []
-  const overlaps = (list: [number, number][], from: number, to: number) => list.some(([a, b]) => from < b && to > a)
   const PULSE = Math.round(FPS * 0.6)
-  const SETTLE = Math.round(FPS * 2)                             // margin so a door is fully open before it dances
-  const DANCE_TOTAL = Math.round(FPS * 28), DANCE_MAX = Math.round(FPS * 8)
-  let danceUsed = 0, doorHeroes = 0                             // ≤2 door events/show, strictly time-separated
+  const SETTLE = Math.round(FPS * 2)                             // margin so a closure is fully open before it dances
+  const DANCE_TOTAL = Math.round(FPS * 30), DANCE_MAX = Math.round(FPS * 8)
+  let danceUsed = 0
   const secs = (fam: ClosureFamily) => Math.round(CLOSURE_DURATIONS[fam] * FPS)   // open travel (frames)
   const write = (ch: number, cmd: keyof typeof CLOSURE_CMD, from: number, len: number) => {
     const v = CLOSURE_CMD[cmd]
     for (let f = Math.max(0, from); f < Math.min(N, from + len); f++) frames[f][ch] = v
   }
-  // Hold a command continuously for `len` frames across both L/R channels.
   const hold = (fam: ClosureFamily, cmd: keyof typeof CLOSURE_CMD, at: number, len: number) => {
     for (const ch of chOf(fam)) write(ch, cmd, at, len)
+  }
+
+  // ── movement grammar ── opens may overlap opens (synchronized bloom); a dance or
+  // close may not overlap an in-progress open; on Model X window motion and door
+  // motion are mutually exclusive. Mirrors/handles are exempt (low-risk rhythm).
+  type Kind = 'open' | 'dance' | 'close'
+  const moves: { fam: ClosureFamily; kind: Kind; from: number; to: number }[] = []
+  const hit = (pred: (m: { fam: ClosureFamily; kind: Kind }) => boolean, from: number, to: number) =>
+    moves.some(m => pred(m) && from < m.to && to > m.from)
+  const canPlace = (fam: ClosureFamily, kind: Kind, from: number, to: number) => {
+    if (kind === 'open') { if (hit(m => m.kind !== 'open', from, to)) return false }
+    else if (hit(m => m.kind === 'open', from, to)) return false
+    if (model === 'modelX') {
+      if (fam === 'windows' && hit(m => isDoorFam(m.fam), from, to)) return false
+      if (isDoorFam(fam) && hit(m => m.fam === 'windows', from, to)) return false
+    }
+    return true
+  }
+  const place = (fam: ClosureFamily, kind: Kind, at: number, len: number) => {
+    hold(fam, kind, at, len); moves.push({ fam, kind, from: at, to: at + len })
   }
 
   const byPeak = [...all].sort((a, b) => b.peak - a.peak)
   const byTime = [...all].sort((a, b) => a.start - b.start)
   const topPeak = byPeak[0]?.peak ?? 0
-  // Per-song seed → rotates which hero lands on which drop. Different tempo/
-  // structure ⇒ different rotation ⇒ a different show.
   const seed = (Math.round(bpm) * 2654435761 + all.length * 40503 + Math.round(topPeak * 1e4)) >>> 0
-  const finaleAt = N - Math.round(FPS * 4)
-  const opened: { fam: ClosureFamily }[] = []                    // closures to button up in the finale
+  const drama = Math.max(2, Math.min(8, maxSections))           // genre intensity: cinematic 2 … edm 8
+  const opened: ClosureFamily[] = []                            // closures to button up in the finale
 
-  // ════ Layer 1 — hero moments on the biggest drops ════
-  const palette: ClosureFamily[] = (['charge_port', 'liftgate', 'windows', 'falcon_doors', 'front_doors'] as ClosureFamily[]).filter(has)
-  const heroCount = Math.min(byPeak.length, Math.max(1, maxSections))
-  let p = palette.length ? seed % palette.length : 0
-  for (let i = 0; i < heroCount && palette.length; i++) {
-    const sec = byPeak[i]
-    for (let tries = 0; tries < palette.length; tries++) {
-      const fam = palette[(p + tries) % palette.length]
+  // ════ Layer 1a — CLIMAX BLOOM on the loudest drop ════
+  // A genre-sized set of big closures opens in an anticipatory cascade so they all
+  // land fully open ON the drop, then the dance-capable ones dance through it.
+  const climax = byPeak[0]
+  if (climax) {
+    const bloom: ClosureFamily[] = []
+    if (has('liftgate')) bloom.push('liftgate')                  // graceful trunk — always if present
+    if (drama >= 4 && has('falcon_doors')) bloom.push('falcon_doors')
+    if (drama >= 5 && has('front_doors')) bloom.push('front_doors')
+    const apex = climax.start
+    for (const fam of bloom) {                                   // 1) anticipatory opens, all open by the apex
+      const openAt = apex - secs(fam) - SETTLE
+      if (openAt < PULSE || !room(fam, 2)) continue
+      if (!canPlace(fam, 'open', openAt, apex)) continue
+      place(fam, 'open', openAt, apex - openAt); spend(fam, 1); opened.push(fam)
+    }
+    for (const fam of [...opened]) {                             // 2) dance the bloomers through the climax
+      if (!DANCE_SUPPORTED.has(fam) || danceUsed >= DANCE_TOTAL || !room(fam, 1)) continue
+      const len = Math.min(climax.end - apex, DANCE_MAX, DANCE_TOTAL - danceUsed)
+      if (len < FPS || !canPlace(fam, 'dance', apex, apex + len)) continue
+      place(fam, 'dance', apex, len); spend(fam, 1); danceUsed += len
+    }
+  }
 
-      if (fam === 'windows') {
-        // Windows dance directly (the one closure that dances without opening),
-        // through the drop — but never while a Model-X door is in motion.
-        const len = Math.min(sec.end - sec.start, DANCE_MAX, DANCE_TOTAL - danceUsed)
-        if (len < FPS || !room('windows', 2)) continue
-        const mv: [number, number] = [sec.start - PULSE, sec.start + len]
-        if (model === 'modelX' && overlaps(doorBusy, mv[0], mv[1])) continue
-        hold('windows', 'dance', sec.start, len); spend('windows', 1); danceUsed += len
-        windowBusy.push(mv); opened.push({ fam })
-      } else if (isDoorFam(fam)) {
-        // Up to 2 door events per show (falcon AND/OR front), each at its own
-        // time-separated drop. Hold the OPEN continuously until fully open, then
-        // (falcon only, ≤2×, biggest drops) dance. Skip entirely if there isn't
-        // room for a guaranteed full open — a half-open door is what errored.
-        if (doorHeroes >= 2 || !room(fam, 2)) continue
-        const travel = secs(fam)
-        const wantDance = fam === 'falcon_doors' && i < 2 && danceUsed < DANCE_TOTAL && room(fam, 3)
-        const danceAt = sec.start
-        const openAt = danceAt - travel - SETTLE                  // commanded-open right up to the dance ⇒ fully open
-        if (openAt < PULSE) continue
-        const danceLen = wantDance ? Math.min(sec.end - sec.start, DANCE_MAX, DANCE_TOTAL - danceUsed) : 0
-        const mv: [number, number] = [openAt, danceAt + danceLen]
-        if (overlaps(windowBusy, mv[0], mv[1]) || overlaps(doorBusy, mv[0], mv[1])) continue
-        hold(fam, 'open', openAt, danceAt - openAt); spend(fam, 1)  // continuous open ⇒ no stalling blip
-        if (wantDance && danceLen >= FPS) { hold(fam, 'dance', danceAt, danceLen); spend(fam, 1); danceUsed += danceLen }
-        doorBusy.push(mv); doorHeroes++; opened.push({ fam })
-      } else {
-        // liftgate / charge-port: hold open until fully open, then dance through
-        // the drop (rainbow for the charge port), close in the finale.
-        const travel = secs(fam)
-        const canDance = DANCE_SUPPORTED.has(fam) && danceUsed < DANCE_TOTAL && room(fam, 3)
-        const danceAt = sec.start
-        const openAt = danceAt - travel - SETTLE
-        if (openAt < PULSE || !room(fam, 2)) continue
-        hold(fam, 'open', openAt, danceAt - openAt); spend(fam, 1)
-        if (canDance) {
-          const len = Math.min(sec.end - sec.start, DANCE_MAX, DANCE_TOTAL - danceUsed)
-          hold(fam, 'dance', danceAt, len); spend(fam, 1); danceUsed += len
-        }
-        opened.push({ fam })
+  // ════ Layer 1b — ACCENTS on the other drops (rotated per song) ════
+  const accents: ClosureFamily[] = (['charge_port', 'windows'] as ClosureFamily[]).filter(has).filter(f => !opened.includes(f))
+  const otherDrops = byPeak.slice(1, 1 + Math.max(1, Math.round(drama / 2)))
+  let a = accents.length ? seed % accents.length : 0
+  for (const sec of otherDrops) {
+    if (!accents.length) break
+    for (let t = 0; t < accents.length; t++) {
+      const fam = accents[(a + t) % accents.length]
+      if ((used[fam] ?? 0) > 0) continue                          // each accent used once
+      const danceLen = Math.min(sec.end - sec.start, DANCE_MAX, DANCE_TOTAL - danceUsed)
+      if (danceLen < FPS || danceUsed >= DANCE_TOTAL) continue
+      if (fam === 'windows') {                                    // window dance — no open needed
+        if (!room('windows', 2) || !canPlace('windows', 'dance', sec.start, sec.start + danceLen)) continue
+        place('windows', 'dance', sec.start, danceLen); spend('windows', 1); danceUsed += danceLen
+        opened.push('windows'); a = (a + t + 1) % accents.length; break
+      } else {                                                    // charge-port rainbow: open → dance
+        const openAt = sec.start - secs('charge_port') - SETTLE
+        if (openAt < PULSE || !room('charge_port', 3)) continue
+        if (!canPlace('charge_port', 'open', openAt, sec.start) || !canPlace('charge_port', 'dance', sec.start, sec.start + danceLen)) continue
+        place('charge_port', 'open', openAt, sec.start - openAt); spend('charge_port', 1)
+        place('charge_port', 'dance', sec.start, danceLen); spend('charge_port', 1); danceUsed += danceLen
+        opened.push('charge_port'); a = (a + t + 1) % accents.length; break
       }
-      p = (p + tries + 1) % palette.length
-      break
     }
   }
 
@@ -254,18 +268,18 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number
   }
 
   // ════ Layer 3 — finale: button up, windows clear of door motion ════
-  // Doors close at the very end (close commands finish even after the fseq ends).
-  // Any open window closes a few seconds EARLIER so it's done moving before the
-  // doors start — preserving the Model-X separation.
-  const doorCloseAt = finaleAt
-  const winCloseAt = doorCloseAt - Math.round(FPS * 6)
-  const haveDoorClose = opened.some(o => isDoorFam(o.fam))
-  for (const { fam } of opened) {
+  // Doors close at the very end (close commands finish even after the fseq ends);
+  // any open window closes a few seconds EARLIER so it's done moving before the
+  // doors start — preserving the Model-X separation. (Each close is one command,
+  // already reserved against the limit when the closure was opened/danced.)
+  const finaleAt = N - Math.round(FPS * 4)
+  const winCloseAt = finaleAt - Math.round(FPS * 6)
+  const doorsClosing = model === 'modelX' && opened.some(isDoorFam)
+  for (const fam of [...new Set(opened)]) {
     if (!room(fam, 1)) continue
     const len = Math.round(CLOSE_SECONDS[fam] * FPS)
-    let at = (fam === 'windows' && haveDoorClose && model === 'modelX') ? winCloseAt : doorCloseAt
-    at = Math.max(0, Math.min(at, N - 2))
-    hold(fam, 'close', at, len); spend(fam, 1)
+    const at = Math.max(0, Math.min((fam === 'windows' && doorsClosing) ? winCloseAt : finaleAt, N - 2))
+    place(fam, 'close', at, len); spend(fam, 1)
   }
 }
 

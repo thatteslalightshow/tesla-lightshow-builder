@@ -301,16 +301,14 @@ export function buildEditFrames(ed: EditData, bpm: number, channelCount: number)
     const ch = Number(chStr)
     const family = CLOSURE_FAMILY_BY_CHANNEL[ch]
     const limit = family ? CLOSURE_LIMITS[family] : Infinity
-    // Hard cap: keep the EARLIEST actuations within Tesla's per-closure limit and
-    // drop the rest, so an exported show can never exceed the published parameters
-    // (Open/Close/Dance count; Stop does not). The UI also warns before this.
+    // Hard cap: keep the EARLIEST commands within Tesla's per-closure limit and
+    // drop the rest, so an exported show can never exceed the published parameters.
+    // EVERY command counts — Open/Close/Dance AND Stop. The UI also warns before this.
     let used = 0
     const ordered = Object.entries(lane).sort((a, b) => Number(a[0]) - Number(b[0]))
     for (const [beatStr, cmd] of ordered) {
-      if (cmd !== 'stop') {
-        if (used >= limit) continue
-        used++
-      }
+      if (used >= limit) continue
+      used++
       const [s, e] = span(Number(beatStr))
       for (let f = s; f < e; f++) frames[f][ch] = CLOSURE_CMD[cmd]
     }

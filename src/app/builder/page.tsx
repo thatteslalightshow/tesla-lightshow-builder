@@ -171,7 +171,8 @@ function validateClosures(
     const zone = zones.find(z => z.channel === ch);
     if (!zone?.closure) return;
     const cmds = Object.values(lane);
-    const actuations = cmds.filter(c => c === 'open' || c === 'close' || c === 'dance').length;
+    // EVERY command counts toward Tesla's per-closure limit — Open, Close, Dance, AND Stop.
+    const actuations = cmds.filter(c => c !== 'idle').length;
     const limit = CLOSURE_LIMITS[zone.closure];
     if (actuations > limit) warnings.push(`${zone.label}: ${actuations} commands exceed Tesla's limit of ${limit} per show.`);
     if (cmds.includes('dance') && !DANCE_SUPPORTED.has(zone.closure)) {
