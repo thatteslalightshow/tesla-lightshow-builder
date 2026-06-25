@@ -271,24 +271,24 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number
   // Each closure takes a different time to shut (falcon 8s, liftgate 4s, front 3s,
   // windows 4s, charge-port 2s), so we fire each close at end − (its close travel)
   // − buffer, holding the command for the full travel, so it finishes just before
-  // the music stops. On Model X the windows finish closing BEFORE the doors begin
-  // their close motion (window-vs-door rule). A close never starts before that
-  // closure's own open/dance has finished.
+  // the music stops. The WINDOWS close LAST — after the doors are fully shut — so
+  // the cabin music stays audible outside through the door finale (and that also
+  // honors the Model-X window-vs-door rule, since windows then move only once door
+  // motion is done). A close never starts before that closure's own open/dance ends.
   const BUFFER = Math.round(FPS * 1)                                  // ~1s margin (durations are approximate)
-  const GAP = Math.round(FPS * 1)
+  const GAP = Math.round(FPS * 1.5)                                   // settle time between door close and window close
   const closeF = (fam: ClosureFamily) => Math.round(CLOSE_SECONDS[fam] * FPS)
   const toClose = [...new Set(opened)]
-  // earliest door-close start (longest-closing door) — windows must be done before this
-  const doorCloseStart = toClose.filter(isDoorFam).reduce((m, f) => Math.min(m, N - closeF(f) - BUFFER), N)
+  const windowsLast = toClose.includes('windows') && model === 'modelX' && toClose.some(isDoorFam)
+  const windowsStart = N - closeF('windows') - BUFFER                // windows finish ~1s before the end
+  const doorFinishBy = windowsLast ? windowsStart - GAP : N - BUFFER // doors wrap up before the windows move
   for (const fam of toClose) {
     if (!room(fam, 1)) continue
     const cf = closeF(fam)
-    let at = N - cf - BUFFER                                          // finish ~1s before the end
-    if (fam === 'windows' && model === 'modelX' && doorCloseStart < N)
-      at = Math.min(at, doorCloseStart - GAP - cf)                    // …and clear of the doors' close motion
+    let at = (isDoorFam(fam) && windowsLast) ? doorFinishBy - cf      // doors close first…
+      : N - cf - BUFFER                                              // …windows (last) + liftgate/charge-port finish ~1s before end
     const ownEnd = moves.filter(m => m.fam === fam).reduce((mx, m) => Math.max(mx, m.to), 0)
-    at = Math.max(0, Math.max(at, ownEnd))                           // never close before its own open/dance ends
-    at = Math.min(at, N - 1)
+    at = Math.min(Math.max(0, Math.max(at, ownEnd)), N - 1)          // never before its own open/dance; keep in-bounds
     place(fam, 'close', at, cf); spend(fam, 1)
   }
 }
