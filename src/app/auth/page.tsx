@@ -3,7 +3,6 @@ import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import BrandLogo from '@/components/BrandLogo';
 
 // Magic link is fully built, but its email delivery needs custom SMTP + a
 // verified sending domain for production (Supabase's default email is
@@ -81,9 +80,11 @@ function AuthForm() {
       justifyContent: 'center',
       padding: '2rem',
     }}>
-      <div style={{ marginBottom: '2rem' }}>
-        <BrandLogo boxSize={36} />
-      </div>
+      <Link href="/" style={{ marginBottom: '2rem', display: 'block' }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/logo.png" alt="That Lightshow — Tesla Lightshow Builder"
+          style={{ width: 'min(300px, 72vw)', height: 'auto', display: 'block' }} />
+      </Link>
 
       <div style={{
         width: '100%',

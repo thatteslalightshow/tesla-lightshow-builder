@@ -164,6 +164,9 @@ export default function Home() {
         <div style={{ position:'absolute', top:'30%', left:'50%', transform:'translate(-50%,-50%)', width:700, height:400, background:'radial-gradient(ellipse, rgba(232,64,74,0.12) 0%, transparent 70%)', pointerEvents:'none' }} />
 
         <div ref={heroReveal.ref} style={heroReveal.style}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/logo.png" alt="That Lightshow — Tesla Lightshow Builder"
+            style={{ width:'min(460px, 84vw)', height:'auto', display:'block', margin:'0 auto 2rem', filter:'drop-shadow(0 0 55px rgba(232,64,74,0.18))' }} />
           <div style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'5px 16px', borderRadius:20, border:'1px solid rgba(255,255,255,0.12)', fontSize:12, fontWeight:500, letterSpacing:'.08em', color:'rgba(255,255,255,0.5)', marginBottom:'2.5rem' }}>
             <span style={{ width:6, height:6, borderRadius:'50%', background:'#00e887', display:'inline-block', boxShadow:'0 0 6px #00e887' }} />
             First export free · No credit card required

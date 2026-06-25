@@ -37,12 +37,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       url,
       siteName: 'ThatTeslaLightshow',
       type: 'website',
+      images: [{ url: '/brand/og.png', width: 1200, height: 630, alt: 'That Lightshow — Tesla Lightshow Builder' }],
     },
     twitter: {
       card: 'summary_large_image',
       title: show.name,
       description: `${modelLabel[show.tesla_model] ?? show.tesla_model} · ${show.style} light show. Built with @ThatTeslaLightshow`,
       site: '@ThatTeslaLightshow',
+      images: ['/brand/og.png'],
     },
   }
 }
