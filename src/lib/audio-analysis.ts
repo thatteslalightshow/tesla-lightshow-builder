@@ -159,6 +159,14 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number
   const PULSE = Math.round(FPS * 0.6)
   const SETTLE = Math.round(FPS * 2)                             // margin so a closure is fully open before it dances
   const DANCE_TOTAL = Math.round(FPS * 30), DANCE_MAX = Math.round(FPS * 8)
+  // FALCON DOORS — never command both on the same frame. Two real-car tests faulted
+  // one falcon door on byte-identical L/R commands, and the FAILING SIDE SWITCHED
+  // run-to-run → it's simultaneous-actuation arbitration (the heavy double-hinged
+  // doors + pinch sensors can't both swing at the exact same instant via a show),
+  // NOT hardware. So we offset the 2nd falcon door by a few seconds — the car's own
+  // button-press sequences them the same way. Front doors move together fine (lighter).
+  const FALCON_STAGGER = Math.round(FPS * 3.5)
+  const falconStag = (fam: ClosureFamily, i: number) => (fam === 'falcon_doors' ? i * FALCON_STAGGER : 0)
   let danceUsed = 0
   const secs = (fam: ClosureFamily) => Math.round(CLOSURE_DURATIONS[fam] * FPS)   // open travel (frames)
   const write = (ch: number, cmd: keyof typeof CLOSURE_CMD, from: number, len: number) => {
@@ -166,7 +174,7 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number
     for (let f = Math.max(0, from); f < Math.min(N, from + len); f++) frames[f][ch] = v
   }
   const hold = (fam: ClosureFamily, cmd: keyof typeof CLOSURE_CMD, at: number, len: number) => {
-    for (const ch of chOf(fam)) write(ch, cmd, at, len)
+    chOf(fam).forEach((ch, i) => write(ch, cmd, at + falconStag(fam, i), len))   // falcon L/R offset
   }
 
   // ── movement grammar ── opens may overlap opens (synchronized bloom); a dance or
@@ -186,7 +194,8 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number
     return true
   }
   const place = (fam: ClosureFamily, kind: Kind, at: number, len: number) => {
-    hold(fam, kind, at, len); moves.push({ fam, kind, from: at, to: at + len })
+    hold(fam, kind, at, len)
+    moves.push({ fam, kind, from: at, to: at + len + falconStag(fam, chOf(fam).length - 1) })  // cover the staggered tail
   }
 
   const byPeak = [...all].sort((a, b) => b.peak - a.peak)
@@ -207,7 +216,8 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number
     if (drama >= 5 && has('front_doors')) bloom.push('front_doors')
     const apex = climax.start
     for (const fam of bloom) {                                   // 1) anticipatory opens, all open by the apex
-      const openAt = apex - secs(fam) - SETTLE
+      // extra lead for falcon so the offset 2nd door is also fully open by the apex
+      const openAt = apex - secs(fam) - SETTLE - falconStag(fam, chOf(fam).length - 1)
       if (openAt < PULSE || !room(fam, 2)) continue
       if (!canPlace(fam, 'open', openAt, apex)) continue
       place(fam, 'open', openAt, apex - openAt); spend(fam, 1); opened.push(fam)
