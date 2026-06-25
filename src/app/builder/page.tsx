@@ -7,9 +7,9 @@ import { supabase, validateAudioFile, type TeslaModel, type ShowStyle } from '@/
 import TeslaScene from '@/components/TeslaScene';
 import { MODELS, generateFrames, getChannelCount, buildTimelineRows, CLOSURE_CMD, CLOSURE_LIMITS, type TimelineRow, type ClosureCommand, type ClosureFamily } from '@/lib/tesla-channels'
 
-// Email delivery is off until a sending domain is registered + verified in Resend
-// (see email-status). Flip to true once that's done to re-show the "Email me" toggle.
-const EMAIL_ENABLED = false;
+// Sending domain thatteslalightshow.com is verified in Resend (2026-06-25) — the
+// "Email me" export toggle is live (delivers the download link via the Resend API).
+const EMAIL_ENABLED = true;
 
 // Closure command UI metadata
 const CMD_CYCLE: ClosureCommand[] = ['open', 'close', 'dance', 'stop'];
