@@ -20,6 +20,11 @@ const CMD_STYLE: Record<ClosureCommand, { letter: string; fg: string; bg: string
   dance: { letter: 'D', fg: '#ff4aa0', bg: 'rgba(255,74,160,0.22)' },
   stop:  { letter: 'S', fg: '#e8404a', bg: 'rgba(232,64,74,0.22)' },
 };
+// Reverse of CLOSURE_CMD: a closure byte in the frame data → its command name, so
+// the timeline can surface AUTO-choreographed closures, not just hand-placed ones.
+const BYTE_TO_CMD: Record<number, ClosureCommand> = Object.fromEntries(
+  Object.entries(CLOSURE_CMD).filter(([k]) => k !== 'idle').map(([k, v]) => [v, k as ClosureCommand])
+) as Record<number, ClosureCommand>;
 const DANCE_SUPPORTED: Set<ClosureFamily> = new Set(['liftgate', 'charge_port', 'windows', 'falcon_doors']);
 
 type ClosureBlocks = Record<number, Record<number, ClosureCommand>>;
@@ -193,12 +198,13 @@ interface TimelineProps {
   closureBlocks?: ClosureBlocks;
   onClosureCommand?: (channel: number, beat: number) => void;
   beats?: number;   // total beats to render — spans the WHOLE song when audio is loaded
+  revealClosures?: boolean;   // auto-expand the Closures group (e.g. when auto-choreograph is on)
 }
 
 function Timeline({
   model, bpm, style, intensity, playheadFraction,
   audioFrames, audioTriggers, waveformData, editMode, symmetry, customBlocks, onToggleBeat,
-  closureBlocks, onClosureCommand, beats,
+  closureBlocks, onClosureCommand, beats, revealClosures,
 }: TimelineProps) {
   const def = MODELS[model];
   const zones = def.zones;
@@ -228,14 +234,19 @@ function Timeline({
   // ── Collapsible channel tree (xLights-style: Group → Side → channel) ───────
   const allRows: TimelineRow[] = useMemo(() => buildTimelineRows(def), [def]);
   const rowById = useMemo(() => new Map(allRows.map(r => [r.id, r])), [allRows]);
-  // Start with every top-level group collapsed
-  const [collapsed, setCollapsed] = useState<Set<string>>(
-    () => new Set(buildTimelineRows(def).filter(r => r.depth === 0).map(r => r.id))
-  );
-  // When the model changes, collapse its groups afresh
+  // All top-level groups start collapsed — EXCEPT Closures when auto-choreograph is
+  // on, so the user immediately sees the closure commands we placed for them.
+  const initialCollapsed = (d: typeof def) =>
+    new Set(buildTimelineRows(d).filter(r => r.depth === 0 && !(revealClosures && r.id === 'grp:Closures')).map(r => r.id));
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => initialCollapsed(def));
+  // When the model changes, collapse its groups afresh (respecting reveal).
   useEffect(() => {
-    setCollapsed(new Set(buildTimelineRows(def).filter(r => r.depth === 0).map(r => r.id)));
-  }, [def]);
+    setCollapsed(initialCollapsed(def));
+  }, [def]); // eslint-disable-line react-hooks/exhaustive-deps
+  // When auto-choreograph turns on, reveal the Closures group so they're visible.
+  useEffect(() => {
+    if (revealClosures) setCollapsed(prev => { const n = new Set(prev); n.delete('grp:Closures'); return n; });
+  }, [revealClosures]);
 
   function toggleRow(id: string) {
     setCollapsed(prev => {
@@ -483,13 +494,28 @@ function Timeline({
             // Closure command lane — click a cell to cycle Open→Close→Dance→Stop→clear
             if (row.closure) {
               const cch = row.channel!;
-              const lane = closureBlocks?.[cch] ?? {};
+              const manual = closureBlocks?.[cch] ?? {};
+              // Effective command per beat: a hand-placed command wins; otherwise we
+              // decode the AUTO-choreographed closure baked into the analyzed audio
+              // frames — so "Auto-choreograph closures to the music" actually shows
+              // up on the timeline. Held commands render as a block (letter at the
+              // start of the run); auto is dimmer than hand-placed.
+              const eff: ({ cmd: ClosureCommand; auto: boolean } | null)[] = Array.from({ length: BEATS }, (_, bi) => {
+                const m = manual[bi];
+                if (m) return { cmd: m, auto: false };
+                if (audioFrames) {
+                  const v = audioFrames[Math.floor(bi * fpb)]?.[cch] ?? 0;
+                  const c = BYTE_TO_CMD[v];
+                  if (c && c !== 'idle') return { cmd: c, auto: true };
+                }
+                return null;
+              });
               return (
                 <div key={row.id} style={{ height: ROW_H, marginBottom: 2, display: 'flex', gap: 1, width: contentW }}>
-                  {Array.from({ length: BEATS }, (_, beatIdx) => {
-                    const cmd = lane[beatIdx];
-                    const cs = cmd ? CMD_STYLE[cmd] : null;
+                  {eff.map((e, beatIdx) => {
+                    const cs = e ? CMD_STYLE[e.cmd] : null;
                     const isMeasure = beatIdx % 4 === 0;
+                    const runStart = !!e && (beatIdx === 0 || eff[beatIdx - 1]?.cmd !== e.cmd);
                     return (
                       <div
                         key={beatIdx}
@@ -503,9 +529,10 @@ function Timeline({
                           color: cs ? cs.fg : 'transparent',
                           background: cs ? cs.bg : isMeasure ? 'rgba(157,107,255,0.06)' : 'rgba(157,107,255,0.03)',
                           border: cs ? `1px solid ${cs.fg}` : 'none',
+                          opacity: e?.auto ? 0.6 : 1,   // auto-choreographed reads dimmer than hand-placed
                         }}
                       >
-                        {cs?.letter}
+                        {runStart ? cs?.letter : ''}
                       </div>
                     );
                   })}
@@ -1638,6 +1665,7 @@ function BuilderInner() {
               closureBlocks={closureBlocks}
               onClosureCommand={onClosureCommand}
               beats={timelineBeats}
+              revealClosures={autoClosures}
             />
           </div>
 
@@ -1658,6 +1686,7 @@ function BuilderInner() {
               {' '}<strong style={{ color: CMD_STYLE.open.fg }}>Open</strong> and <strong style={{ color: CMD_STYLE.close.fg }}>Close</strong> actuate the panel,
               {' '}<strong style={{ color: CMD_STYLE.dance.fg }}>Dance</strong> wiggles it open &amp; shut, and
               {' '}<strong style={{ color: CMD_STYLE.stop.fg }}>Stop</strong> halts it mid-motion. Click again past Stop to clear.
+              {' '}<span style={{ opacity: 0.7 }}>Dimmed cells are auto-choreographed for you; click any cell to override it.</span>
             </div>
             {/* Auto-choreograph closures to the song (opt-in — physical doors move) */}
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', userSelect: 'none', padding: '8px 10px', background: autoClosures ? 'rgba(157,107,255,0.12)' : 'rgba(255,255,255,0.03)', border: `1px solid ${autoClosures ? 'rgba(157,107,255,0.4)' : 'var(--border)'}`, borderRadius: 8 }}>
