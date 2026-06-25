@@ -4,11 +4,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
-// Magic link is fully built, but its email delivery needs custom SMTP + a
-// verified sending domain for production (Supabase's default email is
-// rate-limited and often spam-filtered). Keep the button hidden until SMTP is
-// configured, then flip this to true — no other change needed.
-const MAGIC_LINK_ENABLED = false;
+// Magic-link delivery now runs through Resend SMTP (Supabase custom SMTP) on the
+// verified sending domain thatteslalightshow.com — enabled 2026-06-25.
+const MAGIC_LINK_ENABLED = true;
 
 function AuthForm() {
   const searchParams = useSearchParams();
