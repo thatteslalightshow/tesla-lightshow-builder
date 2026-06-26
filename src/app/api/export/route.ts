@@ -63,43 +63,8 @@ function wavInfo(buf: ArrayBuffer): { sampleRate: number; durationSec: number } 
   return { sampleRate, durationSec: byteRate > 0 ? dataSize / byteRate : 0 }
 }
 
-// Linear-interpolation resampler. Tesla needs 44.1kHz; this is plenty for keeping
-// the audio length aligned to the fseq's time-based frames (sync, not hi-fi).
-function resamplePCM(data: Float32Array, srcRate: number, dstRate: number): Float32Array {
-  if (srcRate === dstRate) return data
-  const ratio = srcRate / dstRate
-  const outLen = Math.max(1, Math.round(data.length / ratio))
-  const out = new Float32Array(outLen)
-  for (let i = 0; i < outLen; i++) {
-    const pos = i * ratio, i0 = Math.floor(pos), i1 = Math.min(i0 + 1, data.length - 1)
-    const frac = pos - i0
-    out[i] = data[i0] * (1 - frac) + data[i1] * frac
-  }
-  return out
-}
-
-// Encode L/R PCM to a 16-bit stereo WAV (the format Tesla plays sample-accurately).
-function encodeWav(L: Float32Array, R: Float32Array, sampleRate: number): Uint8Array {
-  const numFrames = Math.min(L.length, R.length)
-  const blockAlign = 2 * 2 // 2ch * 16-bit
-  const dataSize = numFrames * blockAlign
-  const out = new Uint8Array(44 + dataSize)
-  const view = new DataView(out.buffer)
-  const writeStr = (o: number, s: string) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)) }
-  writeStr(0, 'RIFF'); view.setUint32(4, 36 + dataSize, true); writeStr(8, 'WAVE')
-  writeStr(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true)
-  view.setUint16(22, 2, true); view.setUint32(24, sampleRate, true)
-  view.setUint32(28, sampleRate * blockAlign, true); view.setUint16(32, blockAlign, true); view.setUint16(34, 16, true)
-  writeStr(36, 'data'); view.setUint32(40, dataSize, true)
-  let off = 44
-  for (let i = 0; i < numFrames; i++) {
-    let l = Math.max(-1, Math.min(1, L[i])); l = l < 0 ? l * 0x8000 : l * 0x7fff
-    let r = Math.max(-1, Math.min(1, R[i])); r = r < 0 ? r * 0x8000 : r * 0x7fff
-    view.setInt16(off, l, true); off += 2
-    view.setInt16(off, r, true); off += 2
-  }
-  return out
-}
+// (BYOM/FSEQ-only exports no longer ship audio, so the 44.1kHz resampler + WAV
+// encoder that used to prepare the bundled track were removed — see byom-positioning.)
 
 const MODEL_LABELS: Record<string, string> = {
   model3: 'Model 3', modelY: 'Model Y', modelS: 'Model S',
@@ -218,25 +183,42 @@ export async function POST(req: Request) {
   }
   const fseq = buildFseq(channels, frameData.length, Math.round(STEP_MS), frameData)
 
-  // Shipped audio — guaranteed 44.1kHz WAV whenever we can decode it.
-  let shipped: { data: ArrayBuffer | Uint8Array; ext: 'wav' | 'mp3' } | null = null
-  if (storedIsWav44 && audioBytes) {
-    shipped = { data: audioBytes, ext: 'wav' }                        // already perfect — pass through
-  } else if (audio) {
-    const L = audio.sampleRate === 44100 ? audio.L : resamplePCM(audio.L, audio.sampleRate, 44100)
-    const R = audio.sampleRate === 44100 ? audio.R : resamplePCM(audio.R, audio.sampleRate, 44100)
-    shipped = { data: encodeWav(L, R, 44100), ext: 'wav' }            // transcoded to 44.1kHz
-  } else if (audioBytes) {
-    const head = new Uint8Array(audioBytes.slice(0, 4))               // undecodable — last resort
-    const isWav = head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46
-    shipped = { data: audioBytes, ext: isWav ? 'wav' : 'mp3' }
-  }
+  // ── BYOM: ship the choreography ONLY (the .fseq + a setup README). The customer
+  // brings their own copy of the song — we never redistribute the audio. The
+  // README carries the locked BYOM voice (see byom-positioning in memory).
+  const songLabel = show.song_title
+    ? `"${show.song_title}"${show.song_artist ? ` — ${show.song_artist}` : ''}`
+    : 'your song'
+  const readme = [
+    `THAT LIGHTSHOW  —  your show is ready`,
+    `Choreography by us. Soundtrack by you.`,
+    ``,
+    `IN THIS FOLDER`,
+    `  - lightshow.fseq   (your custom light show)`,
+    ``,
+    `ONE LAST STEP - ADD YOUR MUSIC`,
+    `  1. Find your copy of ${songLabel} - the same file you uploaded works perfectly.`,
+    `  2. Rename it to:   lightshow.wav   (or  lightshow.mp3)`,
+    `  3. Make sure it's 44.1 kHz so it stays perfectly in sync (most MP3s already are).`,
+    `  4. Put it in this LightShow folder, right next to lightshow.fseq.`,
+    `  5. Copy the whole LightShow folder to a USB drive (formatted exFAT or FAT32).`,
+    `  6. In your Tesla: Toybox -> Light Show -> Schedule Show. Enjoy.`,
+    ``,
+    `WHY DO YOU ADD THE SONG YOURSELF?`,
+    `The music belongs to the artists who made it - and we'd rather honor the`,
+    `copyright that protects their work than tiptoe around it. So you bring your own`,
+    `copy of the track, and we'll make your Tesla do it justice. It keeps your show`,
+    `100% legal, 100% yours, and everyone on the right side of the music.`,
+    ``,
+    `Questions?  thatteslalightshow.com`,
+    ``,
+  ].join('\r\n')
 
-  // ── Build ZIP ─────────────────────────────────────────────────────────────
+  // ── Build ZIP (FSEQ + README only — no audio) ─────────────────────────────
   const zip = new JSZip()
   const folder = zip.folder('LightShow')!
   folder.file('lightshow.fseq', fseq)
-  if (shipped) folder.file(`lightshow.${shipped.ext}`, shipped.data)
+  folder.file('README.txt', readme)
 
   const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
 
@@ -278,6 +260,7 @@ export async function POST(req: Request) {
       showName: show.name,
       model: MODEL_LABELS[show.tesla_model] ?? 'Tesla',
       downloadUrl: signedUrl,
+      songTitle: show.song_title ?? undefined,
       expiresMinutes: expirySec / 60,
     }).catch(() => null)
   }

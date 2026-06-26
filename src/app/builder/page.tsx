@@ -1228,14 +1228,33 @@ function BuilderInner() {
     const zip = new JSZip();
     const folder = zip.folder('LightShow')!;
     folder.file('lightshow.fseq', fseq);
-    // Prefer the converted WAV (sample-accurate). Otherwise ship the original
-    // with the correct extension (Tesla accepts .mp3 or .wav; name must match).
-    if (wavBlobRef.current) {
-      folder.file('lightshow.wav', await wavBlobRef.current.arrayBuffer());
-    } else if (audioFile) {
-      const isWav = audioFile.type === 'audio/wav' || audioFile.type === 'audio/x-wav';
-      folder.file(`lightshow.${isWav ? 'wav' : 'mp3'}`, await audioFile.arrayBuffer());
-    }
+    // BYOM: ship the choreography ONLY (.fseq + a setup README). The customer
+    // brings their own copy of the song — we never bundle/redistribute the audio.
+    const songLabel = songTitle ? `"${songTitle}"${songArtist ? ` — ${songArtist}` : ''}` : 'your song';
+    folder.file('README.txt', [
+      `THAT LIGHTSHOW  —  your show is ready`,
+      `Choreography by us. Soundtrack by you.`,
+      ``,
+      `IN THIS FOLDER`,
+      `  - lightshow.fseq   (your custom light show)`,
+      ``,
+      `ONE LAST STEP - ADD YOUR MUSIC`,
+      `  1. Find your copy of ${songLabel} - the same file you uploaded works perfectly.`,
+      `  2. Rename it to:   lightshow.wav   (or  lightshow.mp3)`,
+      `  3. Make sure it's 44.1 kHz so it stays perfectly in sync (most MP3s already are).`,
+      `  4. Put it in this LightShow folder, right next to lightshow.fseq.`,
+      `  5. Copy the whole LightShow folder to a USB drive (formatted exFAT or FAT32).`,
+      `  6. In your Tesla: Toybox -> Light Show -> Schedule Show. Enjoy.`,
+      ``,
+      `WHY DO YOU ADD THE SONG YOURSELF?`,
+      `The music belongs to the artists who made it - and we'd rather honor the`,
+      `copyright that protects their work than tiptoe around it. So you bring your own`,
+      `copy of the track, and we'll make your Tesla do it justice. It keeps your show`,
+      `100% legal, 100% yours, and everyone on the right side of the music.`,
+      ``,
+      `Questions?  thatteslalightshow.com`,
+      ``,
+    ].join('\r\n'));
     const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url;
