@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { getAdminClient } from '@/lib/supabase'
+import { resolveSongLinks } from '@/lib/song-links'
 import ShowPreview from './ShowPreview'
 
 // Render per-request so the view/like counts are always live, not cached.
@@ -84,5 +85,9 @@ export default async function ShowPage({ params }: Props) {
     audioUrl = signed?.signedUrl ?? null
   }
 
-  return <ShowPreview show={show} audioUrl={audioUrl} audioName={audioFile?.original_name ?? null} />
+  // Resolve free EXACT streaming links for the song (BYOM — bring your own copy).
+  const s = show as { song_title?: string | null; song_artist?: string | null }
+  const songLinks = await resolveSongLinks(s.song_title, s.song_artist, audioFile?.original_name ?? show.name)
+
+  return <ShowPreview show={show} audioUrl={audioUrl} audioName={audioFile?.original_name ?? null} songLinks={songLinks} />
 }

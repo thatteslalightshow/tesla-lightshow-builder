@@ -6,6 +6,7 @@ import { supabase, type Show } from '@/lib/supabase';
 import TeslaScene from '@/components/TeslaScene';
 import SocialLinks from '@/components/SocialLinks';
 import BrandLogo from '@/components/BrandLogo';
+import type { SongLinks } from '@/lib/song-links';
 
 const MODEL_LABELS: Record<string, string> = {
   model3: 'Model 3', modelY: 'Model Y', modelS: 'Model S',
@@ -20,6 +21,7 @@ interface Props {
   show: Show
   audioUrl: string | null
   audioName: string | null
+  songLinks?: SongLinks
 }
 
 function fmt(sec: number) {
@@ -27,7 +29,7 @@ function fmt(sec: number) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export default function ShowPreview({ show, audioUrl, audioName }: Props) {
+export default function ShowPreview({ show, audioUrl, audioName, songLinks }: Props) {
   const [playing, setPlaying]         = useState(false);
   const [duration, setDuration]       = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -226,22 +228,22 @@ export default function ShowPreview({ show, audioUrl, audioName }: Props) {
               {audioName && <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>♪ {audioName}</span>}
               <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>👁 {viewCount.toLocaleString()} views</span>
             </div>
-            {/* BYOM — find your own copy of the song to run this show */}
-            {(() => {
-              const q = encodeURIComponent(
-                [(show as { song_title?: string | null }).song_title, (show as { song_artist?: string | null }).song_artist]
-                  .filter(Boolean).join(' ') || audioName || show.name
-              );
-              return (
-                <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>🎵 This show is <strong style={{ color: 'rgba(255,255,255,0.65)' }}>BYOM</strong> — bring your own copy:</span>
-                  <a href={`https://open.spotify.com/search/${q}`} target="_blank" rel="noopener noreferrer"
-                    style={{ fontSize: 12, color: '#1db954', textDecoration: 'none', fontWeight: 600, border: '1px solid rgba(29,185,84,0.4)', padding: '3px 11px', borderRadius: 16 }}>Spotify ↗</a>
-                  <a href={`https://music.apple.com/search?term=${q}`} target="_blank" rel="noopener noreferrer"
-                    style={{ fontSize: 12, color: '#fc3c44', textDecoration: 'none', fontWeight: 600, border: '1px solid rgba(252,60,68,0.4)', padding: '3px 11px', borderRadius: 16 }}>Apple Music ↗</a>
-                </div>
-              );
-            })()}
+            {/* BYOM — find your own copy of the song (exact links when matched) */}
+            {songLinks && (
+              <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>
+                  🎵 This show is <strong style={{ color: 'rgba(255,255,255,0.65)' }}>BYOM</strong> — {songLinks.matched ? 'get the song:' : 'find your copy:'}
+                </span>
+                <a href={songLinks.spotify} target="_blank" rel="noopener noreferrer"
+                  style={{ fontSize: 12, color: '#1db954', textDecoration: 'none', fontWeight: 600, border: '1px solid rgba(29,185,84,0.4)', padding: '3px 11px', borderRadius: 16 }}>Spotify ↗</a>
+                <a href={songLinks.apple} target="_blank" rel="noopener noreferrer"
+                  style={{ fontSize: 12, color: '#fc3c44', textDecoration: 'none', fontWeight: 600, border: '1px solid rgba(252,60,68,0.4)', padding: '3px 11px', borderRadius: 16 }}>Apple Music ↗</a>
+                {songLinks.youtube && (
+                  <a href={songLinks.youtube} target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize: 12, color: '#ff5a5f', textDecoration: 'none', fontWeight: 600, border: '1px solid rgba(255,90,95,0.4)', padding: '3px 11px', borderRadius: 16 }}>YouTube ↗</a>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Like button */}
