@@ -63,8 +63,42 @@ function wavInfo(buf: ArrayBuffer): { sampleRate: number; durationSec: number } 
   return { sampleRate, durationSec: byteRate > 0 ? dataSize / byteRate : 0 }
 }
 
-// (BYOM/FSEQ-only exports no longer ship audio, so the 44.1kHz resampler + WAV
-// encoder that used to prepare the bundled track were removed — see byom-positioning.)
+// 44.1kHz resampler + WAV encoder — used ONLY for admin/tester QA builds, which
+// bundle the audio so it's ready to run on the car. Customer exports are FSEQ-only
+// (BYOM) and never touch these. See byom-positioning.
+function resamplePCM(data: Float32Array, srcRate: number, dstRate: number): Float32Array {
+  if (srcRate === dstRate) return data
+  const ratio = srcRate / dstRate
+  const outLen = Math.max(1, Math.round(data.length / ratio))
+  const out = new Float32Array(outLen)
+  for (let i = 0; i < outLen; i++) {
+    const pos = i * ratio, i0 = Math.floor(pos), i1 = Math.min(i0 + 1, data.length - 1)
+    const frac = pos - i0
+    out[i] = data[i0] * (1 - frac) + data[i1] * frac
+  }
+  return out
+}
+function encodeWav(L: Float32Array, R: Float32Array, sampleRate: number): Uint8Array {
+  const numFrames = Math.min(L.length, R.length)
+  const blockAlign = 2 * 2 // 2ch * 16-bit
+  const dataSize = numFrames * blockAlign
+  const out = new Uint8Array(44 + dataSize)
+  const view = new DataView(out.buffer)
+  const writeStr = (o: number, s: string) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)) }
+  writeStr(0, 'RIFF'); view.setUint32(4, 36 + dataSize, true); writeStr(8, 'WAVE')
+  writeStr(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true)
+  view.setUint16(22, 2, true); view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * blockAlign, true); view.setUint16(32, blockAlign, true); view.setUint16(34, 16, true)
+  writeStr(36, 'data'); view.setUint32(40, dataSize, true)
+  let off = 44
+  for (let i = 0; i < numFrames; i++) {
+    let l = Math.max(-1, Math.min(1, L[i])); l = l < 0 ? l * 0x8000 : l * 0x7fff
+    let r = Math.max(-1, Math.min(1, R[i])); r = r < 0 ? r * 0x8000 : r * 0x7fff
+    view.setInt16(off, l, true); off += 2
+    view.setInt16(off, r, true); off += 2
+  }
+  return out
+}
 
 const MODEL_LABELS: Record<string, string> = {
   model3: 'Model 3', modelY: 'Model Y', modelS: 'Model S',
@@ -214,11 +248,33 @@ export async function POST(req: Request) {
     ``,
   ].join('\r\n')
 
-  // ── Build ZIP (FSEQ + README only — no audio) ─────────────────────────────
+  // ── Build ZIP ─────────────────────────────────────────────────────────────
+  // Customers: FSEQ + README only (BYOM — never redistribute audio).
+  // Admin/tester accounts (is_admin): bundle the audio too, as a 44.1kHz WAV, so
+  // QA gets a ready-to-run drive without the BYOM steps. This path NEVER reaches
+  // customers — it's gated on the server-verified is_admin flag.
   const zip = new JSZip()
   const folder = zip.folder('LightShow')!
   folder.file('lightshow.fseq', fseq)
-  folder.file('README.txt', readme)
+
+  if (isAdmin) {
+    let shipped: { data: ArrayBuffer | Uint8Array; ext: 'wav' | 'mp3' } | null = null
+    if (storedIsWav44 && audioBytes) {
+      shipped = { data: audioBytes, ext: 'wav' }                        // already 44.1kHz WAV — pass through
+    } else if (audio) {
+      const L = audio.sampleRate === 44100 ? audio.L : resamplePCM(audio.L, audio.sampleRate, 44100)
+      const R = audio.sampleRate === 44100 ? audio.R : resamplePCM(audio.R, audio.sampleRate, 44100)
+      shipped = { data: encodeWav(L, R, 44100), ext: 'wav' }            // transcoded to 44.1kHz
+    } else if (audioBytes) {
+      const head = new Uint8Array(audioBytes.slice(0, 4))               // undecodable — last resort
+      const isWavHdr = head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46
+      shipped = { data: audioBytes, ext: isWavHdr ? 'wav' : 'mp3' }
+    }
+    if (shipped) folder.file(`lightshow.${shipped.ext}`, shipped.data)
+    folder.file('README.txt', `QA / tester build — audio bundled (is_admin account). This is NOT the customer FSEQ-only output.\r\n`)
+  } else {
+    folder.file('README.txt', readme)                                  // customer BYOM build
+  }
 
   const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
 
