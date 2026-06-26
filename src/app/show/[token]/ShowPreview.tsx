@@ -226,6 +226,22 @@ export default function ShowPreview({ show, audioUrl, audioName }: Props) {
               {audioName && <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>♪ {audioName}</span>}
               <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>👁 {viewCount.toLocaleString()} views</span>
             </div>
+            {/* BYOM — find your own copy of the song to run this show */}
+            {(() => {
+              const q = encodeURIComponent(
+                [(show as { song_title?: string | null }).song_title, (show as { song_artist?: string | null }).song_artist]
+                  .filter(Boolean).join(' ') || audioName || show.name
+              );
+              return (
+                <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>🎵 This show is <strong style={{ color: 'rgba(255,255,255,0.65)' }}>BYOM</strong> — bring your own copy:</span>
+                  <a href={`https://open.spotify.com/search/${q}`} target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize: 12, color: '#1db954', textDecoration: 'none', fontWeight: 600, border: '1px solid rgba(29,185,84,0.4)', padding: '3px 11px', borderRadius: 16 }}>Spotify ↗</a>
+                  <a href={`https://music.apple.com/search?term=${q}`} target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize: 12, color: '#fc3c44', textDecoration: 'none', fontWeight: 600, border: '1px solid rgba(252,60,68,0.4)', padding: '3px 11px', borderRadius: 16 }}>Apple Music ↗</a>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Like button */}
