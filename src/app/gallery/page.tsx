@@ -26,7 +26,7 @@ interface ShowRow {
   song_title?: string | null
   song_artist?: string | null
   created_at: string
-  profiles: MaybeArr<{ display_name: string | null; is_admin: boolean | null }>
+  profiles: MaybeArr<{ display_name: string | null; is_admin: boolean | null; is_tester?: boolean | null }>
 }
 
 function first<T>(v: MaybeArr<T>): T | null {
@@ -44,7 +44,7 @@ export default async function GalleryPage() {
   // is_admin (for the OFFICIAL badge) lives on profiles and always exists, so
   // it's in both selects. Only song_title/song_artist depend on the newer
   // migration — if that hasn't run, FULL errors and we fall back to BASE.
-  const FULL = 'id, name, tesla_model, style, intensity, bpm, share_token, view_count, like_count, song_title, song_artist, created_at, profiles(display_name, is_admin)'
+  const FULL = 'id, name, tesla_model, style, intensity, bpm, share_token, view_count, like_count, song_title, song_artist, created_at, profiles(display_name, is_admin, is_tester)'
   const BASE = 'id, name, tesla_model, style, intensity, bpm, share_token, created_at, profiles(display_name, is_admin)'
 
   let rows: ShowRow[] = []
@@ -75,7 +75,7 @@ export default async function GalleryPage() {
 
   const shows: GalleryShow[] = rows.map(r => {
     const profile = first(r.profiles)
-    const isOfficial = profile?.is_admin === true
+    const isOfficial = profile?.is_admin === true || profile?.is_tester === true
     const fileName = audioByShow.get(r.id)
     const title = r.song_title?.trim()
       || (fileName ? titleFromFile(fileName) : '')

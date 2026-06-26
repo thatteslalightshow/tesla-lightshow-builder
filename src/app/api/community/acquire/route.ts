@@ -25,12 +25,15 @@ export async function POST(req: Request) {
     .from('shows').select('id').eq('user_id', user.id).eq('source_show_id', sourceId).limit(1).maybeSingle()
   if (existing) return NextResponse.json({ show_id: existing.id, already: true })
 
-  // Free for admins + active subscribers; otherwise it needs the $2.99 purchase.
+  // Free for admins, testers + active subscribers; otherwise it needs the $2.99 purchase.
   const [{ data: profile }, { data: subscription }] = await Promise.all([
     admin.from('profiles').select('is_admin').eq('id', user.id).single(),
     admin.from('subscriptions').select('status').eq('user_id', user.id).in('status', ['active', 'trialing']).maybeSingle(),
   ])
-  if (!(profile?.is_admin === true || !!subscription)) {
+  // is_tester read separately so a missing column (pre-migration) can't break this.
+  const { data: testerRow } = await admin.from('profiles').select('is_tester').eq('id', user.id).maybeSingle()
+  const isPrivileged = profile?.is_admin === true || (testerRow as { is_tester?: boolean } | null)?.is_tester === true
+  if (!(isPrivileged || !!subscription)) {
     return NextResponse.json({ needs_payment: true })
   }
 
