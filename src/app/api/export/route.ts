@@ -160,13 +160,17 @@ export async function POST(req: Request) {
   if (showErr || !show) return NextResponse.json({ error: 'Show not found' }, { status: 404 })
 
   const isAdmin = profile?.is_admin === true
+  // Testers get the same QA build as admins (audio bundled + audio kept). Separate
+  // query so a missing is_tester column (pre-migration) can't break the profile load.
+  const { data: testerRow } = await admin.from('profiles').select('is_tester').eq('id', user.id).maybeSingle()
+  const isPrivileged = isAdmin || (testerRow as { is_tester?: boolean } | null)?.is_tester === true
   const isSubscribed = !!subscription
   const hasPaid = !!purchase
   const isFreeExport = (exportCount ?? 0) === 0
   // A show acquired from the community was already paid for at acquisition time.
   const isAcquired = !!show.source_show_id
 
-  if (!isAdmin && !isSubscribed && !hasPaid && !isFreeExport && !isAcquired) {
+  if (!isPrivileged && !isSubscribed && !hasPaid && !isFreeExport && !isAcquired) {
     return NextResponse.json({ error: 'subscription_required' }, { status: 402 })
   }
 
@@ -277,7 +281,7 @@ export async function POST(req: Request) {
   const folder = zip.folder('LightShow')!
   folder.file('lightshow.fseq', fseq)
 
-  if (isAdmin) {
+  if (isPrivileged) {
     let shipped: { data: ArrayBuffer | Uint8Array; ext: 'wav' | 'mp3' } | null = null
     if (storedIsWav44 && audioBytes) {
       shipped = { data: audioBytes, ext: 'wav' }                        // already 44.1kHz WAV — pass through
@@ -310,7 +314,7 @@ export async function POST(req: Request) {
       user_id: user.id, show_id: body.show_id,
       // Customers' audio is deleted right after export (BYOM), so don't leave a
       // dangling FK; admin/tester QA builds keep the audio, so reference it.
-      audio_file_id: isAdmin ? (audioRecord?.id ?? null) : null,
+      audio_file_id: isPrivileged ? (audioRecord?.id ?? null) : null,
       // The export is bundled as a single zip; fseq_path is NOT NULL in the
       // schema, so point it at the same zip rather than leaving it empty
       // (an empty insert silently broke export tracking and free-export gating).
@@ -346,7 +350,7 @@ export async function POST(req: Request) {
   // BYOM retention: a CUSTOMER's uploaded audio is removed the moment they export —
   // but ONLY once the choreography is safely stored (so re-exports still work).
   // Admin/tester accounts keep theirs for QA. Ref-count-safe; never blocks export.
-  if (!isAdmin && choreographyStored) {
+  if (!isPrivileged && choreographyStored) {
     await deleteShowAudio(admin, body.show_id).catch(() => null)
   }
 
@@ -357,6 +361,6 @@ export async function POST(req: Request) {
     export_id: exportRecord?.id ?? null,
     file_size_bytes: zipBuffer.byteLength,
     delivered_by_email: deliverByEmail,
-    audio_removed: !isAdmin,
+    audio_removed: !isPrivileged,
   })
 }
