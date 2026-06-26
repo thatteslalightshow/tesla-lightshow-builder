@@ -4,6 +4,7 @@ import { getAuthedUser } from '@/lib/auth'
 import { getChannelCount, generateFrames, buildEditFrames, hasEdits, MODELS, FPS, STEP_MS, type EditData } from '@/lib/tesla-channels'
 import { analyzePCM } from '@/lib/audio-analysis'
 import { sendExportDownload } from '@/lib/email'
+import { deleteShowAudio } from '@/lib/audio-storage'
 import { MPEGDecoder } from 'mpg123-decoder'
 import JSZip from 'jszip'
 
@@ -288,7 +289,9 @@ export async function POST(req: Request) {
   const { data: exportRecord, error: exportInsertErr } = await admin
     .from('exports').insert({
       user_id: user.id, show_id: body.show_id,
-      audio_file_id: audioRecord?.id ?? null,
+      // Customers' audio is deleted right after export (BYOM), so don't leave a
+      // dangling FK; admin/tester QA builds keep the audio, so reference it.
+      audio_file_id: isAdmin ? (audioRecord?.id ?? null) : null,
       // The export is bundled as a single zip; fseq_path is NOT NULL in the
       // schema, so point it at the same zip rather than leaving it empty
       // (an empty insert silently broke export tracking and free-export gating).
@@ -321,6 +324,13 @@ export async function POST(req: Request) {
     }).catch(() => null)
   }
 
+  // BYOM retention: a CUSTOMER's uploaded audio is removed the moment they export —
+  // we keep their FSEQ, never their copyrighted track. Admin/tester accounts keep
+  // theirs so QA can re-export. Ref-count-safe; failure never blocks the export.
+  if (!isAdmin) {
+    await deleteShowAudio(admin, body.show_id).catch(() => null)
+  }
+
   const safeName = show.name.replace(/\s+/g, '_')
   return NextResponse.json({
     url: signedUrl,
@@ -328,5 +338,6 @@ export async function POST(req: Request) {
     export_id: exportRecord?.id ?? null,
     file_size_bytes: zipBuffer.byteLength,
     delivered_by_email: deliverByEmail,
+    audio_removed: !isAdmin,
   })
 }

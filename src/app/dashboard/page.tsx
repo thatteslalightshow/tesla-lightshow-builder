@@ -74,7 +74,12 @@ export default function DashboardPage() {
 
   async function deleteShow(id: string) {
     setDeleting(id);
-    await supabase.from('shows').delete().eq('id', id);
+    // Route through the API so the uploaded audio is removed too (BYOM — delete the
+    // show, the song goes with it). Ref-count-safe on the server.
+    await fetch('/api/shows/delete', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ show_id: id }),
+    }).catch(() => null);
     setShows(prev => prev.filter(s => s.id !== id));
     setDeleting(null);
   }
