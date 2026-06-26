@@ -39,18 +39,14 @@ const STYLE_TEXT: Record<string, string> = {
 };
 
 const MODELS = ['model3', 'modelY', 'modelS', 'modelX', 'cybertruck'];
-const STYLES = ['energetic', 'wave', 'strobe', 'chase', 'pulse', 'ripple', 'bounce', 'twinkle'];
 type Sort = 'popular' | 'newest' | 'liked';
 
 export default function GalleryClient({ shows }: { shows: GalleryShow[] }) {
   const [model, setModel] = useState<string | null>(null);
-  const [style, setStyle] = useState<string | null>(null);
   const [sort, setSort] = useState<Sort>('popular');
 
   const filtered = useMemo(() => {
-    let rows = shows.filter(s =>
-      (!model || s.tesla_model === model) && (!style || s.style === style)
-    );
+    let rows = shows.filter(s => (!model || s.tesla_model === model));
     rows = [...rows].sort((a, b) => {
       if (sort === 'newest') return +new Date(b.created_at) - +new Date(a.created_at);
       if (sort === 'liked') return b.like_count - a.like_count || b.view_count - a.view_count;
@@ -59,7 +55,7 @@ export default function GalleryClient({ shows }: { shows: GalleryShow[] }) {
       return score(b) - score(a);
     });
     return rows;
-  }, [shows, model, style, sort]);
+  }, [shows, model, sort]);
 
   return (
     <>
@@ -71,14 +67,7 @@ export default function GalleryClient({ shows }: { shows: GalleryShow[] }) {
             <FilterChip key={m} label={MODEL_LABELS[m]} active={model === m} onClick={() => setModel(model === m ? null : m)} />
           ))}
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <FilterChip label="All styles" active={style === null} onClick={() => setStyle(null)} />
-            {STYLES.map(s => (
-              <FilterChip key={s} label={STYLE_LABELS[s]} active={style === s} onClick={() => setStyle(style === s ? null : s)}
-                color={style === s ? STYLE_TEXT[s] : undefined} />
-            ))}
-          </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end' }}>
           <div style={{ display: 'flex', gap: 4, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 3 }}>
             {(['popular', 'newest', 'liked'] as Sort[]).map(s => (
               <button key={s} onClick={() => setSort(s)}
@@ -163,6 +152,10 @@ function ShowCard({ show }: { show: GalleryShow }) {
               OFFICIAL
             </span>
           )}
+          <span title="Bring Your Own Music — add your own copy of the song to run this show"
+            style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 700, letterSpacing: '.05em', color: 'var(--muted)', background: 'var(--bg3)', border: '1px solid var(--border)', padding: '1px 6px', borderRadius: 10 }}>
+            🎵 BYOM
+          </span>
         </div>
 
         {/* Stats footer */}
