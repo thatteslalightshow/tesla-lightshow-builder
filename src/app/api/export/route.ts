@@ -203,20 +203,39 @@ export async function POST(req: Request) {
     ?? (wav && wav.durationSec > 0 ? wav.durationSec : null)
     ?? audioRecord?.duration_sec ?? show.duration_sec ?? 30
 
-  // Priority: manual timeline edits > music-reactive analysis > generic style.
-  let frameData: Uint8Array[]
+  // Priority: manual edits (rebuild from edit_data, no audio) > fresh analysis
+  // (which we STORE) > stored choreography > generic fallback. Persisting the
+  // generated FSEQ per show (shows.fseq_path) is the BYOM linchpin: we can delete
+  // the raw audio yet still re-export — and let community clones export — without
+  // ever re-analyzing the copyrighted track.
+  const storedFseqPath: string | null = (show as { fseq_path?: string | null }).fseq_path ?? null
+  let fseq: Uint8Array
+  let choreographyStored = false
   if (hasEdits(editData)) {
     const frames = Math.round(durationSec * FPS)
     const loop = buildEditFrames(editData!, bpm, channels)
-    frameData = Array.from({ length: frames }, (_, f) => loop[f % loop.length])
+    const frameData = Array.from({ length: frames }, (_, f) => loop[f % loop.length])
+    fseq = buildFseq(channels, frameData.length, Math.round(STEP_MS), frameData)
+    choreographyStored = true                                          // manual shows rebuild from edit_data — audio not needed
   } else if (audio) {
     const autoClosures = editData?.autoClosures === true
-    frameData = analyzePCM(audio.L, audio.R, audio.sampleRate, modelDef.zones, channels,
+    const frameData = analyzePCM(audio.L, audio.R, audio.sampleRate, modelDef.zones, channels,
       { autoClosures, model: show.tesla_model as TeslaModel, preset: editData?.mixPreset }).frames
+    fseq = buildFseq(channels, frameData.length, Math.round(STEP_MS), frameData)
+    // Persist the choreography so future exports / clones never need the audio.
+    const canonical = `${show.user_id}/${body.show_id}/canonical.fseq`
+    const up = await admin.storage.from('fseq-exports')
+      .upload(canonical, fseq, { contentType: 'application/octet-stream', upsert: true })
+    const upd = await admin.from('shows').update({ fseq_path: canonical }).eq('id', body.show_id)
+    choreographyStored = !up.error && !upd.error                       // only true once it's safely stored
+  } else if (storedFseqPath) {
+    const { data: blob } = await admin.storage.from('fseq-exports').download(storedFseqPath)
+    if (!blob) return NextResponse.json({ error: 'This show needs to be rebuilt by its creator before it can export.' }, { status: 410 })
+    fseq = new Uint8Array(await blob.arrayBuffer())                    // use the stored choreography as-is
   } else {
-    frameData = generateFrames(show.style, show.intensity, bpm, Math.round(durationSec * FPS), modelDef)
+    const frameData = generateFrames(show.style, show.intensity, bpm, Math.round(durationSec * FPS), modelDef)
+    fseq = buildFseq(channels, frameData.length, Math.round(STEP_MS), frameData)
   }
-  const fseq = buildFseq(channels, frameData.length, Math.round(STEP_MS), frameData)
 
   // ── BYOM: ship the choreography ONLY (the .fseq + a setup README). The customer
   // brings their own copy of the song — we never redistribute the audio. The
@@ -325,9 +344,9 @@ export async function POST(req: Request) {
   }
 
   // BYOM retention: a CUSTOMER's uploaded audio is removed the moment they export —
-  // we keep their FSEQ, never their copyrighted track. Admin/tester accounts keep
-  // theirs so QA can re-export. Ref-count-safe; failure never blocks the export.
-  if (!isAdmin) {
+  // but ONLY once the choreography is safely stored (so re-exports still work).
+  // Admin/tester accounts keep theirs for QA. Ref-count-safe; never blocks export.
+  if (!isAdmin && choreographyStored) {
     await deleteShowAudio(admin, body.show_id).catch(() => null)
   }
 

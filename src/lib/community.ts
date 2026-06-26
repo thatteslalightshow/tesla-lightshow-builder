@@ -43,23 +43,13 @@ export async function cloneCommunityShow(
   }).select('id').single()
   if (cloneErr || !clone) return { error: cloneErr?.message ?? 'Could not create your copy' }
 
-  // HYBRID storage: reference the canonical community audio (one shared file per
-  // listing — no per-buyer duplication, so storage scales with listings, not
-  // sales). Durability is preserved because (1) deleting a show doesn't remove
-  // its storage file, and (2) the upload route won't remove a file that another
-  // show still references. So the buyer's copy stays playable without copying
-  // ~46MB per purchase.
-  const { data: srcAudio } = await admin
-    .from('audio_files').select('*').eq('show_id', sourceShowId).limit(1).maybeSingle()
-  if (srcAudio?.storage_path) {
-    await admin.from('audio_files').insert({
-      user_id: buyerId,
-      show_id: clone.id,
-      original_name: srcAudio.original_name,
-      storage_path: srcAudio.storage_path,
-      file_size_bytes: srcAudio.file_size_bytes,
-      mime_type: srcAudio.mime_type,
-    }).then(() => null, () => null)
+  // BYOM (metadata-only community): the clone references the source's STORED
+  // choreography (fseq_path) — its export reads that FSEQ directly, so NO audio is
+  // copied or shared. The buyer brings their own copy of the song at export time.
+  // (Defensive update so it no-ops cleanly until the shows.fseq_path column exists.)
+  const srcFseq = (src as { fseq_path?: string | null }).fseq_path
+  if (srcFseq) {
+    await admin.from('shows').update({ fseq_path: srcFseq }).eq('id', clone.id).then(() => null, () => null)
   }
 
   return { showId: clone.id }
