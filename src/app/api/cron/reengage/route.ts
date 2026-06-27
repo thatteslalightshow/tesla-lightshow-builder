@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabase'
-import { sendReengagement, sendWelcome, sendCreatorWelcome, sendFirstExportCheers } from '@/lib/email'
+import { sendReengagement, sendWelcome, sendCreatorWelcome, sendFirstExportCheers, sendWinBack, sendRenewalReminder } from '@/lib/email'
 import { unsubToken, appUrl } from '@/lib/reengage'
 
 export const maxDuration = 60
@@ -28,7 +28,8 @@ export async function GET(req: Request) {
   const admin = getAdminClient()
   const reengage = await runReengage(admin).catch(e => ({ error: String(e?.message ?? e) }))
   const lifecycle = await runLifecycle(admin).catch(e => ({ error: String(e?.message ?? e) }))
-  return NextResponse.json({ ok: true, reengage, lifecycle })
+  const retention = await runRetention(admin).catch(e => ({ error: String(e?.message ?? e) }))
+  return NextResponse.json({ ok: true, reengage, lifecycle, retention })
 }
 
 // ── Abandoned-show re-engagement (two-touch) ────────────────────────────────
@@ -188,4 +189,67 @@ async function runLifecycle(admin: Admin) {
     await send(x.user_id, 'first_export', (email) => sendFirstExportCheers({ to: email, showName: showName.get(x.show_id) || 'your show', unsubscribeUrl: unsub(x.user_id) }))
   }
   return { sent }
+}
+
+// ── Retention: renewal reminders (yearly subs) + win-back (dormant users) ────
+async function runRetention(admin: Admin) {
+  const now = Date.now()
+  const iso = (ms: number) => new Date(ms).toISOString()
+  const base = appUrl()
+  const unsub = (uid: string) => `${base}/api/email/unsubscribe?u=${uid}&t=${unsubToken(uid)}`
+  const getEmail = async (uid: string) => (await admin.auth.admin.getUserById(uid)).data?.user?.email ?? null
+  const optedOut = async (uid: string) => {
+    const { data } = await admin.from('profiles').select('marketing_opt_out').eq('id', uid).maybeSingle()
+    return (data as { marketing_opt_out?: boolean } | null)?.marketing_opt_out === true
+  }
+  const logged = async (uid: string, kind: string) =>
+    (((await admin.from('email_log').select('id').eq('user_id', uid).eq('kind', kind).limit(1)).data) ?? []).length > 0
+  const stamp = (uid: string, kind: string) => admin.from('email_log').insert({ user_id: uid, kind }).then(() => null, () => null)
+
+  // 1. RENEWAL — yearly subscriptions renewing within 10 days (once per cycle).
+  let renewSent = 0
+  try {
+    const { data: subs } = await admin.from('subscriptions')
+      .select('user_id, current_period_end')
+      .eq('plan', 'creator_yearly').in('status', ['active', 'trialing'])
+      .gte('current_period_end', iso(now)).lte('current_period_end', iso(now + 10 * D)).limit(500)
+    for (const s of (subs ?? []) as { user_id: string; current_period_end: string | null }[]) {
+      if (!s.current_period_end) continue
+      const kind = `renewal_${s.current_period_end.slice(0, 10)}`              // one per renewal cycle
+      if (await logged(s.user_id, kind) || await optedOut(s.user_id)) continue
+      const email = await getEmail(s.user_id); if (!email) continue
+      try {
+        await sendRenewalReminder({
+          to: email,
+          renewDateLabel: new Date(s.current_period_end).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+          manageUrl: `${base}/dashboard`, unsubscribeUrl: unsub(s.user_id),
+        })
+        await stamp(s.user_id, kind); renewSent++
+      } catch { /* retried next run */ }
+    }
+  } catch { /* subscriptions/email_log missing */ }
+
+  // 2. WIN-BACK — built a show 30-45d ago and nothing since (once per user).
+  let winSent = 0
+  try {
+    const [{ data: oldShows }, { data: recentShows }, { data: recentExp }] = await Promise.all([
+      admin.from('shows').select('user_id').gte('created_at', iso(now - 45 * D)).lte('created_at', iso(now - 30 * D)).limit(2000),
+      admin.from('shows').select('user_id').gte('created_at', iso(now - 30 * D)).limit(2000),
+      admin.from('exports').select('user_id').gte('created_at', iso(now - 30 * D)).limit(2000),
+    ])
+    const dormant = [...new Set((oldShows ?? []).map(r => (r as { user_id: string }).user_id))]
+    const active = new Set([...(recentShows ?? []), ...(recentExp ?? [])].map(r => (r as { user_id: string }).user_id))
+    const targets = dormant.filter(u => !active.has(u))
+    for (const uid of targets) {
+      if (winSent >= MAX_PER_RUN) break
+      if (await logged(uid, 'winback') || await optedOut(uid)) continue
+      const email = await getEmail(uid); if (!email) continue
+      try {
+        await sendWinBack({ to: email, builderUrl: `${base}/builder`, unsubscribeUrl: unsub(uid) })
+        await stamp(uid, 'winback'); winSent++
+      } catch { /* retried next run */ }
+    }
+  } catch { /* tables missing */ }
+
+  return { renewSent, winSent }
 }

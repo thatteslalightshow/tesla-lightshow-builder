@@ -314,6 +314,23 @@ export async function sendFirstExportCheers({ to, showName, unsubscribeUrl }: { 
   await resend.emails.send({ from: FROM, to, subject: 'Your first light show is ready 🎉', html: lifecycleShell({ headline: 'Your first show is done 🎉', bodyHtml: body, unsubscribeUrl }) });
 }
 
+// Dormant user (built a show a while ago, gone quiet) → a no-pressure "come back".
+// No featured/community show content — just an invite to build something new.
+export async function sendWinBack({ to, builderUrl, unsubscribeUrl }: { to: string; builderUrl: string; unsubscribeUrl: string }) {
+  if (!resend) return;
+  const body = `<p style="font-size:15px;color:rgba(255,255,255,0.55);margin:0 0 18px;line-height:1.7;">It’s been a minute. New song stuck in your head? Turn it into a light show — your Tesla’s been waiting. ⚡</p>`
+    + `<p style="font-size:14px;color:rgba(255,255,255,0.5);margin:0 0 22px;line-height:1.7;">Upload a track, our engine choreographs the lights to it, preview in 3D, and export. Two minutes, start to finish. <em style="color:rgba(255,255,255,0.45);">Choreography by us. Soundtrack by you.</em></p>`;
+  await resend.emails.send({ from: FROM, to, subject: 'Your Tesla misses the spotlight ⚡', html: lifecycleShell({ headline: 'Make something new ⚡', bodyHtml: body, ctaHref: builderUrl, ctaText: 'Build a show →', unsubscribeUrl }) });
+}
+
+// Yearly subscriber nearing renewal → a courtesy heads-up (transparency + retention).
+export async function sendRenewalReminder({ to, renewDateLabel, manageUrl, unsubscribeUrl }: { to: string; renewDateLabel: string; manageUrl: string; unsubscribeUrl: string }) {
+  if (!resend) return;
+  const body = `<p style="font-size:15px;color:rgba(255,255,255,0.55);margin:0 0 18px;line-height:1.7;">Your Creator annual plan renews on <strong style="color:rgba(255,255,255,0.8);">${escHtml(renewDateLabel)}</strong>. No action needed — we just like to give a heads-up.</p>`
+    + `<p style="font-size:14px;color:rgba(255,255,255,0.5);margin:0 0 22px;line-height:1.7;">You’ll keep unlimited exports, multi-model export, your unlimited cloud library, and free re-exports for another year. Manage or change your plan anytime from your dashboard.</p>`;
+  await resend.emails.send({ from: FROM, to, subject: 'Your Creator plan renews soon', html: lifecycleShell({ headline: 'Your Creator year is almost up ⚡', bodyHtml: body, ctaHref: manageUrl, ctaText: 'Manage your plan →', unsubscribeUrl }) });
+}
+
 function escHtml(s: string) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
