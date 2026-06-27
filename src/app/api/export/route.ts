@@ -137,7 +137,7 @@ export async function POST(req: Request) {
   const user = await getAuthedUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  let body: { show_id: string }
+  let body: { show_id: string; models?: string[] }
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
   if (!body.show_id) return NextResponse.json({ error: 'Missing show_id' }, { status: 400 })
@@ -242,6 +242,36 @@ export async function POST(req: Request) {
     fseq = buildFseq(channels, frameData.length, Math.round(STEP_MS), frameData)
   }
 
+  // ── Multi-model export (Creator) — build the same show for additional Tesla
+  // models and bundle one ready-to-copy LightShow folder per model. Subscriber-only;
+  // a non-subscriber's `models` is ignored. Extra models are regenerated for THIS
+  // export (needs the audio, which is present until export completes) — manual-edit
+  // channel maps don't transfer across models, so extras use the audio analysis (or
+  // the generic style fallback when no audio is available). The primary model's
+  // stored choreography (canonical.fseq) is unchanged.
+  const allowMulti = isPrivileged || isSubscribed
+  const requestedModels = Array.isArray(body.models)
+    ? body.models.filter((m): m is TeslaModel => typeof m === 'string' && m in MODELS)
+    : []
+  const extraModels = allowMulti
+    ? [...new Set(requestedModels)].filter(m => m !== show.tesla_model)
+    : []
+  const extraFseqs: { model: TeslaModel; fseq: Uint8Array }[] = []
+  for (const m of extraModels) {
+    const mDef = MODELS[m]
+    const mCh = getChannelCount(m)
+    let mf: Uint8Array
+    if (audio) {
+      const fr = analyzePCM(audio.L, audio.R, audio.sampleRate, mDef.zones, mCh,
+        { autoClosures: editData?.autoClosures === true, model: m, preset: editData?.mixPreset }).frames
+      mf = buildFseq(mCh, fr.length, Math.round(STEP_MS), fr)
+    } else {
+      const fr = generateFrames(show.style, show.intensity, bpm, Math.round(durationSec * FPS), mDef)
+      mf = buildFseq(mCh, fr.length, Math.round(STEP_MS), fr)
+    }
+    extraFseqs.push({ model: m, fseq: mf })
+  }
+
   // ── BYOM: ship the choreography ONLY (the .fseq + a setup README). The customer
   // brings their own copy of the song — we never redistribute the audio. The
   // README carries the locked BYOM voice (see byom-positioning in memory).
@@ -279,11 +309,10 @@ export async function POST(req: Request) {
   // QA gets a ready-to-run drive without the BYOM steps. This path NEVER reaches
   // customers — it's gated on the server-verified is_admin flag.
   const zip = new JSZip()
-  const folder = zip.folder('LightShow')!
-  folder.file('lightshow.fseq', fseq)
 
+  // The QA audio (privileged only) is computed once so every model folder can reuse it.
+  let shipped: { data: ArrayBuffer | Uint8Array; ext: 'wav' | 'mp3' } | null = null
   if (isPrivileged) {
-    let shipped: { data: ArrayBuffer | Uint8Array; ext: 'wav' | 'mp3' } | null = null
     if (storedIsWav44 && audioBytes) {
       shipped = { data: audioBytes, ext: 'wav' }                        // already 44.1kHz WAV — pass through
     } else if (audio) {
@@ -295,10 +324,41 @@ export async function POST(req: Request) {
       const isWavHdr = head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46
       shipped = { data: audioBytes, ext: isWavHdr ? 'wav' : 'mp3' }
     }
-    if (shipped) folder.file(`lightshow.${shipped.ext}`, shipped.data)
-    folder.file('README.txt', `QA / tester build — audio bundled (is_admin account). This is NOT the customer FSEQ-only output.\r\n`)
+  }
+
+  // Fill a LightShow folder: the .fseq + a README, plus the QA audio for privileged builds.
+  const fillLightShow = (folder: JSZip, fseqBytes: Uint8Array) => {
+    folder.file('lightshow.fseq', fseqBytes)
+    if (isPrivileged) {
+      if (shipped) folder.file(`lightshow.${shipped.ext}`, shipped.data)
+      folder.file('README.txt', `QA / tester build — audio bundled (is_admin account). This is NOT the customer FSEQ-only output.\r\n`)
+    } else {
+      folder.file('README.txt', readme)                                // customer BYOM build
+    }
+  }
+
+  if (extraFseqs.length === 0) {
+    // Single model — unchanged structure: /LightShow/...
+    fillLightShow(zip.folder('LightShow')!, fseq)
   } else {
-    folder.file('README.txt', readme)                                  // customer BYOM build
+    // Multi-model — one subfolder per model, each holding a ready-to-copy /LightShow/.
+    const all: { model: TeslaModel; fseq: Uint8Array }[] = [{ model: show.tesla_model as TeslaModel, fseq }, ...extraFseqs]
+    for (const { model: m, fseq: mf } of all) {
+      fillLightShow(zip.folder(MODEL_LABELS[m] ?? m)!.folder('LightShow')!, mf)
+    }
+    zip.file('README.txt', [
+      `THAT LIGHTSHOW - multi-model export`,
+      `Choreography by us. Soundtrack by you.`,
+      ``,
+      `This download has a folder for each Tesla model you chose:`,
+      ...all.map(({ model: m }) => `  - ${MODEL_LABELS[m] ?? m}/LightShow/`),
+      ``,
+      `Open the folder for YOUR car, then follow the steps in its README to add your`,
+      `song and copy the LightShow folder onto a USB drive (exFAT or FAT32).`,
+      ``,
+      `thatteslalightshow.com`,
+      ``,
+    ].join('\r\n'))
   }
 
   const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
@@ -365,6 +425,7 @@ export async function POST(req: Request) {
     export_id: exportRecord?.id ?? null,
     file_size_bytes: zipBuffer.byteLength,
     delivered_by_email: emailed,
+    models_exported: [show.tesla_model, ...extraModels],
     audio_removed: !isPrivileged,
   })
 }

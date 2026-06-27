@@ -634,6 +634,7 @@ function BuilderInner() {
   const [savedShowId, setSavedShowId] = useState<string | null>(editId);
   const [name, setName] = useState('My Light Show');
   const [model, setModel] = useState<TeslaModel>('model3');
+  const [extraModels, setExtraModels] = useState<TeslaModel[]>([]);  // Creator: also export for these models
   const [style, setStyle] = useState<ShowStyle>('energetic');
   const [intensity, setIntensity] = useState(80);
   const [bpm, setBpm] = useState(120);
@@ -1140,15 +1141,18 @@ function BuilderInner() {
         res = await fetch('/api/export', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ show_id: showId }),
+          body: JSON.stringify({ show_id: showId, models: [model, ...extraModels] }),
         });
       } catch { res = null; }
 
       if (res && res.ok) {
-        const { url, filename, delivered_by_email } = await res.json();
+        const { url, filename, delivered_by_email, models_exported } = await res.json();
         // Every export downloads directly AND emails a backup copy + setup steps.
         await streamDownload(url, filename || `${name.replace(/\s+/g, '_')}_lightshow.zip`);
-        setCheckoutMsg(delivered_by_email ? '✓ Downloaded — backup + setup steps emailed to you' : '✓ Download started!');
+        const nModels = Array.isArray(models_exported) ? models_exported.length : 1;
+        setCheckoutMsg(
+          nModels > 1 ? `✓ Downloaded ${nModels}-model pack${delivered_by_email ? ' — emailed too' : ''}`
+            : delivered_by_email ? '✓ Downloaded — backup + setup steps emailed to you' : '✓ Download started!');
         setTimeout(() => setCheckoutMsg(''), 6000);
         setExportCount(c => c + 1);
         setExporting(false); setExportStage(''); setShowSharePrompt(true);
@@ -1316,13 +1320,37 @@ function BuilderInner() {
             <div className="label">Tesla model</div>
             <div className="builder-models">
               {TESLA_MODELS.map(m => (
-                <button key={m.value} onClick={() => { setModel(m.value); setAudioFrames(null); setAudioTriggers(new Set()); setWaveformData(null); setCustomBlocks({}); setClosureBlocks({}); }}
+                <button key={m.value} onClick={() => { setModel(m.value); setExtraModels(p => p.filter(x => x !== m.value)); setAudioFrames(null); setAudioTriggers(new Set()); setWaveformData(null); setCustomBlocks({}); setClosureBlocks({}); }}
                   style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: `1px solid ${model === m.value ? 'var(--red)' : 'var(--border)'}`, background: model === m.value ? 'var(--red-glow)' : 'var(--bg3)', color: model === m.value ? 'var(--text)' : 'var(--muted)', fontSize: 13, textAlign: 'left', cursor: 'pointer', transition: 'all .15s' }}>
                   {m.label}
                 </button>
               ))}
             </div>
           </div>
+
+          {/* Multi-model export — Creator only: bundle a LightShow folder per car */}
+          {isSubscribed && (
+            <div>
+              <div className="label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                Also export for
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.05em', color: 'rgba(80,160,255,0.95)', background: 'rgba(80,160,255,0.12)', border: '1px solid rgba(80,160,255,0.35)', padding: '1px 6px', borderRadius: 10 }}>CREATOR</span>
+              </div>
+              <div className="builder-models">
+                {TESLA_MODELS.filter(m => m.value !== model).map(m => {
+                  const on = extraModels.includes(m.value);
+                  return (
+                    <button key={m.value} onClick={() => setExtraModels(p => on ? p.filter(x => x !== m.value) : [...p, m.value])}
+                      style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: `1px solid ${on ? 'rgba(80,160,255,0.6)' : 'var(--border)'}`, background: on ? 'rgba(80,160,255,0.1)' : 'var(--bg3)', color: on ? 'var(--text)' : 'var(--muted)', fontSize: 13, textAlign: 'left', cursor: 'pointer', transition: 'all .15s' }}>
+                      {on ? '✓ ' : '+ '}{m.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 6 }}>
+                {extraModels.length ? `Your export bundles ${extraModels.length + 1} models — one LightShow folder per car.` : 'Own more than one Tesla? Bundle a ready show for each, in one download.'}
+              </div>
+            </div>
+          )}
 
           {/* Audio */}
           <div>

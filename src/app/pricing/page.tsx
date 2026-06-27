@@ -34,6 +34,7 @@ const CREATOR_FEATURES: { text: string; unlock?: boolean }[] = [
   { text: 'Everything in Per export' },
   { text: 'Unlimited exports — no per-show fee' },
   { text: 'Free re-exports of any show, forever', unlock: true },
+  { text: 'Multi-model export — build once, export for every Tesla you own', unlock: true },
   { text: 'Unlimited cloud library — every show saved & backed up', unlock: true },
   { text: 'Remix any public community show' },
   { text: 'Priority support' },
@@ -51,7 +52,7 @@ const FAQ = [
   },
   {
     q: 'What extra do I get with Creator?',
-    a: 'Beyond unlimited exports: free re-exports of any show forever, an unlimited cloud library so every show stays saved and backed up, the ability to remix any public community show, and priority support.',
+    a: 'Beyond unlimited exports: free re-exports of any show forever, multi-model export (build a show once and export a tailored version for every Tesla you own in a single download), an unlimited cloud library so every show stays saved and backed up, the ability to remix any public community show, and priority support.',
   },
   {
     q: 'Do I get my show by email?',
