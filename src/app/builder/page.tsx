@@ -42,27 +42,8 @@ const TESLA_MODELS: { value: TeslaModel; label: string }[] = [
   { value: 'cybertruck', label: 'Cybertruck' },
 ];
 
-const STYLES: { value: ShowStyle; label: string; desc: string }[] = [
-  { value: 'energetic', label: 'Energetic', desc: 'Fast flashes synced to beats' },
-  { value: 'wave', label: 'Wave', desc: 'Smooth rolling light waves' },
-  { value: 'strobe', label: 'Strobe', desc: 'Sharp rhythmic strobing' },
-  { value: 'chase', label: 'Chase', desc: 'Sequential chasing pattern' },
-  { value: 'pulse', label: 'Pulse', desc: 'Whole car breathes on the beat' },
-  { value: 'ripple', label: 'Ripple', desc: 'Light radiates from the centre out' },
-  { value: 'bounce', label: 'Bounce', desc: 'A band sweeps front to back' },
-  { value: 'twinkle', label: 'Twinkle', desc: 'Sparkling random shimmer' },
-];
-
-// Starter templates — a one-tap vibe + style + intensity so new users don't
-// stare at a blank canvas. Each maps to an audio-engine preset (the "vibe").
-const TEMPLATES: { id: string; emoji: string; name: string; desc: string; preset: string; style: ShowStyle; intensity: number }[] = [
-  { id: 'edm',       emoji: '🔊', name: 'EDM Drop',    desc: 'Big builds, explosive drops', preset: 'edm',       style: 'strobe',    intensity: 95 },
-  { id: 'pop',       emoji: '✨', name: 'Pop Party',    desc: 'Bright, bouncy, fun',          preset: 'pop',       style: 'energetic', intensity: 85 },
-  { id: 'hiphop',    emoji: '🎤', name: 'Hip-Hop',      desc: '808-forward, punchy',          preset: 'hiphop',    style: 'pulse',     intensity: 85 },
-  { id: 'rock',      emoji: '🎸', name: 'Rock Anthem',  desc: 'Driving, punchy drums',        preset: 'rock',      style: 'chase',     intensity: 90 },
-  { id: 'cinematic', emoji: '🎬', name: 'Cinematic',    desc: 'Smooth, swelling, elegant',    preset: 'cinematic', style: 'wave',      intensity: 70 },
-  { id: 'holiday',   emoji: '🎄', name: 'Holiday',      desc: 'Festive sparkle',              preset: 'balanced',  style: 'twinkle',   intensity: 80 },
-];
+// The audio engine drives the show now — the legacy per-show "style" is kept only
+// as a defaulted DB field (for the non-audio LightStrip preview); no UI for it.
 
 const PREVIEW_DURATION = 30;
 const VISIBLE_BEATS = 16;
@@ -659,7 +640,6 @@ function BuilderInner() {
   const [model, setModel] = useState<TeslaModel>('model3');
   const [style, setStyle] = useState<ShowStyle>('energetic');
   const [intensity, setIntensity] = useState(80);
-  const [activeTemplate, setActiveTemplate] = useState<string | null>(null);
   const [bpm, setBpm] = useState(120);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioError, setAudioError] = useState('');
@@ -867,15 +847,6 @@ function BuilderInner() {
   const sceneFrames: Uint8Array[] | null = hasCustom
     ? customBlocksToFrames(customBlocks, timelineBeats, bpm, getChannelCount(model), closureBlocks)
     : audioFrames;
-
-  // Apply a starter template — sets the vibe + style + intensity and locks the
-  // vibe so song auto-detection won't override the user's deliberate choice.
-  function applyTemplate(t: typeof TEMPLATES[number]) {
-    setStyle(t.style); setIntensity(t.intensity); setMixPreset(t.preset);
-    vibeUserSet.current = true;
-    setActiveTemplate(t.id);
-    if (!name || name === 'My Light Show') setName(t.name);
-  }
 
   // ── Audio file selection ──────────────────────────────────────────────────
   function onAudioChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1355,24 +1326,18 @@ function BuilderInner() {
       <div className="builder-grid">
         {/* ── Left panel ─────────────────────────────────────────────────── */}
         <aside className="builder-sidebar" style={{ borderRight: '1px solid var(--border)', padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          {/* Starter templates — shown before a song is added */}
-          {!audioFile && (
-            <div>
-              <div className="label">Start from a template</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                {TEMPLATES.map(t => (
-                  <button key={t.id} onClick={() => applyTemplate(t)}
-                    style={{ textAlign: 'left', padding: '10px 11px', borderRadius: 10, cursor: 'pointer',
-                      background: activeTemplate === t.id ? 'rgba(232,64,74,0.15)' : 'rgba(255,255,255,0.04)',
-                      border: `1px solid ${activeTemplate === t.id ? 'rgba(232,64,74,0.45)' : 'var(--border)'}` }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{t.emoji} {t.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 1 }}>{t.desc}</div>
-                  </button>
-                ))}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 8 }}>Pick a vibe, then add your song — or just upload and we&apos;ll auto-detect it.</div>
+          {/* Tesla model — first: pick the car, then add the song */}
+          <div>
+            <div className="label">Tesla model</div>
+            <div className="builder-models">
+              {TESLA_MODELS.map(m => (
+                <button key={m.value} onClick={() => { setModel(m.value); setAudioFrames(null); setAudioTriggers(new Set()); setWaveformData(null); setCustomBlocks({}); setClosureBlocks({}); }}
+                  style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: `1px solid ${model === m.value ? 'var(--red)' : 'var(--border)'}`, background: model === m.value ? 'var(--red-glow)' : 'var(--bg3)', color: model === m.value ? 'var(--text)' : 'var(--muted)', fontSize: 13, textAlign: 'left', cursor: 'pointer', transition: 'all .15s' }}>
+                  {m.label}
+                </button>
+              ))}
             </div>
-          )}
+          </div>
 
           {/* Audio */}
           <div>
@@ -1481,33 +1446,6 @@ function BuilderInner() {
             )}
           </div>
 
-          {/* Tesla model */}
-          <div>
-            <div className="label">Tesla model</div>
-            <div className="builder-models">
-              {TESLA_MODELS.map(m => (
-                <button key={m.value} onClick={() => { setModel(m.value); setAudioFrames(null); setAudioTriggers(new Set()); setWaveformData(null); setCustomBlocks({}); setClosureBlocks({}); }}
-                  style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: `1px solid ${model === m.value ? 'var(--red)' : 'var(--border)'}`, background: model === m.value ? 'var(--red-glow)' : 'var(--bg3)', color: model === m.value ? 'var(--text)' : 'var(--muted)', fontSize: 13, textAlign: 'left', cursor: 'pointer', transition: 'all .15s' }}>
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Style */}
-          <div>
-            <div className="label">Animation style</div>
-            <div className="builder-styles">
-              {STYLES.map(s => (
-                <button key={s.value} onClick={() => setStyle(s.value)}
-                  style={{ padding: '8px 12px', borderRadius: 'var(--radius)', border: `1px solid ${style === s.value ? 'var(--red)' : 'var(--border)'}`, background: style === s.value ? 'var(--red-glow)' : 'var(--bg3)', textAlign: 'left', cursor: 'pointer', transition: 'all .15s' }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: style === s.value ? 'var(--text)' : 'var(--muted)' }}>{s.label}</div>
-                  <div style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 1 }}>{s.desc}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* BPM */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1605,7 +1543,6 @@ function BuilderInner() {
           <div className="builder-stats" style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
             {[
               { label: 'Model', value: TESLA_MODELS.find(m => m.value === model)?.label },
-              { label: 'Style', value: STYLES.find(s => s.value === style)?.label },
               { label: 'BPM', value: bpm },
               { label: 'Intensity', value: `${intensity}%` },
               { label: 'Channels', value: getChannelCount(model) },

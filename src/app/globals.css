@@ -61,15 +61,14 @@ input,select,textarea{font-family:var(--font-body);outline:none}
 .builder-stats{display:flex;gap:1rem;padding:1rem;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg)}
 .builder-nav-title{display:flex;align-items:center;gap:16px}
 .builder-nav-title input{background:none;border:none;font-family:var(--font-display);font-weight:600;font-size:15px;color:var(--text);min-width:0;outline:none}
-/* model/style rows stay vertical on desktop */
+/* model row stays vertical on desktop */
 .builder-models{display:flex;flex-direction:column;gap:4px}
-.builder-styles{display:flex;flex-direction:column;gap:4px}
 
 @media(max-width:768px){
-  /* builder two-column → single column, scene first */
+  /* builder two-column → single column; controls (model + song) FIRST, preview below */
   .builder-grid{grid-template-columns:1fr}
-  .builder-sidebar{border-right:none!important;border-top:1px solid var(--border);order:2;max-height:none;padding:1rem!important}
-  .builder-main{order:1;padding:1rem!important}
+  .builder-sidebar{border-right:none!important;border-bottom:1px solid var(--border);order:1;max-height:none;padding:1rem!important}
+  .builder-main{order:2;padding:1rem!important}
   .builder-scene-h{height:260px}
 
   /* stats bar scrolls horizontally */
@@ -88,11 +87,9 @@ input,select,textarea{font-family:var(--font-body);outline:none}
   .desktop-only{display:none!important}
   .mobile-only{display:inline!important}
 
-  /* model & style buttons scroll horizontally */
+  /* model buttons scroll horizontally */
   .builder-models{flex-direction:row;overflow-x:auto;padding-bottom:4px;gap:6px}
   .builder-models button{flex:0 0 auto!important}
-  .builder-styles{flex-direction:row;overflow-x:auto;padding-bottom:4px;gap:6px;flex-wrap:nowrap}
-  .builder-styles button{flex:0 0 auto!important;min-width:110px}
 
   /* timeline scrolls horizontally */
   .builder-timeline{overflow-x:auto;-webkit-overflow-scrolling:touch}

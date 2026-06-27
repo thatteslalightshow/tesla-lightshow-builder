@@ -23,21 +23,6 @@ export interface GalleryShow {
 const MODEL_LABELS: Record<string, string> = {
   model3: 'Model 3', modelY: 'Model Y', modelS: 'Model S', modelX: 'Model X', cybertruck: 'Cybertruck',
 };
-const STYLE_LABELS: Record<string, string> = {
-  energetic: 'Energetic', wave: 'Wave', strobe: 'Strobe', chase: 'Chase',
-  pulse: 'Pulse', ripple: 'Ripple', bounce: 'Bounce', twinkle: 'Twinkle',
-};
-const STYLE_COLOR: Record<string, string> = {
-  energetic: 'rgba(232,64,74,0.15)', wave: 'rgba(74,144,232,0.15)',
-  strobe: 'rgba(232,216,74,0.14)', chase: 'rgba(0,232,135,0.12)',
-  pulse: 'rgba(255,107,53,0.15)', ripple: 'rgba(157,107,255,0.15)',
-  bounce: 'rgba(255,74,160,0.15)', twinkle: 'rgba(74,216,232,0.15)',
-};
-const STYLE_TEXT: Record<string, string> = {
-  energetic: '#ff8a8a', wave: '#80b0ff', strobe: '#ffe57a', chase: '#00e887',
-  pulse: '#ff8c5a', ripple: '#b48cff', bounce: '#ff7ac0', twinkle: '#7ae4f0',
-};
-
 const MODELS = ['model3', 'modelY', 'modelS', 'modelX', 'cybertruck'];
 type Sort = 'popular' | 'newest' | 'liked';
 
@@ -137,9 +122,6 @@ function ShowCard({ show }: { show: GalleryShow }) {
               {show.artist ? `${show.artist} · ` : ''}{MODEL_LABELS[show.tesla_model] ?? show.tesla_model}
             </p>
           </div>
-          <span style={{ flexShrink: 0, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: STYLE_COLOR[show.style] ?? 'var(--bg3)', color: STYLE_TEXT[show.style] ?? 'var(--muted)' }}>
-            {STYLE_LABELS[show.style] ?? show.style}
-          </span>
         </div>
 
         {/* Creator credit */}
