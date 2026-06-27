@@ -119,6 +119,35 @@ export default async function AdminPage() {
     }
   })
 
+  // ── Traffic & funnel (last 30 days) ──────────────────────────────────────
+  const cutoff = new Date(Date.now() - 30 * 86400000).toISOString()
+  const count30 = async (table: string) => {
+    try { return (await db.from(table).select('*', { count: 'exact', head: true }).gte('created_at', cutoff)).count ?? 0 }
+    catch { return 0 }
+  }
+  const [showsSaved30, exports30, purchases30] = await Promise.all([
+    count30('shows'), count30('exports'), count30('show_purchases'),
+  ])
+  // Visitors + builders-started + visitor geo from the events table. Defensive: the
+  // table may not be migrated yet — a failure just leaves the top of the funnel empty.
+  let visitors30 = 0, builders30 = 0
+  const visitorGeo: Record<string, number> = {}
+  try {
+    const { data: ev } = await db.from('events').select('anon_id, path, country')
+      .eq('type', 'page_view').gte('created_at', cutoff).limit(100000)
+    const vset = new Set<string>(), bset = new Set<string>()
+    const geoSets: Record<string, Set<string>> = {}
+    for (const e of (ev ?? []) as { anon_id: string | null; path: string | null; country: string | null }[]) {
+      if (!e.anon_id) continue
+      vset.add(e.anon_id)
+      if (e.path && e.path.startsWith('/builder')) bset.add(e.anon_id)
+      if (e.country) (geoSets[e.country] ??= new Set<string>()).add(e.anon_id)
+    }
+    visitors30 = vset.size; builders30 = bset.size
+    for (const [c, s] of Object.entries(geoSets)) visitorGeo[c] = s.size
+  } catch { /* events table not migrated yet */ }
+  const pctOf = (n: number, d: number) => d > 0 ? `${Math.round((n / d) * 100)}% of prev` : '—'
+
   // Recent Sentry errors (null = not configured → show connect prompt).
   const sentryIssues = await fetchRecentSentryIssues()
 
@@ -149,6 +178,29 @@ export default async function AdminPage() {
             <StatCard label="Exports Purchased" value={purchaseCount ?? 0} />
             <StatCard label="Revenue" value={revenueStr} sub={purchaseCount ? `avg $${((revenue / 100) / purchaseCount).toFixed(2)}/export` : undefined} />
           </div>
+        </section>
+
+        {/* Traffic & funnel (last 30 days) */}
+        <section>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 16 }}>Traffic &amp; funnel · last 30 days</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12 }}>
+            <StatCard label="Visitors" value={visitors30} sub="unique" />
+            <StatCard label="Started building" value={builders30} sub={pctOf(builders30, visitors30)} />
+            <StatCard label="Shows saved" value={showsSaved30 ?? 0} sub={pctOf(showsSaved30 ?? 0, builders30)} />
+            <StatCard label="Exports" value={exports30 ?? 0} sub={pctOf(exports30 ?? 0, showsSaved30 ?? 0)} />
+            <StatCard label="Purchases" value={purchases30 ?? 0} sub={pctOf(purchases30 ?? 0, exports30 ?? 0)} />
+          </div>
+          {visitors30 === 0 && <div style={{ fontSize: 12, color: 'var(--muted2)', marginTop: 10 }}>Visitor counts populate once the <code>events</code> migration is run and traffic comes in.</div>}
+          {Object.keys(visitorGeo).length > 0 && (
+            <div style={{ marginTop: 16, padding: '1rem 1.25rem', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
+              <div style={{ fontSize: 12, color: 'var(--muted2)', marginBottom: 10 }}>Visitors by country · last 30 days</div>
+              {Object.entries(visitorGeo).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([c, n]) => (
+                <div key={c} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 13 }}>
+                  <span style={{ color: 'var(--muted)' }}>{c}</span><span style={{ fontWeight: 600 }}>{n}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Conversion */}

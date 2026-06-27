@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
+import Track from "@/components/Track";
 
 export const metadata: Metadata = {
   metadataBase: new URL(
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         {children}
+        <Track />
         <Analytics />
       </body>
     </html>
