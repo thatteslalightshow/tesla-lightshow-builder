@@ -48,7 +48,7 @@ const FAQ = [
   },
   {
     q: 'Should I pay per export or subscribe?',
-    a: 'If you only need a show or two, pay $2.99 per export — no commitment. If you create regularly (new shows for holidays, meetups, seasons), Creator at $6.99/mo pays for itself after about three shows a month, and the annual plan ($49.99/yr — save 40%) is the best value.',
+    a: 'If you only need a show or two, pay $2.99 per export — no commitment. If you create regularly (new shows for holidays, meetups, seasons), Creator at $6.99/mo pays for itself after about three shows a month, and the annual plan ($59.99/yr — save 28%) is the best value.',
   },
   {
     q: 'What extra do I get with Creator?',
@@ -159,7 +159,7 @@ export default function PricingPage() {
               <span style={{ fontFamily: 'var(--font-display)', fontSize: '2.6rem', fontWeight: 700, lineHeight: 1 }}>$6.99</span>
               <span style={{ fontSize: 14, color: 'var(--muted)', paddingBottom: 6 }}>/ month</span>
             </div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: '1.75rem' }}>or $49.99/year — save 40%</div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: '1.75rem' }}>or $59.99/year — save 28%</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: '1.75rem' }}>
               {CREATOR_FEATURES.map(f => <Feature key={f.text} text={f.text} unlock={f.unlock} />)}
             </div>

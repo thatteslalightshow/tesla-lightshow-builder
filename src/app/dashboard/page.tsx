@@ -235,7 +235,7 @@ export default function DashboardPage() {
                     }}
                     className="btn btn-primary btn-sm"
                   >
-                    $49.99/yr — best value
+                    $59.99/yr — best value
                   </button>
                 </div>
               </>

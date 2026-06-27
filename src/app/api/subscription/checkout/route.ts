@@ -6,10 +6,12 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-05
 
 // Lookup keys keep these idempotent — Stripe creates the price once, reuses it forever
 const PLANS = {
-  // _v2 lookup keys force Stripe to create NEW price objects at the new amounts
-  // (changing unit_amount alone would reuse the old $4.99/$39.99 prices).
+  // Versioned lookup keys force Stripe to mint a NEW price object whenever the amount
+  // changes (changing unit_amount alone reuses the old price). Bump the suffix on every
+  // price change; existing subscribers stay grandfathered on their old price.
+  //   monthly: v2 = $6.99 · yearly: v3 = $59.99 (was v2 $49.99, raised 2026-06-27)
   monthly: { lookup_key: 'creator_monthly_v2', unit_amount: 699,  interval: 'month' as const, label: 'Creator Monthly' },
-  yearly:  { lookup_key: 'creator_yearly_v2',  unit_amount: 4999, interval: 'year'  as const, label: 'Creator Annual'  },
+  yearly:  { lookup_key: 'creator_yearly_v3',  unit_amount: 5999, interval: 'year'  as const, label: 'Creator Annual'  },
 }
 
 async function getOrCreatePrice(plan: typeof PLANS[keyof typeof PLANS]): Promise<string> {
