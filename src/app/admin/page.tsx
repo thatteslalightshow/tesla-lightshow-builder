@@ -5,6 +5,7 @@ import { getAdminClient } from '@/lib/supabase'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import AdminSweepPanel from './AdminSweepPanel'
+import BroadcastPanel from './BroadcastPanel'
 import { fetchRecentSentryIssues } from '@/lib/sentry-issues'
 
 export const metadata: Metadata = { title: 'Admin' }
@@ -216,6 +217,15 @@ export default async function AdminPage() {
             <StatCard label="Paying Users" value={payingUsers} sub={`of ${userCount ?? 0} total`} />
             <StatCard label="Paid Conversion" value={`${conversionPct}%`} sub="paid or subscribed" />
           </div>
+        </section>
+
+        {/* Broadcasts */}
+        <section>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 16 }}>Broadcasts</div>
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16, maxWidth: 660, lineHeight: 1.6 }}>
+            Send a seasonal campaign or announcement. Always <strong>send a proof to yourself first</strong> and review it — &ldquo;Send to all&rdquo; only unlocks after. Opted-out users are skipped automatically, and every email includes an unsubscribe link.
+          </p>
+          <BroadcastPanel />
         </section>
 
         {/* Storage cleanup */}

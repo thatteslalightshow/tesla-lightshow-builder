@@ -273,7 +273,7 @@ function lifecycleShell(opts: { headline: string; bodyHtml: string; ctaHref?: st
         </div>
       </td></tr></table>
       <table width="100%" cellpadding="0" cellspacing="0" style="background:#111118;border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:40px 36px;margin-bottom:24px;"><tr><td>
-        <p style="font-size:26px;font-weight:800;letter-spacing:-1px;margin:0 0 16px;">${opts.headline}</p>
+        ${opts.headline ? `<p style="font-size:26px;font-weight:800;letter-spacing:-1px;margin:0 0 16px;">${opts.headline}</p>` : ''}
         ${opts.bodyHtml}
         ${cta}
       </td></tr></table>
@@ -329,6 +329,16 @@ export async function sendRenewalReminder({ to, renewDateLabel, manageUrl, unsub
   const body = `<p style="font-size:15px;color:rgba(255,255,255,0.55);margin:0 0 18px;line-height:1.7;">Your Creator annual plan renews on <strong style="color:rgba(255,255,255,0.8);">${escHtml(renewDateLabel)}</strong>. No action needed — we just like to give a heads-up.</p>`
     + `<p style="font-size:14px;color:rgba(255,255,255,0.5);margin:0 0 22px;line-height:1.7;">You’ll keep unlimited exports, multi-model export, your unlimited cloud library, and free re-exports for another year. Manage or change your plan anytime from your dashboard.</p>`;
   await resend.emails.send({ from: FROM, to, subject: 'Your Creator plan renews soon', html: lifecycleShell({ headline: 'Your Creator year is almost up ⚡', bodyHtml: body, ctaHref: manageUrl, ctaText: 'Manage your plan →', unsubscribeUrl }) });
+}
+
+// Admin broadcast (seasonal / announcement). `bodyHtml` is owner-authored content the
+// API has already escaped + linkified. Returns true on a successful send.
+export async function sendBroadcast({ to, subject, bodyHtml, unsubscribeUrl }: { to: string; subject: string; bodyHtml: string; unsubscribeUrl: string }): Promise<boolean> {
+  if (!resend) return false;
+  try {
+    await resend.emails.send({ from: FROM, to, subject, html: lifecycleShell({ headline: '', bodyHtml, unsubscribeUrl }) });
+    return true;
+  } catch { return false; }
 }
 
 function escHtml(s: string) {
