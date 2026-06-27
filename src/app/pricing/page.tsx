@@ -20,7 +20,8 @@ const FREE_FEATURES = [
 const PER_EXPORT_FEATURES = [
   'Everything in Free',
   'Export any show for $2.99',
-  'Audio-synced FSEQ + WAV package',
+  'Beat-synced FSEQ light sequence',
+  'Step-by-step BYOM setup instructions',
   'FSEQ v2 validation report',
   'Pay only when you export',
   'No commitment',
@@ -58,7 +59,11 @@ const FAQ = [
   },
   {
     q: 'What is an FSEQ file?',
-    a: 'FSEQ (xLights sequence format v2) is the file format Tesla uses to drive light shows. It contains per-frame brightness values for each of your car\'s 48 light channels at 20 frames per second.',
+    a: 'FSEQ (xLights sequence format v2) is the file format Tesla uses to drive light shows. It contains per-frame values for every light and closure channel on your car, at 50 frames per second. It\'s the choreography — not the music.',
+  },
+  {
+    q: 'Is the song included in my export?',
+    a: 'No — choreography by us, soundtrack by you. Your export is the light sequence, not the music. We use your upload only to build the show, then delete it the moment you export. To run a show you add your own copy of the same song; every export comes with simple step-by-step instructions (easiest path: reuse the exact file you uploaded). It keeps everyone on the right side of the music — the song belongs to the artists who made it.',
   },
 ]
 

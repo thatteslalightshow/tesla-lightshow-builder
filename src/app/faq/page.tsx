@@ -27,7 +27,7 @@ export default function FaqPage() {
       </Q>
 
       <Q q="How does it work?">
-        Upload a song, preview your show in 3D in the browser, then export. You get a <strong>LightShow</strong> folder (a <code>.fseq</code> sequence + your audio) to copy onto a USB drive. Plug it into your Tesla and start the show from the Toybox.
+        Upload a song so our engine can choreograph to it, preview your show in 3D in the browser, then export. You get a <strong>LightShow</strong> folder with your <code>.fseq</code> sequence and step-by-step instructions. You add <strong>your own copy of the song</strong> to the folder, copy it onto a USB drive, plug it into your Tesla, and start the show from the Toybox. <strong>Choreography by us. Soundtrack by you.</strong>
       </Q>
 
       <Q q="Which Teslas are supported?">
@@ -43,7 +43,11 @@ export default function FaqPage() {
       </Q>
 
       <Q q="What music can I use?">
-        Upload an MP3 or WAV (WAV is best). We automatically convert it to the 44.1 kHz WAV format Tesla needs so it stays perfectly in sync. <strong>You provide your own music</strong> — we don&apos;t supply songs, and you&apos;re responsible for having the rights to the audio you upload.
+        Any song you have a copy of — upload an MP3 or WAV so our engine can analyze the beat and build the choreography. You bring your own copy of the track to actually run the show. The music belongs to the artists who made it, and we&apos;d rather honor the copyright that protects their work than tiptoe around it — so we keep you <strong>on the right side of the music</strong> while your Tesla does it justice.
+      </Q>
+
+      <Q q="Do you include the music with my show?">
+        No — and that&apos;s on purpose. <strong>Choreography by us. Soundtrack by you.</strong> Your export is the light sequence (<code>.fseq</code>), not the song. We use your upload only to build the show, then <strong>delete it the moment you export</strong> — we never store, ship, or share anyone&apos;s audio. To run the show, drop <strong>your own copy of the same song</strong> into the LightShow folder (the export email walks you through it). Easiest path: reuse the exact file you uploaded — rename it to match, and you&apos;re set.
       </Q>
 
       <Q q="How do I load a show onto my Tesla?">
@@ -51,7 +55,7 @@ export default function FaqPage() {
       </Q>
 
       <Q q="Can I share or buy community shows?">
-        Yes. You can make your shows public in the community gallery, and acquire shows others have shared. When you add a community show to your library, it&apos;s tailored to your Tesla model automatically. Subscribers get community downloads free; otherwise it&apos;s $2.99.
+        Yes. You can make your shows public in the community gallery, and acquire shows others have shared. Community shows are <strong>choreography only</strong> — the <code>.fseq</code> plus the song&apos;s title, artist, and tempo, never anyone&apos;s audio — so it&apos;s BYOM just like your own exports: bring your own copy of the listed song to run it. When you add a community show to your library, it&apos;s tailored to your Tesla model automatically. Subscribers get community downloads free; otherwise it&apos;s $2.99.
       </Q>
 
       <Q q="Can I cancel my subscription?">

@@ -10,7 +10,7 @@ export default function TermsPage() {
   return (
     <LegalPage
       title="Terms of Service"
-      updated="June 24, 2026"
+      updated="June 26, 2026"
       intro="These terms govern your use of ThatTeslaLightshow. By creating an account or using the service, you agree to them. Please read the music-rights and vehicle-safety sections carefully."
     >
       <h2>1. The service</h2>
@@ -27,11 +27,11 @@ export default function TermsPage() {
       </ul>
 
       <h2>4. Music &amp; content rights</h2>
-      <p><strong>You provide your own music.</strong> When you upload an audio file, you confirm that you own it or have the rights to use it to create a personal light show. We do not own, license, sell, or claim any rights to your music. We process your audio only to generate and time your light show, and we return your same audio bundled with the light-sequence file we create — the light sequence is our product, not the music.</p>
-      <p>You retain ownership of the shows you create. You are solely responsible for ensuring you have the rights to any audio you upload, share, or distribute. You agree not to upload audio you do not have the right to use.</p>
+      <p><strong>Choreography by us. Soundtrack by you.</strong> The music belongs to the artists who made it, and we&apos;d rather honor the copyright that protects their work than tiptoe around it. So our product is the light <em>choreography</em> — never the music. When you upload an audio file, you confirm that you own it or have the rights to use it to create a personal light show. We use your upload <strong>only</strong> to analyze the song and build your light sequence, and we <strong>permanently delete that audio the moment you export</strong>. We do not own, license, sell, store, or redistribute your music, and your export contains the light sequence (<code>.fseq</code>) only — no audio. To run a show, you supply your own copy of the song. This keeps you, and us, <strong>on the right side of the music</strong>.</p>
+      <p>You retain ownership of the shows you create. You are solely responsible for ensuring you have the rights to any audio you upload or use to run a show. You agree not to upload audio you do not have the right to use.</p>
 
       <h2>5. Sharing &amp; community shows</h2>
-      <p>If you make a show public or list it in the community gallery, you grant other users permission to view and acquire a copy of that show. You represent and warrant that you hold all rights necessary to share any audio included with it. You — not ThatTeslaLightshow — are responsible for the content you choose to make public. We may remove any show at our discretion.</p>
+      <p>If you make a show public or list it in the community gallery, you grant other users permission to view and acquire a copy of that show. Community shows are <strong>choreography only</strong> — the light sequence plus basic song metadata (title, artist, tempo); <strong>no audio is ever shared</strong>, and anyone running a community show brings their own copy of the song. You — not ThatTeslaLightshow — are responsible for the content you choose to make public. We may remove any show at our discretion.</p>
 
       <h2>6. Vehicle safety — important</h2>
       <p>Some light shows can command your vehicle&apos;s <strong>physical closures</strong> — doors, windows, mirrors, the liftgate/frunk, and the charge port — to move. <strong>You run light shows entirely at your own risk.</strong> Before running any show:</p>

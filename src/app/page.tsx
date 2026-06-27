@@ -229,8 +229,21 @@ export default function Home() {
           desc="Drop in any MP3 or WAV. Our beat detection reads the tempo, identifies drops and transitions, and auto-syncs 48 light channels to the music — all in seconds." />
         <HowStep n="02" title="Customize your show"
           desc="Edit any channel manually in the timeline. Toggle symmetry, adjust intensity, and preview live on a 3D model of your exact Tesla — Model 3, Y, S, X, or Cybertruck." />
-        <HowStep n="03" title="Export and plug in"
-          desc="One click downloads a Tesla-ready ZIP with your FSEQ file and audio. Copy it to a USB drive, plug into the front port, and tap Light Show on your touchscreen." />
+        <HowStep n="03" title="Export, add your song, plug in"
+          desc="One click downloads a Tesla-ready folder with your FSEQ light sequence and simple setup instructions. Drop in your own copy of the song, copy it to a USB drive, plug into the front port, and tap Light Show on your touchscreen." />
+      </section>
+
+      {/* ── BYOM ─────────────────────────────────────────────────────────── */}
+      <section style={{ position:'relative', zIndex:1, borderTop:'1px solid rgba(255,255,255,0.06)', background:'linear-gradient(180deg,rgba(232,64,74,0.06),rgba(255,96,48,0.02))' }}>
+        <div style={{ maxWidth:820, margin:'0 auto', padding:'7rem 2rem', textAlign:'center' }}>
+          <SLabel>Bring your own music</SLabel>
+          <h2 style={{ fontFamily:'var(--font-display)', fontSize:'clamp(2rem,5vw,3.4rem)', fontWeight:700, letterSpacing:'-2px', lineHeight:1.02, marginBottom:'1.5rem' }}>
+            Choreography by us.<br /><span style={{ background:'linear-gradient(90deg,#e8404a,#ff6030)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>Soundtrack by you.</span>
+          </h2>
+          <p style={{ fontSize:16, color:'rgba(255,255,255,0.45)', maxWidth:560, margin:'0 auto', lineHeight:1.75 }}>
+            Your export is the light sequence — never the song. We use your upload only to build the show, then <strong style={{ color:'rgba(255,255,255,0.7)' }}>delete it the moment you export</strong>. To run a show, drop your own copy of the same track into the LightShow folder. It keeps everyone <strong style={{ color:'rgba(255,255,255,0.7)' }}>on the right side of the music</strong> — the song belongs to the artists who made it.
+          </p>
+        </div>
       </section>
 
       {/* ── FEATURES ─────────────────────────────────────────────────────── */}
@@ -247,7 +260,7 @@ export default function Home() {
               ['5 Tesla models','Model 3, Model Y, Model S, Model X, and Cybertruck — each with their exact channel layout.'],
               ['Manual beat editing','Click any beat on any channel to toggle it. Draw your own patterns from scratch.'],
               ['Left/right symmetry','Mirror edits across the car automatically. One click, perfect symmetry.'],
-              ['FSEQ v2 export','Validated FSEQ file + WAV audio package. Plug in and it just works.'],
+              ['FSEQ v2 export','Validated FSEQ light sequence with step-by-step setup. Add your own song and plug in.'],
               ['Community gallery','Browse, preview, and remix shows shared by other Tesla owners.'],
               ['Real-time 3D preview','Rotate around your exact model. Watch the light show play live before you export.'],
             ].map(([title, desc], i) => (
@@ -291,7 +304,7 @@ export default function Home() {
             <div style={{ fontSize:12, fontWeight:600, letterSpacing:'.12em', color:'rgba(255,255,255,0.3)', textTransform:'uppercase', marginBottom:20 }}>Per Export</div>
             <div style={{ fontFamily:'var(--font-display)', fontSize:'3.2rem', fontWeight:700, letterSpacing:'-2px', marginBottom:4 }}>$2.99</div>
             <div style={{ fontSize:13, color:'rgba(255,255,255,0.3)', marginBottom:'2rem', paddingBottom:'2rem', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>per USB download</div>
-            {['Everything in Free','Pay only when you export','FSEQ + WAV package','FSEQ validation report','No commitment'].map(f=>(
+            {['Everything in Free','Pay only when you export','Beat-synced FSEQ + setup guide','FSEQ validation report','No commitment'].map(f=>(
               <div key={f} style={{ display:'flex', gap:10, fontSize:14, color:'rgba(255,255,255,0.5)', marginBottom:10, alignItems:'center' }}>
                 <span style={{ color:'#00e887', fontSize:12 }}>✓</span>{f}
               </div>

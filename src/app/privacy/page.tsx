@@ -10,13 +10,13 @@ export default function PrivacyPage() {
   return (
     <LegalPage
       title="Privacy Policy"
-      updated="June 24, 2026"
+      updated="June 26, 2026"
       intro="This policy explains what we collect when you use ThatTeslaLightshow, how we use it, and the choices you have. By using the service you agree to this policy."
     >
       <h2>Information we collect</h2>
       <ul>
         <li><strong>Account information</strong> — your email address and, if you sign in with Google, the basic profile info Google shares (name, email). We never receive your Google password.</li>
-        <li><strong>Content you create</strong> — the light shows you build, their settings, and any audio files you upload to make a show.</li>
+        <li><strong>Content you create</strong> — the light shows you build and their settings. We also temporarily process the audio you upload to choreograph a show; see <strong>Audio you upload</strong> below for how briefly we keep it.</li>
         <li><strong>Payment information</strong> — when you buy an export or subscribe, payments are processed by <strong>Stripe</strong>. We do not see or store your full card number; Stripe handles it and shares limited details with us (e.g., that a payment succeeded, the billing country, the last digits).</li>
         <li><strong>Usage &amp; analytics</strong> — basic, privacy-friendly analytics about how the site is used (pages viewed, referrers, device type) and a <strong>coarse location (country / region)</strong> derived from your connection. We do <strong>not</strong> store your raw IP address for analytics.</li>
         <li><strong>Cookies</strong> — we use cookies that are necessary to keep you signed in. We do not use third-party advertising cookies.</li>
@@ -41,10 +41,10 @@ export default function PrivacyPage() {
       <p>We may also disclose information if required by law, or to protect the rights, safety, and property of our users or ourselves.</p>
 
       <h2>Audio you upload</h2>
-      <p>Audio files you upload are used to generate and sync your light show, and are bundled back into the show package you download. You are responsible for having the rights to any audio you upload. See our <a href="/terms">Terms of Service</a> for details.</p>
+      <p><strong>Choreography by us. Soundtrack by you.</strong> We use the audio you upload only to analyze the song and build your light show. We <strong>do not</strong> include your audio in the file you download, and we <strong>permanently delete the uploaded audio as soon as you export</strong> the show — we never store it long-term, ship it back to you, or share it with anyone. What we keep is the light sequence we created and a small amount of non-audio analysis (such as tempo and timing) so we can re-render your show without re-uploading. To run a show, you add your own copy of the song yourself. This keeps everyone <strong>on the right side of the music</strong>: the song belongs to the artists who made it. You are responsible for having the rights to any audio you upload. See our <a href="/terms">Terms of Service</a> for details.</p>
 
       <h2>Data retention</h2>
-      <p>We keep your account and content for as long as your account is active. You can delete individual shows at any time, and you can request deletion of your account by contacting us.</p>
+      <p>We keep your account and the shows you create for as long as your account is active. <strong>Uploaded audio is the exception:</strong> it is deleted automatically the moment you export a show, and is never kept long-term. When you delete a show, its associated song data and any remaining audio are deleted along with it. You can delete individual shows at any time, and you can request deletion of your account by contacting us.</p>
 
       <h2>Security</h2>
       <p>We use industry-standard measures to protect your data, including encrypted connections and access controls. No system is perfectly secure, but we work to safeguard your information.</p>

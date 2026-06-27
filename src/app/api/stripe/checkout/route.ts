@@ -31,7 +31,7 @@ export async function POST(req: Request) {
         currency: 'usd',
         product_data: {
           name: 'Tesla Light Show Export',
-          description: 'Download your custom FSEQ + WAV light show package for your Tesla.',
+          description: 'Download your custom FSEQ light sequence for your Tesla, with step-by-step setup. Choreography by us, soundtrack by you.',
         },
         unit_amount: EXPORT_PRICE_CENTS,
       },
