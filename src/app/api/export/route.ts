@@ -111,9 +111,10 @@ const MODEL_LABELS: Record<string, string> = {
 // drop the client into the audio-less fallback path.
 export const maxDuration = 120
 
-// Signed URL TTL: 1 hour for email delivery, 15 min for direct download
-const EMAIL_EXPIRY_SEC = 3600
-const DIRECT_EXPIRY_SEC = 900
+// Signed URL TTL — 1 hour. Every export both downloads directly AND emails this same
+// link (+ BYOM setup steps) as a backup, so it must stay valid long enough to use from
+// the inbox.
+const EXPORT_EXPIRY_SEC = 3600
 
 function buildFseq(channels: number, frames: number, stepMs: number, frameData: Uint8Array[]): Uint8Array {
   const headerSize = 32
@@ -136,7 +137,7 @@ export async function POST(req: Request) {
   const user = await getAuthedUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  let body: { show_id: string; deliver_by_email?: boolean }
+  let body: { show_id: string }
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
   if (!body.show_id) return NextResponse.json({ error: 'Missing show_id' }, { status: 400 })
@@ -324,8 +325,9 @@ export async function POST(req: Request) {
   if (exportInsertErr) console.error('export insert failed:', exportInsertErr.message)
 
   // ── Deliver ───────────────────────────────────────────────────────────────
-  const deliverByEmail = body.deliver_by_email === true
-  const expirySec = deliverByEmail ? EMAIL_EXPIRY_SEC : DIRECT_EXPIRY_SEC
+  // Every export does BOTH: return a direct-download URL AND email the same link with
+  // the BYOM setup instructions, so the customer always has a backup + next-steps.
+  const expirySec = EXPORT_EXPIRY_SEC
   // Sign with the admin (service-role) client — the private fseq-exports bucket
   // isn't readable by the anon client, so the shared getSignedDownloadUrl helper
   // (which uses the browser client) threw here and 500'd the whole export.
@@ -336,15 +338,17 @@ export async function POST(req: Request) {
   }
   const signedUrl = signed.signedUrl
 
-  if (deliverByEmail && user.email) {
-    await sendExportDownload({
+  // Best-effort backup email — a failed send must never fail the export.
+  let emailed = false
+  if (user.email) {
+    emailed = await sendExportDownload({
       to: user.email,
       showName: show.name,
       model: MODEL_LABELS[show.tesla_model] ?? 'Tesla',
       downloadUrl: signedUrl,
       songTitle: show.song_title ?? undefined,
       expiresMinutes: expirySec / 60,
-    }).catch(() => null)
+    }).then(() => true).catch(() => false)
   }
 
   // BYOM retention: a CUSTOMER's uploaded audio is removed the moment they export —
@@ -360,7 +364,7 @@ export async function POST(req: Request) {
     filename: `${safeName}_lightshow.zip`,
     export_id: exportRecord?.id ?? null,
     file_size_bytes: zipBuffer.byteLength,
-    delivered_by_email: deliverByEmail,
+    delivered_by_email: emailed,
     audio_removed: !isPrivileged,
   })
 }

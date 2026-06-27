@@ -7,10 +7,6 @@ import { supabase, validateAudioFile, type TeslaModel, type ShowStyle } from '@/
 import TeslaScene from '@/components/TeslaScene';
 import { MODELS, generateFrames, getChannelCount, buildTimelineRows, CLOSURE_CMD, CLOSURE_LIMITS, type TimelineRow, type ClosureCommand, type ClosureFamily } from '@/lib/tesla-channels'
 
-// Sending domain thatteslalightshow.com is verified in Resend (2026-06-25) — the
-// "Email me" export toggle is live (delivers the download link via the Resend API).
-const EMAIL_ENABLED = true;
-
 // Closure command UI metadata
 const CMD_CYCLE: ClosureCommand[] = ['open', 'close', 'dance', 'stop'];
 const CMD_STYLE: Record<ClosureCommand, { letter: string; fg: string; bg: string }> = {
@@ -681,7 +677,6 @@ function BuilderInner() {
   const [exportCount, setExportCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
-  const [emailExport, setEmailExport] = useState(false);
   const [checkoutMsg, setCheckoutMsg] = useState(checkoutCancelled ? 'Payment cancelled — your show is still saved.' : '');
   const [showSharePrompt, setShowSharePrompt] = useState(false);
   // Pay/subscribe choice prompt shown when a non-subscriber who's used their free
@@ -1143,22 +1138,18 @@ function BuilderInner() {
         res = await fetch('/api/export', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ show_id: showId, deliver_by_email: emailExport }),
+          body: JSON.stringify({ show_id: showId }),
         });
       } catch { res = null; }
 
       if (res && res.ok) {
         const { url, filename, delivered_by_email } = await res.json();
-        if (delivered_by_email) {
-          setCheckoutMsg('✓ Download link sent to your email!');
-          setTimeout(() => setCheckoutMsg(''), 6000);
-          setExportCount(c => c + 1);
-          setExporting(false); setExportStage('');
-        } else {
-          await streamDownload(url, filename || `${name.replace(/\s+/g, '_')}_lightshow.zip`);
-          setExportCount(c => c + 1);
-          setExporting(false); setExportStage(''); setShowSharePrompt(true);
-        }
+        // Every export downloads directly AND emails a backup copy + setup steps.
+        await streamDownload(url, filename || `${name.replace(/\s+/g, '_')}_lightshow.zip`);
+        setCheckoutMsg(delivered_by_email ? '✓ Downloaded — backup + setup steps emailed to you' : '✓ Download started!');
+        setTimeout(() => setCheckoutMsg(''), 6000);
+        setExportCount(c => c + 1);
+        setExporting(false); setExportStage(''); setShowSharePrompt(true);
         return;
       }
 
@@ -1286,14 +1277,6 @@ function BuilderInner() {
             </Link>
           )}
           <button onClick={save} disabled={saving || uploading} className="btn btn-ghost btn-sm">{saving ? '…' : 'Save'}</button>
-          {/* Email export toggle — hidden until a verified sending domain exists */}
-          {EMAIL_ENABLED && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}>
-              <input type="checkbox" checked={emailExport} onChange={e => setEmailExport(e.target.checked)}
-                style={{ accentColor: 'var(--red)', width: 14, height: 14 }} />
-              <span className="builder-status-msg" style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>Email me</span>
-            </label>
-          )}
           <div style={{ position: 'relative' }}>
             <button onClick={exportZip} disabled={exporting || saving} className="btn btn-primary btn-sm">
               {exporting ? 'Exporting…' : (
