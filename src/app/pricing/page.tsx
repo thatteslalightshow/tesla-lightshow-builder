@@ -14,7 +14,7 @@ const FREE_FEATURES = [
   'Full music-reactive audio engine',
   'Live 3D preview on your exact model',
   'Manual per-channel editing',
-  'Cloud-saved shows',
+  'Cloud library — 1 saved show',
   'Share to the community gallery',
   '1 free USB export included',
 ]

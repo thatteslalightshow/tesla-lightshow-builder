@@ -682,6 +682,7 @@ function BuilderInner() {
   // Pay/subscribe choice prompt shown when a non-subscriber who's used their free
   // export tries to export again. payBusy = the option currently redirecting.
   const [payPromptOpen, setPayPromptOpen] = useState(false);
+  const [libraryCapOpen, setLibraryCapOpen] = useState(false);
   const [payBusy, setPayBusy] = useState<'' | 'once' | 'monthly' | 'yearly'>('');
   const [payErr, setPayErr] = useState('');
 
@@ -1048,32 +1049,33 @@ function BuilderInner() {
       : null;
     const fullPayload = { user_id: userId, name, tesla_model: model, style, intensity, bpm, is_public: isPublic, song_title: songTitle || null, song_artist: songArtist || null, edit_data: editData, duration_sec: audioDurationRef.current ?? undefined, updated_at: new Date().toISOString() };
     let showId = savedShowId;
-    let error;
 
-    // Save with edit_data; if that column doesn't exist yet (migration not run),
-    // retry without it so saving never breaks.
-    const trySave = async (payload: Record<string, unknown>) => {
-      if (showId) {
-        return (await supabase.from('shows').update(payload).eq('id', showId)).error;
+    if (showId) {
+      // UPDATE an existing show (client-side via RLS). Retry without edit_data if that
+      // column isn't there yet (migration not run) so saving never breaks.
+      let error = (await supabase.from('shows').update(fullPayload).eq('id', showId)).error;
+      if (error && /edit_data/.test(error.message)) {
+        const { edit_data: _omit, ...noEdit } = fullPayload; void _omit;
+        error = (await supabase.from('shows').update(noEdit).eq('id', showId)).error;
       }
-      const { error: e, data } = await supabase.from('shows')
-        .insert({ ...payload, is_public: false, share_token: crypto.randomUUID() })
-        .select().single();
-      if (data) {
-        showId = data.id; setSavedShowId(data.id); setShareToken(data.share_token);
-        router.replace(`/builder?id=${data.id}`);
+      setSaving(false);
+      if (error) { setSaveMsg(`Error: ${error.message}`); setTimeout(() => setSaveMsg(''), 4000); return null; }
+    } else {
+      // CREATE a new show through the server so the free cloud-library cap is enforced.
+      let res: Response | null = null;
+      try {
+        res = await fetch('/api/shows/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fullPayload) });
+      } catch { res = null; }
+      const data = res ? await res.json().catch(() => ({})) : {};
+      setSaving(false);
+      if (res && res.status === 403 && data.error === 'cap_reached') {
+        setLibraryCapOpen(true); setSaveMsg('');
+        return null;
       }
-      return e;
-    };
-
-    error = await trySave(fullPayload);
-    if (error && /edit_data/.test(error.message)) {
-      const { edit_data: _omit, ...noEdit } = fullPayload;
-      void _omit;
-      error = await trySave(noEdit);
+      if (!res || !res.ok || !data.id) { setSaveMsg(`Error: ${data.error ?? 'could not save'}`); setTimeout(() => setSaveMsg(''), 4000); return null; }
+      showId = data.id; setSavedShowId(data.id); setShareToken(data.share_token);
+      router.replace(`/builder?id=${data.id}`);
     }
-    setSaving(false);
-    if (error) { setSaveMsg(`Error: ${error.message}`); setTimeout(() => setSaveMsg(''), 4000); return null; }
     setSaveMsg('Saved!'); setTimeout(() => setSaveMsg(''), 3000);
     if (audioFile && !audioUploaded && showId) await uploadAudio(showId, audioFile);
     return showId;
@@ -1758,6 +1760,47 @@ function BuilderInner() {
               disabled={!!payBusy}
               style={{ display: 'block', margin: '14px auto 0', background: 'none', border: 'none', color: 'var(--muted)', fontSize: 12, cursor: payBusy ? 'default' : 'pointer', textDecoration: 'underline' }}
             >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Cloud-library cap — free plan keeps 1 saved show; nudge to Creator */}
+      {libraryCapOpen && (
+        <div
+          onClick={() => { if (!payBusy) setLibraryCapOpen(false); }}
+          style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.62)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 420, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '1.5rem', boxShadow: '0 12px 50px rgba(0,0,0,0.6)' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, marginBottom: 4 }}>Your free library is full</div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 18, lineHeight: 1.6 }}>
+              The free plan keeps <strong style={{ color: 'var(--text)' }}>1 saved show</strong>. Go Creator for an <strong style={{ color: 'var(--text)' }}>unlimited cloud library</strong> — every show saved &amp; backed up — or free up space by deleting a show.
+            </div>
+
+            <button onClick={() => checkoutSubscription('yearly')} disabled={!!payBusy}
+              style={{ width: '100%', textAlign: 'left', padding: '12px 14px', marginBottom: 10, borderRadius: 10, background: 'var(--red)', border: '1px solid var(--red)', color: '#fff', cursor: payBusy ? 'default' : 'pointer', opacity: payBusy && payBusy !== 'yearly' ? 0.5 : 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontWeight: 700, fontSize: 14 }}>{payBusy === 'yearly' ? 'Redirecting…' : 'Go Unlimited — $49.99/yr'}</span>
+                <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(255,255,255,0.22)', padding: '2px 7px', borderRadius: 20 }}>BEST VALUE</span>
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>Unlimited library + exports · save 40%</div>
+            </button>
+
+            <button onClick={() => checkoutSubscription('monthly')} disabled={!!payBusy}
+              style={{ width: '100%', textAlign: 'left', padding: '12px 14px', marginBottom: 10, borderRadius: 10, background: 'rgba(80,160,255,0.1)', border: '1px solid rgba(80,160,255,0.4)', color: 'var(--text)', cursor: payBusy ? 'default' : 'pointer', opacity: payBusy && payBusy !== 'monthly' ? 0.5 : 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{payBusy === 'monthly' ? 'Redirecting…' : 'Unlimited — $6.99/mo'}</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Keep as many shows as you want</div>
+            </button>
+
+            <Link href="/dashboard" style={{ display: 'block', textAlign: 'center', padding: '10px', borderRadius: 10, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 13, fontWeight: 600 }}>
+              Manage my shows →
+            </Link>
+
+            {payErr && <div style={{ color: 'var(--red)', fontSize: 12, marginTop: 12 }}>{payErr}</div>}
+
+            <button onClick={() => setLibraryCapOpen(false)} disabled={!!payBusy}
+              style={{ display: 'block', margin: '14px auto 0', background: 'none', border: 'none', color: 'var(--muted)', fontSize: 12, cursor: payBusy ? 'default' : 'pointer', textDecoration: 'underline' }}>
               Cancel
             </button>
           </div>
