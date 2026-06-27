@@ -169,6 +169,90 @@ export async function sendExportDownload({
   });
 }
 
+// Optional physical mailing address for the email footer (CAN-SPAM). Set
+// REENGAGE_FROM_ADDRESS in env once you have a business/PO-box address; until then
+// the line is omitted.
+const BUSINESS_ADDRESS = process.env.REENGAGE_FROM_ADDRESS ?? '';
+
+// Abandoned-show re-engagement — a two-touch nudge to people who built a show but
+// never exported it. `touch: 'first'` = ~48h (warm, low-pressure); `touch: 'final'`
+// = ~5 days (gentle last call). Same brand voice as the export email, plus a required
+// unsubscribe link. Audience is gated upstream (non-subscribers only).
+export async function sendReengagement({
+  to, showName, model, builderUrl, unsubscribeUrl, songTitle, touch,
+}: {
+  to: string;
+  showName: string;
+  model: string;
+  builderUrl: string;
+  unsubscribeUrl: string;
+  songTitle?: string;
+  touch: 'first' | 'final';
+}) {
+  if (!resend) return;
+  const song = songTitle ? escHtml(songTitle) : 'your song';
+  const name = escHtml(showName);
+  const subject = touch === 'first'
+    ? `Your light show “${showName}” is ready to finish`
+    : `Last call for your “${showName}” light show`;
+  const headline = touch === 'first' ? 'You’re one step away ⚡' : 'Still want this one? ⚡';
+  const lead = touch === 'first'
+    ? `Your <strong style="color:rgba(255,255,255,0.85);">${name}</strong> for the ${escHtml(model)} is built and choreographed to ${song} — it’s just waiting for you to export it.`
+    : `Your <strong style="color:rgba(255,255,255,0.85);">${name}</strong> is still here, already choreographed to ${song}. This is the last reminder we’ll send — grab it before it slips your mind.`;
+  const cta = touch === 'first' ? 'Finish &amp; export →' : 'Pick up where you left off →';
+
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject,
+    html: `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background:#08080f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#ffffff;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;padding:40px 24px;">
+    <tr><td>
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
+        <tr><td>
+          <div style="display:inline-flex;align-items:center;gap:10px;">
+            <div style="width:36px;height:36px;background:#e8404a;border-radius:9px;display:inline-block;"></div>
+            <span style="font-size:16px;font-weight:700;color:rgba(255,255,255,0.8);">ThatTeslaLightshow</span>
+          </div>
+        </td></tr>
+      </table>
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#111118;border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:40px 36px;margin-bottom:24px;">
+        <tr><td>
+          <p style="font-size:28px;font-weight:800;letter-spacing:-1px;margin:0 0 12px;">${headline}</p>
+          <p style="font-size:15px;color:rgba(255,255,255,0.55);margin:0 0 10px;line-height:1.6;">${lead}</p>
+          <p style="font-size:14px;color:rgba(255,255,255,0.4);font-style:italic;margin:0 0 28px;">Choreography by us. Soundtrack by you.</p>
+          <a href="${builderUrl}" style="display:inline-block;padding:14px 32px;background:#e8404a;color:#ffffff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:700;letter-spacing:-0.2px;">
+            ${cta}
+          </a>
+          <hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:32px 0;" />
+          <p style="font-size:13px;color:rgba(255,255,255,0.4);margin:0;line-height:1.7;">
+            Export takes one click — you get a Tesla-ready <code style="color:#e8404a;">.fseq</code> plus
+            simple steps to add your own copy of the song. It keeps everyone on the right side of the music. 🎶
+          </p>
+        </td></tr>
+      </table>
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr><td style="text-align:center;">
+          <p style="font-size:12px;color:rgba(255,255,255,0.2);margin:0 0 4px;">
+            Made by <a href="https://tiktok.com/@ThatTeslaLightshow" style="color:rgba(255,255,255,0.3);">@ThatTeslaLightshow</a> · Not affiliated with Tesla, Inc.
+          </p>
+          ${BUSINESS_ADDRESS ? `<p style="font-size:11px;color:rgba(255,255,255,0.18);margin:0 0 4px;">${escHtml(BUSINESS_ADDRESS)}</p>` : ''}
+          <p style="font-size:11px;color:rgba(255,255,255,0.2);margin:0;">
+            <a href="${unsubscribeUrl}" style="color:rgba(255,255,255,0.3);text-decoration:underline;">Unsubscribe from these reminders</a>
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+  });
+}
+
 function escHtml(s: string) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }

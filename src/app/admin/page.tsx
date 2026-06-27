@@ -147,6 +147,9 @@ export default async function AdminPage() {
     for (const [c, s] of Object.entries(geoSets)) visitorGeo[c] = s.size
   } catch { /* events table not migrated yet */ }
   const pctOf = (n: number, d: number) => d > 0 ? `${Math.round((n / d) * 100)}% of prev` : '—'
+  // Re-engagement nudges sent in the window (defensive — column added in Phase B migration).
+  let nudged30 = 0
+  try { nudged30 = (await db.from('shows').select('*', { count: 'exact', head: true }).gte('reengage_48_at', cutoff)).count ?? 0 } catch { /* not migrated */ }
 
   // Recent Sentry errors (null = not configured → show connect prompt).
   const sentryIssues = await fetchRecentSentryIssues()
@@ -189,6 +192,7 @@ export default async function AdminPage() {
             <StatCard label="Shows saved" value={showsSaved30 ?? 0} sub={pctOf(showsSaved30 ?? 0, builders30)} />
             <StatCard label="Exports" value={exports30 ?? 0} sub={pctOf(exports30 ?? 0, showsSaved30 ?? 0)} />
             <StatCard label="Purchases" value={purchases30 ?? 0} sub={pctOf(purchases30 ?? 0, exports30 ?? 0)} />
+            <StatCard label="Re-engage nudges" value={nudged30} sub="sent · 30d" />
           </div>
           {visitors30 === 0 && <div style={{ fontSize: 12, color: 'var(--muted2)', marginTop: 10 }}>Visitor counts populate once the <code>events</code> migration is run and traffic comes in.</div>}
           {Object.keys(visitorGeo).length > 0 && (
