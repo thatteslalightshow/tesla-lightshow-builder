@@ -282,16 +282,36 @@ export async function POST(req: Request) {
     `THAT LIGHTSHOW  —  your show is ready`,
     `Choreography by us. Soundtrack by you.`,
     ``,
-    `IN THIS FOLDER`,
-    `  - lightshow.fseq   (your custom light show)`,
+    `>> READ THIS, THEN LEAVE IT BEHIND. You do NOT need this file on your USB <<`,
+    `   drive - your Tesla only needs lightshow.fseq and your song. Don't copy`,
+    `   this note over (or just delete it from the drive). It won't break anything`,
+    `   either way - it's only to keep your USB clean.`,
     ``,
-    `ONE LAST STEP - ADD YOUR MUSIC`,
+    `================================================================`,
+    ``,
+    `STEP 1 - FORMAT YOUR USB DRIVE (exFAT or FAT32)`,
+    `  Tesla can't read the default Windows (NTFS) or Mac (APFS) format - you have`,
+    `  to reformat the drive first. An 8-32 GB drive is plenty.`,
+    `  - Windows: open File Explorer, right-click the USB drive -> Format ->`,
+    `      File system: exFAT -> Start.`,
+    `  - Mac: open Disk Utility -> select the USB drive -> Erase ->`,
+    `      Format: exFAT (or "MS-DOS (FAT)" for FAT32) -> Erase.`,
+    `  IMPORTANT: reformatting erases the drive, and make sure there is NO`,
+    `  "TeslaCam" folder on it (a TeslaCam folder stops light shows from running).`,
+    ``,
+    `STEP 2 - ADD YOUR MUSIC`,
     `  1. Find your copy of ${songLabel} - the same file you uploaded works perfectly.`,
     `  2. Rename it to:   lightshow.wav   (or  lightshow.mp3)`,
     `  3. Make sure it's 44.1 kHz so it stays perfectly in sync (most MP3s already are).`,
     `  4. Put it in this LightShow folder, right next to lightshow.fseq.`,
-    `  5. Copy the whole LightShow folder to a USB drive (formatted exFAT or FAT32).`,
-    `  6. In your Tesla: Toybox -> Light Show -> Schedule Show. Enjoy.`,
+    ``,
+    `STEP 3 - COPY TO USB & RUN`,
+    `  1. Copy the LightShow folder to the TOP LEVEL of the USB drive - inside it`,
+    `     should be just lightshow.fseq and your song (not this README).`,
+    `  2. Plug the USB into your Tesla's front port.`,
+    `  3. Toybox -> Light Show -> Schedule Show. Enjoy!`,
+    ``,
+    `================================================================`,
     ``,
     `WHY DO YOU ADD THE SONG YOURSELF?`,
     `The music belongs to the artists who made it - and we'd rather honor the`,
@@ -333,7 +353,9 @@ export async function POST(req: Request) {
       if (shipped) folder.file(`lightshow.${shipped.ext}`, shipped.data)
       folder.file('README.txt', `QA / tester build — audio bundled (is_admin account). This is NOT the customer FSEQ-only output.\r\n`)
     } else {
-      folder.file('README.txt', readme)                                // customer BYOM build
+      // Filename carries the instruction so it's seen at a glance — read it, then
+      // leave it off the USB (only lightshow.fseq + the song belong there).
+      folder.file('READ ME FIRST - then delete (do not put on USB).txt', readme)  // customer BYOM build
     }
   }
 
