@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { getAdminClient } from '@/lib/supabase'
 import GalleryClient, { type GalleryShow } from './GalleryClient'
 import BrandLogo from '@/components/BrandLogo'
+import SiteMenu from '@/components/SiteMenu'
 
 export const metadata: Metadata = {
   title: 'Show Gallery',
@@ -103,7 +104,7 @@ export default async function GalleryPage() {
       }}>
         <BrandLogo />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Link href="/pricing" className="btn btn-ghost btn-sm">Pricing</Link>
+          <SiteMenu />
           <Link href="/builder" className="btn btn-primary btn-sm">+ New Show</Link>
         </div>
       </nav>

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import SocialLinks from '@/components/SocialLinks';
 import BrandLogo from '@/components/BrandLogo';
+import SiteMenu from '@/components/SiteMenu';
 
 // ─── Ambient particle field ───────────────────────────────────────────────────
 function Particles() {
@@ -145,10 +146,7 @@ export default function Home() {
       <nav style={{ position:'fixed', top:0, left:0, right:0, zIndex:50, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 2.5rem', height:56, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(20px)', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
         <BrandLogo boxSize={30} />
         <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-          <Link href="/gallery" style={{ padding:'6px 14px', fontSize:13, color:'rgba(255,255,255,0.55)', transition:'color .15s' }}
-            onMouseEnter={e=>(e.currentTarget.style.color='#fff')} onMouseLeave={e=>(e.currentTarget.style.color='rgba(255,255,255,0.55)')}>Gallery</Link>
-          <Link href="/pricing" style={{ padding:'6px 14px', fontSize:13, color:'rgba(255,255,255,0.55)', transition:'color .15s' }}
-            onMouseEnter={e=>(e.currentTarget.style.color='#fff')} onMouseLeave={e=>(e.currentTarget.style.color='rgba(255,255,255,0.55)')}>Pricing</Link>
+          <SiteMenu />
           <Link href="/auth" style={{ padding:'6px 14px', fontSize:13, color:'rgba(255,255,255,0.55)', transition:'color .15s' }}
             onMouseEnter={e=>(e.currentTarget.style.color='#fff')} onMouseLeave={e=>(e.currentTarget.style.color='rgba(255,255,255,0.55)')}>Sign in</Link>
           <Link href="/auth?mode=signup" style={{ marginLeft:8, padding:'7px 20px', borderRadius:6, background:'#e8404a', color:'#fff', fontSize:13, fontWeight:600, transition:'background .15s', letterSpacing:'-.2px' }}
