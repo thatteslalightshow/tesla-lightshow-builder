@@ -253,6 +253,67 @@ export async function sendReengagement({
   });
 }
 
+// Shared dark-card shell for the short lifecycle emails (welcome / first export).
+// headline + body HTML + one CTA + an unsubscribe footer, in the brand voice.
+function lifecycleShell(opts: { headline: string; bodyHtml: string; ctaHref?: string; ctaText?: string; unsubscribeUrl: string }) {
+  const cta = opts.ctaHref && opts.ctaText
+    ? `<a href="${opts.ctaHref}" style="display:inline-block;margin-top:8px;padding:14px 32px;background:#e8404a;color:#ffffff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:700;letter-spacing:-0.2px;">${opts.ctaText}</a>`
+    : '';
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background:#08080f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#ffffff;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;padding:40px 24px;">
+    <tr><td>
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;"><tr><td>
+        <div style="display:inline-flex;align-items:center;gap:10px;">
+          <div style="width:36px;height:36px;background:#e8404a;border-radius:9px;display:inline-block;"></div>
+          <span style="font-size:16px;font-weight:700;color:rgba(255,255,255,0.8);">ThatTeslaLightshow</span>
+        </div>
+      </td></tr></table>
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#111118;border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:40px 36px;margin-bottom:24px;"><tr><td>
+        <p style="font-size:26px;font-weight:800;letter-spacing:-1px;margin:0 0 16px;">${opts.headline}</p>
+        ${opts.bodyHtml}
+        ${cta}
+      </td></tr></table>
+      <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="text-align:center;">
+        <p style="font-size:12px;color:rgba(255,255,255,0.2);margin:0 0 4px;">Made by <a href="https://tiktok.com/@ThatTeslaLightshow" style="color:rgba(255,255,255,0.3);">@ThatTeslaLightshow</a> · Not affiliated with Tesla, Inc.</p>
+        ${BUSINESS_ADDRESS ? `<p style="font-size:11px;color:rgba(255,255,255,0.18);margin:0 0 4px;">${escHtml(BUSINESS_ADDRESS)}</p>` : ''}
+        <p style="font-size:11px;color:rgba(255,255,255,0.2);margin:0;"><a href="${opts.unsubscribeUrl}" style="color:rgba(255,255,255,0.3);text-decoration:underline;">Unsubscribe from these emails</a></p>
+      </td></tr></table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+// New account → a warm welcome + how to make a first show (or finish one in progress).
+export async function sendWelcome({ to, hasShow, builderUrl, unsubscribeUrl }: { to: string; hasShow: boolean; builderUrl: string; unsubscribeUrl: string }) {
+  if (!resend) return;
+  const body = hasShow
+    ? `<p style="font-size:15px;color:rgba(255,255,255,0.55);margin:0 0 22px;line-height:1.7;">You’ve started a show — nice. When it’s ready, one click exports a Tesla-ready light sequence, and we’ll walk you through dropping in your song and copying it to a USB. <em style="color:rgba(255,255,255,0.45);">Choreography by us. Soundtrack by you.</em></p>`
+    : `<p style="font-size:15px;color:rgba(255,255,255,0.55);margin:0 0 18px;line-height:1.7;">Welcome aboard ⚡ Making your first Tesla light show takes about three minutes:</p>`
+      + `<p style="font-size:14px;color:rgba(255,255,255,0.5);margin:0 0 22px;line-height:1.9;">1. Pick your Tesla &amp; upload a song — our engine choreographs the lights to it.<br/>2. Preview it live in 3D on your exact model.<br/>3. Export, add your own copy of the song, plug in the USB. Done.</p>`;
+  await resend.emails.send({ from: FROM, to, subject: 'Welcome to ThatTeslaLightshow ⚡', html: lifecycleShell({ headline: hasShow ? 'Welcome ⚡' : 'Let’s build your first show ⚡', bodyHtml: body, ctaHref: builderUrl, ctaText: hasShow ? 'Open the builder →' : 'Build your first show →', unsubscribeUrl }) });
+}
+
+// New Creator subscriber → spell out everything they just unlocked.
+export async function sendCreatorWelcome({ to, builderUrl, unsubscribeUrl }: { to: string; builderUrl: string; unsubscribeUrl: string }) {
+  if (!resend) return;
+  const body = `<p style="font-size:15px;color:rgba(255,255,255,0.55);margin:0 0 18px;line-height:1.7;">You’re a Creator now — thank you. Here’s everything you just unlocked:</p>`
+    + `<p style="font-size:14px;color:rgba(255,255,255,0.55);margin:0 0 22px;line-height:1.95;">★ <strong style="color:rgba(255,255,255,0.8);">Unlimited exports</strong> — no per-show fee, ever<br/>★ <strong style="color:rgba(255,255,255,0.8);">Free re-exports</strong> of any show, forever<br/>★ <strong style="color:rgba(255,255,255,0.8);">Multi-model export</strong> — build once, export for every Tesla you own<br/>★ <strong style="color:rgba(255,255,255,0.8);">Unlimited cloud library</strong> — every show saved &amp; backed up<br/>★ Remix any community show + priority support</p>`;
+  await resend.emails.send({ from: FROM, to, subject: 'Welcome to Creator ⚡ here’s what you unlocked', html: lifecycleShell({ headline: 'Welcome to Creator ⚡', bodyHtml: body, ctaHref: builderUrl, ctaText: 'Start creating →', unsubscribeUrl }) });
+}
+
+// First successful export → celebrate + invite them to share (and tag us).
+export async function sendFirstExportCheers({ to, showName, unsubscribeUrl }: { to: string; showName: string; unsubscribeUrl: string }) {
+  if (!resend) return;
+  const body = `<p style="font-size:15px;color:rgba(255,255,255,0.55);margin:0 0 18px;line-height:1.7;">You just exported <strong style="color:rgba(255,255,255,0.8);">${escHtml(showName)}</strong> — your first light show is ready to run. 🎉</p>`
+    + `<p style="font-size:14px;color:rgba(255,255,255,0.5);margin:0 0 6px;line-height:1.7;">When you run it on your Tesla, film it and tag <strong style="color:rgba(255,255,255,0.7);">@ThatTeslaLightshow</strong> on TikTok or Instagram — we love featuring community shows, and it’s the best way to get yours seen.</p>`;
+  await resend.emails.send({ from: FROM, to, subject: 'Your first light show is ready 🎉', html: lifecycleShell({ headline: 'Your first show is done 🎉', bodyHtml: body, unsubscribeUrl }) });
+}
+
 function escHtml(s: string) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
