@@ -143,7 +143,7 @@ const CLOSE_SECONDS: Record<ClosureFamily, number> = {
 //       from the grammar; carries the groove between the big moments).
 //   3.  FINALE — everything buttons up, windows clear of door motion.
 // Always inside per-closure command limits + ~30s/≤8s thermal dance budget.
-function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number, model: TeslaModel, zones: LightZone[], maxSections: number, bpm: number): void {
+function choreographClosures(frames: Uint8Array[], totalC: number[], density: number[], triggers: number[], FPS: number, model: TeslaModel, zones: LightZone[], maxSections: number, bpm: number, anchor: number): void {
   const all = detectSections(totalC, FPS)
   if (!all.length) return
   const N = frames.length
@@ -198,80 +198,119 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number
     moves.push({ fam, kind, from: at, to: at + len + falconStag(fam, chOf(fam).length - 1) })  // cover the staggered tail
   }
 
-  const byPeak = [...all].sort((a, b) => b.peak - a.peak)
-  const byTime = [...all].sort((a, b) => a.start - b.start)
+  // ── musical landmarks (the SAME grid + onset hits the lights choreograph to) ──
+  // beat = frames per beat; bars(n) = n-bar phrase length in frames (4 beats/bar).
+  const beat = bpm > 0 ? (60 / bpm) * FPS : FPS / 2
+  const bars = (n: number) => Math.max(1, Math.round(n * 4 * beat))
+  // Snap a frame to the nearest real onset within ±win so a gesture lands ON the hit
+  // rather than where a smoothed envelope happened to cross threshold.
+  const snap = (f: number, win: number) => {
+    let best = f, bd = win + 1
+    for (const t of triggers) { const d = Math.abs(t - f); if (d <= win && d < bd) { bd = d; best = t } }
+    return best
+  }
+  // Quantize a length to a whole number of beats (≥1) so dances resolve on the grid.
+  const qbeat = (len: number) => Math.max(Math.round(beat), Math.round(len / beat) * beat)
+
+  // Each section's true musical hit = its start snapped to the nearest strong onset.
+  const drops = all.map(s => ({ ...s, hit: snap(s.start, Math.round(beat * 0.9)) }))
+  const byPeak = [...drops].sort((a, b) => b.peak - a.peak)
+  const byTime = [...drops].sort((a, b) => a.start - b.start)
   const topPeak = byPeak[0]?.peak ?? 0
   const seed = (Math.round(bpm) * 2654435761 + all.length * 40503 + Math.round(topPeak * 1e4)) >>> 0
   const drama = Math.max(2, Math.min(8, maxSections))           // genre intensity: cinematic 2 … edm 8
   const opened: ClosureFamily[] = []                            // closures to button up in the finale
 
-  // ════ Layer 1a — CLIMAX BLOOM on the loudest drop ════
-  // A genre-sized set of big closures opens in an anticipatory cascade so they all
-  // land fully open ON the drop, then the dance-capable ones dance through it.
-  const climax = byPeak[0]
-  if (climax) {
-    const bloom: ClosureFamily[] = []
-    if (has('liftgate')) bloom.push('liftgate')                  // graceful trunk — always if present
-    if (drama >= 4 && has('falcon_doors')) bloom.push('falcon_doors')
-    if (drama >= 5 && has('front_doors')) bloom.push('front_doors')
-    const apex = climax.start
-    for (const fam of bloom) {                                   // 1) anticipatory opens, all open by the apex
-      // extra lead for falcon so the offset 2nd door is also fully open by the apex
-      const openAt = apex - secs(fam) - SETTLE - falconStag(fam, chOf(fam).length - 1)
-      if (openAt < PULSE || !room(fam, 2)) continue
-      if (!canPlace(fam, 'open', openAt, apex)) continue
-      place(fam, 'open', openAt, apex - openAt); spend(fam, 1); opened.push(fam)
-    }
-    for (const fam of [...opened]) {                             // 2) dance the bloomers through the climax
-      if (!DANCE_SUPPORTED.has(fam) || danceUsed >= DANCE_TOTAL || !room(fam, 1)) continue
-      const len = Math.min(climax.end - apex, DANCE_MAX, DANCE_TOTAL - danceUsed)
-      if (len < FPS || !canPlace(fam, 'dance', apex, apex + len)) continue
-      place(fam, 'dance', apex, len); spend(fam, 1); danceUsed += len
-    }
-  }
+  // ════ Layer 1 — a varied GESTURE on each strong drop ════
+  // The loudest drop gets the full genre-sized door bloom; the rest rotate between a
+  // smaller door bloom and a colorful accent (charge-port rainbow / window dance) so
+  // each track gets its own signature, every strong moment feels intentional, and no
+  // drop is left dead on cars without powered doors. Slow closures start their travel
+  // early so they land fully open ON the hit; dance-capable ones dance a whole-phrase
+  // window. All within budget (open + dance + a reserved finale close).
+  const D = byPeak.length
+  const nBlooms = Math.max(1, Math.min(Math.round(drama / 3) + 1, Math.ceil(D / 2)))
+  const maxDrops = Math.min(D, nBlooms + Math.max(1, Math.round(drama / 2)))
+  const accentPool: ClosureFamily[] = (['charge_port', 'windows'] as ClosureFamily[]).filter(has)
+  let ai = accentPool.length ? seed % accentPool.length : 0
 
-  // ════ Layer 1b — ACCENTS on the other drops (rotated per song) ════
-  const accents: ClosureFamily[] = (['charge_port', 'windows'] as ClosureFamily[]).filter(has).filter(f => !opened.includes(f))
-  const otherDrops = byPeak.slice(1, 1 + Math.max(1, Math.round(drama / 2)))
-  let a = accents.length ? seed % accents.length : 0
-  for (const sec of otherDrops) {
-    if (!accents.length) break
-    for (let t = 0; t < accents.length; t++) {
-      const fam = accents[(a + t) % accents.length]
-      if ((used[fam] ?? 0) > 0) continue                          // each accent used once
-      const danceLen = Math.min(sec.end - sec.start, DANCE_MAX, DANCE_TOTAL - danceUsed)
+  byPeak.slice(0, maxDrops).forEach((drop, di) => {
+    const apex = drop.hit
+    const isClimax = di === 0
+
+    // 1) DOOR/TRUNK BLOOM on the loudest drops (anticipatory open → land open on the hit)
+    if (di < nBlooms) {
+      const bloom: ClosureFamily[] = []
+      if (isClimax && has('liftgate')) bloom.push('liftgate')          // trunk leads the climax
+      if (isClimax) {
+        if (drama >= 4 && has('falcon_doors')) bloom.push('falcon_doors')
+        if (drama >= 5 && has('front_doors')) bloom.push('front_doors')
+      } else if (drama >= 5) {                                          // secondary: one alternating door
+        if (di % 2 === 1 && has('front_doors')) bloom.push('front_doors')
+        else if (has('falcon_doors')) bloom.push('falcon_doors')
+      }
+      const justOpened: ClosureFamily[] = []
+      for (const fam of bloom) {
+        // extra lead for falcon so the offset 2nd door is also fully open by the apex
+        const openAt = apex - secs(fam) - SETTLE - falconStag(fam, chOf(fam).length - 1)
+        if (openAt < PULSE || !room(fam, 2)) continue                  // reserve a finale close
+        if (!canPlace(fam, 'open', openAt, apex)) continue
+        place(fam, 'open', openAt, apex - openAt); spend(fam, 1); opened.push(fam); justOpened.push(fam)
+      }
+      for (const fam of justOpened) {                                  // dance a whole-phrase window
+        if (!DANCE_SUPPORTED.has(fam) || danceUsed >= DANCE_TOTAL || !room(fam, 1)) continue
+        const len = Math.min(qbeat(Math.min(drop.end - apex, bars(isClimax ? 2 : 1))), DANCE_MAX, DANCE_TOTAL - danceUsed)
+        if (len < FPS || !canPlace(fam, 'dance', apex, apex + len)) continue
+        place(fam, 'dance', apex, len); spend(fam, 1); danceUsed += len
+      }
+      if (justOpened.length) return                                    // the bloom claimed this drop
+    }
+
+    // 2) otherwise (or if this car has no doors to bloom) → a colorful ACCENT, rotated
+    if (!accentPool.length) return
+    for (let t = 0; t < accentPool.length; t++) {
+      const fam = accentPool[(ai + t) % accentPool.length]
+      if ((used[fam] ?? 0) > 0) continue                               // each accent used once
+      const danceLen = Math.min(qbeat(Math.min(drop.end - apex, bars(1))), DANCE_MAX, DANCE_TOTAL - danceUsed)
       if (danceLen < FPS || danceUsed >= DANCE_TOTAL) continue
-      if (fam === 'windows') {                                    // window dance — no open needed
-        if (!room('windows', 2) || !canPlace('windows', 'dance', sec.start, sec.start + danceLen)) continue
-        place('windows', 'dance', sec.start, danceLen); spend('windows', 1); danceUsed += danceLen
-        opened.push('windows'); a = (a + t + 1) % accents.length; break
-      } else {                                                    // charge-port rainbow: open → dance
-        const openAt = sec.start - secs('charge_port') - SETTLE
+      if (fam === 'windows') {                                         // window dance — no open needed
+        if (!room('windows', 2) || !canPlace('windows', 'dance', apex, apex + danceLen)) continue
+        place('windows', 'dance', apex, danceLen); spend('windows', 1); danceUsed += danceLen
+        opened.push('windows'); ai = (ai + t + 1) % accentPool.length; return
+      } else {                                                         // charge-port rainbow: open → dance
+        const openAt = apex - secs('charge_port') - SETTLE
         if (openAt < PULSE || !room('charge_port', 3)) continue
-        if (!canPlace('charge_port', 'open', openAt, sec.start) || !canPlace('charge_port', 'dance', sec.start, sec.start + danceLen)) continue
-        place('charge_port', 'open', openAt, sec.start - openAt); spend('charge_port', 1)
-        place('charge_port', 'dance', sec.start, danceLen); spend('charge_port', 1); danceUsed += danceLen
-        opened.push('charge_port'); a = (a + t + 1) % accents.length; break
+        if (!canPlace('charge_port', 'open', openAt, apex) || !canPlace('charge_port', 'dance', apex, apex + danceLen)) continue
+        place('charge_port', 'open', openAt, apex - openAt); spend('charge_port', 1)
+        place('charge_port', 'dance', apex, danceLen); spend('charge_port', 1); danceUsed += danceLen
+        opened.push('charge_port'); ai = (ai + t + 1) % accentPool.length; return
       }
     }
-  }
+  })
 
-  // ════ Layer 2 — rhythm closures: mirrors + door handles flap to the beat ════
-  // Big budgets, low risk → the main per-song movement. Each command is held for
-  // its full ~2s travel; we cap well under the limit so it stays musical, not
-  // machine-gun. Mirrors aren't a pinch risk, so they may move during door motion.
-  if (bpm > 0) {
-    const fpb = (60 / bpm) * FPS
-    const half = Math.max(Math.round(FPS * 2), Math.round(fpb * 2))    // ≥2s per fold/unfold, beat-aligned
+  // ════ Layer 2 — rhythm closures: mirrors + door handles flap ON the grid ════
+  // The main per-song movement. Each fold is still HELD for its full ~2s travel, but
+  // now it's anchored to the SONG'S beat grid (not a free-running 2s metronome) and
+  // the pop snaps to the nearest real onset — so the groove locks to the track. We use
+  // the smallest whole-beat period that still clears the ~2s travel, and cap under the
+  // limit so it stays musical. Mirrors aren't a pinch risk → may move during doors.
+  if (beat > 0) {
+    const travel = Math.round(FPS * 2)                                 // 2s mirror/handle travel
+    let period = beat
+    while (period < travel) period += beat                             // whole beats, ≥ travel
     for (const fam of ['mirrors', 'door_handles'] as ClosureFamily[]) {
       if (!has(fam)) continue
       const cap = Math.min(CLOSURE_LIMITS[fam] - 1, 12)                 // headroom + taste
       for (const sec of byTime) {
         if (sec.peak < topPeak * 0.55) continue                        // only the energetic sections
-        for (let t = sec.start; t + half * 2 < sec.end; t += half * 2) {
+        // first grid position at/after the section start, anchored to the song's grid
+        let g = anchor + Math.ceil((sec.start - anchor) / period) * period
+        for (; g + period * 2 < sec.end; g += period * 2) {
           if ((used[fam] ?? 0) + 2 > cap) break
-          hold(fam, 'open', Math.round(t), half); spend(fam, 1)
-          hold(fam, 'close', Math.round(t + half), half); spend(fam, 1)
+          if ((density[Math.min(density.length - 1, Math.max(0, Math.round(g)))] ?? 1) < 0.25) continue  // stay calm through breakdowns
+          const t = snap(g, Math.round(beat * 0.4))                    // pop on the real hit near the grid
+          hold(fam, 'open', Math.round(t), period); spend(fam, 1)
+          hold(fam, 'close', Math.round(t + period), period); spend(fam, 1)
         }
       }
     }
@@ -291,7 +330,11 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], FPS: number
   const toClose = [...new Set(opened)]
   const windowsLast = toClose.includes('windows') && model === 'modelX' && toClose.some(isDoorFam)
   const windowsStart = N - closeF('windows') - BUFFER                // windows finish ~1s before the end
-  const doorFinishBy = windowsLast ? windowsStart - GAP : N - BUFFER // doors wrap up before the windows move
+  // Doors wrap up before the windows move. On Model X the 2nd falcon door is offset by
+  // FALCON_STAGGER, so its close finishes that much later — clear the staggered tail too,
+  // or the still-closing falcon overlaps the window close (a false-pinch that halts the show).
+  const falconTail = toClose.includes('falcon_doors') ? FALCON_STAGGER : 0
+  const doorFinishBy = windowsLast ? windowsStart - GAP - falconTail : N - BUFFER
   for (const fam of toClose) {
     if (!room(fam, 1)) continue
     const cf = closeF(fam)
@@ -559,7 +602,12 @@ export function analyzePCM(
   applyPhrasing(frames, totalC, bpm, FPS, zones, P.phrasing, triggerFrames.size ? Math.min(...triggerFrames) : 0)
 
   // Phase 3: auto-choreograph closures to the song structure (opt-in per show).
-  if (opts?.autoClosures && opts.model) choreographClosures(frames, totalC, FPS, opts.model, zones, P.closureSections, bpm)
+  // Feed it the SAME musical landmarks the lights use: the onset hits + beat anchor.
+  if (opts?.autoClosures && opts.model) {
+    const triggers = [...triggerFrames].sort((p, q) => p - q)
+    const anchor = triggerFrames.size ? Math.min(...triggerFrames) : 0
+    choreographClosures(frames, totalC, density, triggers, FPS, opts.model, zones, P.closureSections, bpm, anchor)
+  }
 
   // Phase 4: graceful ramping on the inner main beam (cinematic fades; runs last
   // so it sees the final on/off pattern). Degrades to the same on/off show on
