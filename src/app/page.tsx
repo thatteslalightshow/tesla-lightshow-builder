@@ -286,7 +286,7 @@ export default function Home() {
             <div style={{ fontSize:12, fontWeight:600, letterSpacing:'.12em', color:'rgba(255,255,255,0.3)', textTransform:'uppercase', marginBottom:20 }}>Free</div>
             <div style={{ fontFamily:'var(--font-display)', fontSize:'3.2rem', fontWeight:700, letterSpacing:'-2px', marginBottom:4 }}>$0</div>
             <div style={{ fontSize:13, color:'rgba(255,255,255,0.3)', marginBottom:'2rem', paddingBottom:'2rem', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>First export included</div>
-            {['Unlimited show building','Full beat detection','3D live preview','Manual channel editing','1 free USB export'].map(f=>(
+            {['Unlimited show building','Music-reactive audio engine','3D live preview on your model','Manual channel editing','1 free USB export'].map(f=>(
               <div key={f} style={{ display:'flex', gap:10, fontSize:14, color:'rgba(255,255,255,0.5)', marginBottom:10, alignItems:'center' }}>
                 <span style={{ color:'#00e887', fontSize:12 }}>✓</span>{f}
               </div>
@@ -302,7 +302,7 @@ export default function Home() {
             <div style={{ fontSize:12, fontWeight:600, letterSpacing:'.12em', color:'rgba(255,255,255,0.3)', textTransform:'uppercase', marginBottom:20 }}>Per Export</div>
             <div style={{ fontFamily:'var(--font-display)', fontSize:'3.2rem', fontWeight:700, letterSpacing:'-2px', marginBottom:4 }}>$2.99</div>
             <div style={{ fontSize:13, color:'rgba(255,255,255,0.3)', marginBottom:'2rem', paddingBottom:'2rem', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>per USB download</div>
-            {['Everything in Free','Pay only when you export','Beat-synced FSEQ + setup guide','FSEQ validation report','No commitment'].map(f=>(
+            {['Everything in Free','Export any show for $2.99','Beat-synced FSEQ + emailed setup steps','FSEQ v2 validation report','Pay only when you export'].map(f=>(
               <div key={f} style={{ display:'flex', gap:10, fontSize:14, color:'rgba(255,255,255,0.5)', marginBottom:10, alignItems:'center' }}>
                 <span style={{ color:'#00e887', fontSize:12 }}>✓</span>{f}
               </div>
@@ -320,7 +320,7 @@ export default function Home() {
             <div style={{ fontSize:12, fontWeight:600, letterSpacing:'.12em', color:'#e8404a', textTransform:'uppercase', marginBottom:20 }}>Creator</div>
             <div style={{ fontFamily:'var(--font-display)', fontSize:'3.2rem', fontWeight:700, letterSpacing:'-2px', marginBottom:4 }}>$6.99<span style={{ fontSize:'1rem', fontWeight:500, color:'rgba(255,255,255,0.3)', letterSpacing:0 }}>/mo</span></div>
             <div style={{ fontSize:13, color:'rgba(255,255,255,0.3)', marginBottom:'2rem', paddingBottom:'2rem', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>or $49.99/yr — save 40%</div>
-            {['Everything in Per Export','Unlimited exports','Email delivery','Remix any public show','Cancel anytime'].map(f=>(
+            {['Everything in Per Export','Unlimited exports + free re-exports','Unlimited cloud library','Remix any community show','Priority support'].map(f=>(
               <div key={f} style={{ display:'flex', gap:10, fontSize:14, color:'rgba(255,255,255,0.5)', marginBottom:10, alignItems:'center' }}>
                 <span style={{ color:'#00e887', fontSize:12 }}>✓</span>{f}
               </div>

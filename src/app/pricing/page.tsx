@@ -11,9 +11,10 @@ export const metadata: Metadata = {
 
 const FREE_FEATURES = [
   'Build unlimited shows',
-  'Full beat detection and analysis',
+  'Full music-reactive audio engine',
+  'Live 3D preview on your exact model',
   'Manual per-channel editing',
-  'Live 3D preview on your Tesla model',
+  'Cloud-saved shows',
   'Share to the community gallery',
   '1 free USB export included',
 ]
@@ -22,19 +23,21 @@ const PER_EXPORT_FEATURES = [
   'Everything in Free',
   'Export any show for $2.99',
   'Beat-synced FSEQ light sequence',
-  'Step-by-step BYOM setup instructions',
+  'Emailed backup + BYOM setup steps',
   'FSEQ v2 validation report',
-  'Pay only when you export',
-  'No commitment',
+  'Pay only when you export — no commitment',
 ]
 
-const CREATOR_FEATURES = [
-  'Everything in Per export',
-  'Unlimited exports — no per-show fee',
-  'Email delivery of every export',
-  'Remix any public community show',
-  'Priority support',
-  'Cancel anytime',
+// Creator's `unlock: true` perks render with a ★ + brighter text to make the upgrade
+// value pop — what you get that the pay-as-you-go tier doesn't.
+const CREATOR_FEATURES: { text: string; unlock?: boolean }[] = [
+  { text: 'Everything in Per export' },
+  { text: 'Unlimited exports — no per-show fee' },
+  { text: 'Free re-exports of any show, forever', unlock: true },
+  { text: 'Unlimited cloud library — every show saved & backed up', unlock: true },
+  { text: 'Remix any public community show' },
+  { text: 'Priority support' },
+  { text: 'Cancel anytime' },
 ]
 
 const FAQ = [
@@ -45,6 +48,14 @@ const FAQ = [
   {
     q: 'Should I pay per export or subscribe?',
     a: 'If you only need a show or two, pay $2.99 per export — no commitment. If you create regularly (new shows for holidays, meetups, seasons), Creator at $6.99/mo pays for itself after about three shows a month, and the annual plan ($49.99/yr — save 40%) is the best value.',
+  },
+  {
+    q: 'What extra do I get with Creator?',
+    a: 'Beyond unlimited exports: free re-exports of any show forever, an unlimited cloud library so every show stays saved and backed up, the ability to remix any public community show, and priority support.',
+  },
+  {
+    q: 'Do I get my show by email?',
+    a: 'Yes — on every plan. Each export downloads instantly in your browser and we also email you a backup download link plus step-by-step BYOM setup instructions, so you always have it and know exactly what to do next.',
   },
   {
     q: 'Can I cancel the Creator subscription anytime?',
@@ -68,11 +79,11 @@ const FAQ = [
   },
 ]
 
-function Feature({ text }: { text: string }) {
+function Feature({ text, unlock }: { text: string; unlock?: boolean }) {
   return (
     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14 }}>
-      <span style={{ color: 'var(--green)', marginTop: 1, flexShrink: 0 }}>✓</span>
-      <span style={{ color: 'var(--muted)' }}>{text}</span>
+      <span style={{ color: unlock ? 'var(--red)' : 'var(--green)', marginTop: 1, flexShrink: 0 }}>{unlock ? '★' : '✓'}</span>
+      <span style={{ color: unlock ? 'var(--text)' : 'var(--muted)', fontWeight: unlock ? 600 : 400 }}>{text}</span>
     </div>
   )
 }
@@ -149,7 +160,7 @@ export default function PricingPage() {
             </div>
             <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: '1.75rem' }}>or $49.99/year — save 40%</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: '1.75rem' }}>
-              {CREATOR_FEATURES.map(f => <Feature key={f} text={f} />)}
+              {CREATOR_FEATURES.map(f => <Feature key={f.text} text={f.text} unlock={f.unlock} />)}
             </div>
             <Link href="/auth?mode=signup" className="btn btn-primary btn-full" style={{ display: 'flex', justifyContent: 'center' }}>
               Go unlimited →
