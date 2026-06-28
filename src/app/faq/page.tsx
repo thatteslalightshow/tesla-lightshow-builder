@@ -31,7 +31,7 @@ export default function FaqPage() {
       </Q>
 
       <Q q="Which Teslas are supported?">
-        Model S (2021+), Model 3, Model X (2021+), Model Y, and Cybertruck, running Tesla software v11.0 (2021.44.25) or newer. Shows are not model-specific — a single show runs on any supported vehicle, and each car performs the lights and closures it has.
+        Model S (2021+), Model 3, Model X (2021+), Model Y, and Cybertruck, running Tesla software v11.0 (2021.44.25) or newer. Shows are not model-specific — a single show runs on any supported vehicle, and each car performs the lights and closures it has. The <strong>refreshed Model Y (Juniper)</strong> works too — its front light bar dances right along with the music.
       </Q>
 
       <Q q="Is it free?">

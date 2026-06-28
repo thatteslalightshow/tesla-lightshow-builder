@@ -64,7 +64,7 @@ const FAQ = [
   },
   {
     q: 'What Tesla models are supported?',
-    a: 'Model 3, Model Y, Model S, Model X, and Cybertruck. Each model has its own channel layout and 3D preview.',
+    a: 'Model 3, Model Y, Model S, Model X, and Cybertruck — including the refreshed Model Y (Juniper), whose front light bar dances right along with the music. Each model has its own 3D preview.',
   },
   {
     q: 'Do I need special hardware or software?',
