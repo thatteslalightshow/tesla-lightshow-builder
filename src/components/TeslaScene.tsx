@@ -551,12 +551,14 @@ export default function TeslaScene({
   const frameIdxRef = useRef(0);
   const previewBeatRef = useRef<number | null>(null);
   const customFramesRef = useRef<Uint8Array[] | null>(null);
+  const bpmRef = useRef(bpm);   // current bpm for the render loop (avoids stale closure)
 
   // Keep style/intensity/bpm in sync without rebuilding scene
   useEffect(() => {
     const def = MODELS[teslaModel];
     frameDataRef.current = generateFrames(style, intensity, bpm, 40, def);
     frameIdxRef.current = 0;
+    bpmRef.current = bpm;
   }, [teslaModel, style, intensity, bpm]);
 
   useEffect(() => { previewBeatRef.current = previewBeat ?? null; }, [previewBeat]);
@@ -864,7 +866,11 @@ export default function TeslaScene({
           let frameIdx: number;
           const pb = previewBeatRef.current;
           if (pb !== null) {
-            frameIdx = Math.floor(pb * (FMS / 1000) * FPS) % frames.length;
+            // pb is the playback BEAT; frames are 50fps. Convert beat → seconds → frame
+            // index so the preview tracks the song (was indexing by beat = ~1s of show
+            // stretched over the whole preview, hence "lights don't match the song").
+            const secs = (pb * 60) / (bpmRef.current || 120);
+            frameIdx = Math.floor(secs * FPS) % frames.length;
           } else {
             frameIdx = frameIdxRef.current % frames.length;
             frameIdxRef.current++;
