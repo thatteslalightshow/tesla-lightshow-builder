@@ -5,6 +5,10 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { MODELS, generateFrames, FPS } from '@/lib/tesla-channels';
 import type { TeslaModel, ShowStyle } from '@/lib/supabase';
 
@@ -46,7 +50,7 @@ const RUBBER = new THREE.MeshStandardMaterial({ color: 0x080808, roughness: 0.88
 const RIM    = new THREE.MeshStandardMaterial({ color: 0x909aaa, roughness: 0.22, metalness: 0.92 });
 const BRAKE  = new THREE.MeshStandardMaterial({ color: 0xcc4400, roughness: 0.55, metalness: 0.18 });
 const CHROME = new THREE.MeshStandardMaterial({ color: 0xd8d8d8, roughness: 0.08, metalness: 1.0 });
-const FLOOR  = new THREE.MeshStandardMaterial({ color: 0x0c0c13, roughness: 0.96, metalness: 0.0 });
+const FLOOR  = new THREE.MeshStandardMaterial({ color: 0x07070d, roughness: 0.42, metalness: 0.55, envMapIntensity: 1.1 });
 const EMISSIVE_WHITE = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.8, roughness: 0.1 });
 
 // ─── Side profile shapes per model ───────────────────────────────────────────
@@ -619,7 +623,18 @@ export default function TeslaScene({
     controls.minDistance = p.bodyL * 0.65; controls.maxDistance = p.bodyL * 5;
     controls.maxPolarAngle = Math.PI / 2 - 0.005;
     controls.target.set(0, p.bodyH * 0.5, 0);
+    controls.autoRotateSpeed = 0.6;   // slow "hero" orbit — toggled on only during preview
     controls.update();
+
+    // ── Post-processing: bloom makes the lights radiant instead of flat panels ──
+    const composer = new EffectComposer(renderer);
+    composer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    composer.setSize(w, h);
+    composer.addPass(new RenderPass(scene, camera));
+    // strength, radius, threshold — only bright (HDR) light pixels bloom, not the body.
+    const bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.85, 0.5, 0.8);
+    composer.addPass(bloom);
+    composer.addPass(new OutputPass());   // applies ACES tone-map + sRGB after bloom
 
     // ── Scene Lighting ────────────────────────────────────────────────────────
     scene.add(new THREE.AmbientLight(0x10101e, 0.5));
@@ -857,6 +872,7 @@ export default function TeslaScene({
 
     function animate(now: number) {
       raf = requestAnimationFrame(animate);
+      controls.autoRotate = previewBeatRef.current !== null;   // hero orbit only while previewing
       controls.update();
 
       if (now - lastFrame >= FMS) {
@@ -884,7 +900,7 @@ export default function TeslaScene({
           if (litReadyRef.current) lightObjsRef.current.forEach(({ mat, ch, color, center, baseOpacity }) => {
             let v = (frame[ch] ?? 0) / 255;
             if (lpz && lpz.ch === ch && now < lpz.until) v = Math.max(v, lpz.target);
-            mat.emissiveIntensity = v * 3.2;
+            mat.emissiveIntensity = v * 3.8;   // HDR headroom so bright channels punch into bloom
             mat.opacity = baseOpacity + v * (1 - baseOpacity);
             if (v > 0.06) activeForPool.push({ pos: center, color, v });
           });
@@ -915,7 +931,7 @@ export default function TeslaScene({
         });
       }
 
-      renderer.render(scene, camera);
+      composer.render();
     }
     raf = requestAnimationFrame(animate);
 
@@ -924,13 +940,15 @@ export default function TeslaScene({
       const nw = el.clientWidth, nh = el.clientHeight;
       camera.aspect = nw / nh; camera.updateProjectionMatrix();
       renderer.setSize(nw, nh);
+      composer.setSize(nw, nh);
+      bloom.setSize(nw, nh);
     });
     obs.observe(el);
 
     return () => {
       cancelAnimationFrame(raf);
       el.removeEventListener('mousemove', onMouseMove);
-      obs.disconnect(); controls.dispose(); renderer.dispose(); dracoLoader.dispose();
+      obs.disconnect(); controls.dispose(); composer.dispose(); renderer.dispose(); dracoLoader.dispose();
       if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement);
       setTooltip(null);
     };
