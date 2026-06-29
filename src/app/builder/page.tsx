@@ -1136,12 +1136,31 @@ function BuilderInner() {
     // silently ship an fseq with no audio).
     if (showId) {
       setExportStage('Building your light show'); setExportPct(0);
+
+      // Fast path: if the song was already analyzed in the browser and there are no manual
+      // edits, upload the FSEQ we ALREADY computed (the exact frames previewed) so the server
+      // can skip a redundant re-analysis — faster, and guarantees the export matches the
+      // preview. Best-effort: any hiccup silently falls back to the server analysis.
+      let useClientFseq = false;
+      if (audioFrames && audioFrames.length > 0 && !analyzing
+          && Object.keys(customBlocks).length === 0 && Object.keys(closureBlocks).length === 0) {
+        try {
+          const fseqBuf = buildFseq(getChannelCount(model), audioFrames.length, Math.round(1000 / 50), audioFrames);
+          const signRes = await fetch('/api/export/fseq-sign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ show_id: showId }) });
+          const sign = await signRes.json().catch(() => ({}));
+          if (signRes.ok && sign.path) {
+            const { error } = await supabase.storage.from('fseq-exports').uploadToSignedUrl(sign.path, sign.token, new Blob([fseqBuf], { type: 'application/octet-stream' }));
+            if (!error) useClientFseq = true;
+          }
+        } catch { useClientFseq = false; }
+      }
+
       let res: Response | null = null;
       try {
         res = await fetch('/api/export', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ show_id: showId, models: [model, ...extraModels] }),
+          body: JSON.stringify({ show_id: showId, models: [model, ...extraModels], client_fseq: useClientFseq }),
         });
       } catch { res = null; }
 

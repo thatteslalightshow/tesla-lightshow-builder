@@ -133,11 +133,28 @@ function buildFseq(channels: number, frames: number, stepMs: number, frameData: 
   return buf
 }
 
+// Validate a client-uploaded FSEQ before trusting it. The builder "fast path" uploads the
+// frames it ALREADY computed (the exact ones it previewed — same analyzePCM call, so identical
+// to what we'd re-derive) to skip a redundant server analysis + guarantee WYSIWYG. We only
+// accept a well-formed PSEQ v2 whose channel/frame/size match THIS model exactly; anything off
+// returns null and the caller falls back to the normal server analysis.
+function validateClientFseq(bytes: Uint8Array, expectedChannels: number): Uint8Array | null {
+  if (bytes.length < 32) return null
+  if (!(bytes[0] === 0x50 && bytes[1] === 0x53 && bytes[2] === 0x45 && bytes[3] === 0x51)) return null  // "PSEQ"
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  if (dv.getUint16(4, true) !== 32) return null                          // header size
+  const ch = dv.getUint32(10, true), frames = dv.getUint32(14, true), step = dv.getUint16(18, true)
+  if (ch !== expectedChannels || step !== Math.round(STEP_MS)) return null
+  if (frames < 1 || frames > 4 * 3600 * FPS) return null                 // sane (< 4 h)
+  if (bytes.length !== 32 + frames * ch) return null                     // exact byte length
+  return bytes
+}
+
 export async function POST(req: Request) {
   const user = await getAuthedUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  let body: { show_id: string; models?: string[] }
+  let body: { show_id: string; models?: string[]; client_fseq?: boolean }
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
   if (!body.show_id) return NextResponse.json({ error: 'Missing show_id' }, { status: 400 })
@@ -214,6 +231,16 @@ export async function POST(req: Request) {
   // the raw audio yet still re-export — and let community clones export — without
   // ever re-analyzing the copyrighted track.
   const storedFseqPath: string | null = (show as { fseq_path?: string | null }).fseq_path ?? null
+
+  // Fast path: the builder uploaded the FSEQ it already computed (skips re-analysis). Only
+  // used for pure-audio (non-edited) primary exports; validated, else we ignore it and analyze.
+  const incomingPath = `${show.user_id}/${body.show_id}/incoming.fseq`
+  let clientFseq: Uint8Array | null = null
+  if (body.client_fseq === true && !hasEdits(editData)) {
+    const { data: blob } = await admin.storage.from('fseq-exports').download(incomingPath)
+    if (blob) clientFseq = validateClientFseq(new Uint8Array(await blob.arrayBuffer()), channels)
+  }
+
   let fseq: Uint8Array
   let choreographyStored = false
   if (hasEdits(editData)) {
@@ -222,6 +249,14 @@ export async function POST(req: Request) {
     const frameData = Array.from({ length: frames }, (_, f) => loop[f % loop.length])
     fseq = buildFseq(channels, frameData.length, Math.round(STEP_MS), frameData)
     choreographyStored = true                                          // manual shows rebuild from edit_data — audio not needed
+  } else if (clientFseq) {
+    // Use the client-computed frames as-is; still STORE them as the canonical choreography
+    // (BYOM linchpin) so re-exports / community clones work without re-analyzing the audio.
+    fseq = clientFseq
+    const canonical = `${show.user_id}/${body.show_id}/canonical.fseq`
+    const up = await admin.storage.from('fseq-exports').upload(canonical, fseq, { contentType: 'application/octet-stream', upsert: true })
+    const upd = await admin.from('shows').update({ fseq_path: canonical }).eq('id', body.show_id)
+    choreographyStored = !up.error && !upd.error
   } else if (audio) {
     const autoClosures = editData?.autoClosures === true
     const frameData = analyzePCM(audio.L, audio.R, audio.sampleRate, modelDef.zones, channels,
@@ -439,6 +474,8 @@ export async function POST(req: Request) {
   if (!isPrivileged && choreographyStored) {
     await deleteShowAudio(admin, body.show_id).catch(() => null)
   }
+  // Tidy the fast-path staging file (best-effort).
+  if (body.client_fseq === true) await admin.storage.from('fseq-exports').remove([incomingPath]).then(() => null, () => null)
 
   const safeName = show.name.replace(/\s+/g, '_')
   return NextResponse.json({
