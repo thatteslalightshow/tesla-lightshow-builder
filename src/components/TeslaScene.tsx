@@ -631,8 +631,9 @@ export default function TeslaScene({
     composer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     composer.setSize(w, h);
     composer.addPass(new RenderPass(scene, camera));
-    // strength, radius, threshold — only bright (HDR) light pixels bloom, not the body.
-    const bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.85, 0.5, 0.8);
+    // strength, radius, threshold — kept SUBTLE: only the brightest light peaks get a
+    // gentle halo (the front has ~8 clustered fixtures, so strong bloom stacks into a blob).
+    const bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.28, 0.3, 1.1);
     composer.addPass(bloom);
     composer.addPass(new OutputPass());   // applies ACES tone-map + sRGB after bloom
 
@@ -900,7 +901,7 @@ export default function TeslaScene({
           if (litReadyRef.current) lightObjsRef.current.forEach(({ mat, ch, color, center, baseOpacity }) => {
             let v = (frame[ch] ?? 0) / 255;
             if (lpz && lpz.ch === ch && now < lpz.until) v = Math.max(v, lpz.target);
-            mat.emissiveIntensity = v * 3.8;   // HDR headroom so bright channels punch into bloom
+            mat.emissiveIntensity = v * 3.2;   // back to the original brightness; bloom adds only a gentle halo
             mat.opacity = baseOpacity + v * (1 - baseOpacity);
             if (v > 0.06) activeForPool.push({ pos: center, color, v });
           });
