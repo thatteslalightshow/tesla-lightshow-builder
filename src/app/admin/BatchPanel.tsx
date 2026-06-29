@@ -1,23 +1,41 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import { parseId3, titleFromFilename } from '@/lib/id3'
 import { audioBufferToWav, resampleTo44100 } from '@/lib/wav'
+import { analyzePCM } from '@/lib/audio-analysis'
+import { MODELS, getChannelCount, STEP_MS } from '@/lib/tesla-channels'
+import type { TeslaModel } from '@/lib/supabase'
+import JSZip from 'jszip'
 
-const MODELS = [
+const MODEL_LIST = [
   { value: 'model3', label: 'Model 3' }, { value: 'modelY', label: 'Model Y' },
   { value: 'modelS', label: 'Model S' }, { value: 'modelX', label: 'Model X' },
   { value: 'cybertruck', label: 'Cybertruck' },
 ]
 const MAX = 8
-type Status = 'pending' | 'uploading' | 'done' | 'failed'
+type Status = 'pending' | 'working' | 'done' | 'failed'
 
-// Admin/tester batch tool: drop several songs → one ZIP of FSEQ+WAV pairs (each pair
-// named "Title-Artist" so it pairs on a USB). Full shows (closures on). Not customer-facing.
+// PSEQ v2 FSEQ writer (same format as the server export).
+function buildFseq(channels: number, frames: number, stepMs: number, frameData: Uint8Array[]): Uint8Array {
+  const buf = new Uint8Array(32 + frames * channels)
+  const view = new DataView(buf.buffer)
+  buf[0] = 0x50; buf[1] = 0x53; buf[2] = 0x45; buf[3] = 0x51
+  view.setUint16(4, 32, true); buf[6] = 0; buf[7] = 2; view.setUint16(8, 32, true)
+  view.setUint32(10, channels, true); view.setUint32(14, frames, true); view.setUint16(18, stepMs, true)
+  for (let f = 0; f < frames; f++) buf.set(frameData[f] ?? new Uint8Array(channels), 32 + f * channels)
+  return buf
+}
+function sanitize(name: string): string {
+  return (name || 'lightshow').replace(/[/\\:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'lightshow'
+}
+
+// Admin/tester batch tool — runs ENTIRELY in the browser: decode any format, analyze with the
+// same engine the builder uses, build each FSEQ + 44.1kHz WAV, and zip them up locally. No
+// upload, no server limits. Each pair is named "Title-Artist" so it pairs on a USB. Not customer-facing.
 export default function BatchPanel() {
   const [files, setFiles] = useState<File[]>([])
-  const [model, setModel] = useState('model3')
+  const [model, setModel] = useState<TeslaModel>('model3')
   const [busy, setBusy] = useState(false)
   const [statuses, setStatuses] = useState<Record<string, Status>>({})
   const [msg, setMsg] = useState('')
@@ -29,48 +47,48 @@ export default function BatchPanel() {
 
   async function run() {
     if (!files.length || busy) return
-    setBusy(true); setMsg('Uploading…')
-    const items: { path: string; baseName: string }[] = []
-    const st: Record<string, Status> = {}
-    files.forEach(f => { st[f.name] = 'pending' })
-    setStatuses({ ...st })
+    setBusy(true); setMsg('Building shows…')
+    const def = MODELS[model]; const channels = getChannelCount(model)
+    const zip = new JSZip(); const used = new Set<string>(); let ok = 0
+    const st: Record<string, Status> = {}; files.forEach(f => { st[f.name] = 'pending' }); setStatuses({ ...st })
 
     for (const f of files) {
-      st[f.name] = 'uploading'; setStatuses({ ...st })
+      st[f.name] = 'working'; setStatuses({ ...st })
+      await new Promise(r => setTimeout(r, 20))   // let the UI paint the status
       try {
         const tags = await parseId3(f)
         const title = tags.title?.trim() || titleFromFilename(f.name)
         const baseName = tags.artist?.trim() ? `${title}-${tags.artist.trim()}` : title
-        // Decode ANY browser-supported format (mp3/mp4/m4a/aac/ogg/flac/wav) → 44.1kHz WAV
-        // so the server can always read it. Same client-side conversion the builder uses.
-        const raw = await f.arrayBuffer()
         const ctx = new AudioContext()
-        let wav: Blob
-        try { const ab = await ctx.decodeAudioData(raw.slice(0)); wav = audioBufferToWav(await resampleTo44100(ab)) }
-        finally { ctx.close() }
-        const signRes = await fetch('/api/admin/batch-upload-sign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file_name: `${baseName}.wav`, file_size: wav.size }) })
-        const sign = await signRes.json().catch(() => ({}))
-        if (!signRes.ok || !sign.path) throw new Error(sign.error || 'sign failed')
-        const { error } = await supabase.storage.from('audio-files').uploadToSignedUrl(sign.path, sign.token, wav, { contentType: 'audio/wav' })
-        if (error) throw error
-        items.push({ path: sign.path, baseName })
-        st[f.name] = 'done'; setStatuses({ ...st })
+        let ab: AudioBuffer
+        try { ab = await ctx.decodeAudioData((await f.arrayBuffer()).slice(0)) } finally { ctx.close() }
+        const ab44 = await resampleTo44100(ab)
+        const wavBlob = audioBufferToWav(ab44)
+        const L = ab44.getChannelData(0); const R = ab44.numberOfChannels > 1 ? ab44.getChannelData(1) : L
+        const frames = analyzePCM(L, R, ab44.sampleRate, def.zones, channels, { autoClosures: true, model, preset: 'balanced' }).frames
+        const fseq = buildFseq(channels, frames.length, Math.round(STEP_MS), frames)
+        let name = sanitize(baseName); let i = 2
+        while (used.has(name.toLowerCase())) name = `${sanitize(baseName)} (${i++})`
+        used.add(name.toLowerCase())
+        zip.file(`${name}.fseq`, fseq)
+        zip.file(`${name}.wav`, wavBlob)
+        ok++; st[f.name] = 'done'; setStatuses({ ...st })
       } catch { st[f.name] = 'failed'; setStatuses({ ...st }) }
     }
 
-    if (!items.length) { setMsg('All uploads failed.'); setBusy(false); return }
-    setMsg(`Generating ${items.length} show${items.length === 1 ? '' : 's'} — this can take a minute…`)
+    if (!ok) { setMsg('All songs failed to process.'); setBusy(false); return }
+    setMsg('Zipping…')
     try {
-      const res = await fetch('/api/admin/batch-export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model, items }) })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data.url) { setMsg(data.error || 'Batch export failed.'); setBusy(false); return }
-      const a = document.createElement('a'); a.href = data.url; a.download = `batch_${model}.zip`; a.click()
-      setMsg(`✓ ${data.count} show${data.count === 1 ? '' : 's'} exported${data.failures?.length ? ` · ${data.failures.length} failed` : ''}. ZIP downloaded.`)
-    } catch { setMsg('Batch export request failed.') }
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a'); a.href = url; a.download = `batch_${model}.zip`; a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 15000)
+      setMsg(`✓ ${ok} show${ok === 1 ? '' : 's'} exported. ZIP downloaded.`)
+    } catch { setMsg('Could not build the ZIP.') }
     setBusy(false)
   }
 
-  const dot = (s: Status) => s === 'done' ? 'var(--green)' : s === 'failed' ? '#ff8a8a' : s === 'uploading' ? '#ff8c00' : 'var(--muted2)'
+  const dot = (s: Status) => s === 'done' ? 'var(--green)' : s === 'failed' ? '#ff8a8a' : s === 'working' ? '#ff8c00' : 'var(--muted2)'
   const input: React.CSSProperties = { padding: '8px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 13, cursor: 'pointer' }
 
   return (
@@ -80,8 +98,8 @@ export default function BatchPanel() {
           <input type="file" accept="audio/*,video/mp4,.mp3,.wav,.m4a,.mp4,.aac,.ogg,.flac" multiple onChange={onPick} style={{ display: 'none' }} disabled={busy} />
           {files.length ? `${files.length} song${files.length === 1 ? '' : 's'} selected` : 'Choose songs…'}
         </label>
-        <select value={model} onChange={e => setModel(e.target.value)} disabled={busy} style={{ ...input }}>
-          {MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+        <select value={model} onChange={e => setModel(e.target.value as TeslaModel)} disabled={busy} style={{ ...input }}>
+          {MODEL_LIST.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
         </select>
         <button onClick={run} disabled={busy || !files.length} className="btn btn-primary btn-sm">
           {busy ? 'Working…' : 'Process & export →'}
@@ -97,7 +115,7 @@ export default function BatchPanel() {
           ))}
         </div>
       )}
-      {msg && <div style={{ fontSize: 13, color: msg.startsWith('✓') ? 'var(--green)' : msg.includes('fail') || msg.includes('Max') ? '#ff8a8a' : 'var(--muted)' }}>{msg}</div>}
+      {msg && <div style={{ fontSize: 13, color: msg.startsWith('✓') ? 'var(--green)' : msg.includes('fail') || msg.includes('Max') || msg.includes('Could not') ? '#ff8a8a' : 'var(--muted)' }}>{msg}</div>}
     </div>
   )
 }
