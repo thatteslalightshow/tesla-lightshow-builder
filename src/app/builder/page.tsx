@@ -694,7 +694,7 @@ function BuilderInner() {
   const [closureBlocks, setClosureBlocks] = useState<ClosureBlocks>({});
   const [closurePulse, setClosurePulse] = useState<{ ch: number; cmd: ClosureCommand; n: number } | null>(null);
   const pulseN = useRef(0);
-  const [autoClosures, setAutoClosures] = useState(false);   // opt-in: choreograph closures to the song
+  const [autoClosures, setAutoClosures] = useState(true);   // default-on: closures choreographed to the song (opt-out via the checkbox)
   const [mixPreset, setMixPreset] = useState('balanced');    // genre/vibe preset for the audio engine
   const [detectedVibe, setDetectedVibe] = useState<string | null>(null);  // auto-detected vibe (for the badge)
   const vibeUserSet = useRef(false);                         // true once the user manually picks a vibe
@@ -782,11 +782,11 @@ function BuilderInner() {
     if (ed) {
       setCustomBlocks(Object.fromEntries(Object.entries(ed.customBlocks ?? {}).map(([ch, arr]) => [Number(ch), new Set(arr)])));
       setClosureBlocks(ed.closureBlocks ?? {});
-      setAutoClosures(ed.autoClosures ?? false);
+      setAutoClosures(ed.autoClosures ?? true);   // default-on; respects an explicit opt-out
       setMixPreset(ed.mixPreset ?? 'balanced');
       vibeUserSet.current = !!ed.mixPreset;   // respect a saved vibe over auto-detection
     } else {
-      setCustomBlocks({}); setClosureBlocks({}); setAutoClosures(false); setMixPreset('balanced');
+      setCustomBlocks({}); setClosureBlocks({}); setAutoClosures(true); setMixPreset('balanced');
     }
     const { data: audio } = await supabase.from('audio_files').select('id').eq('show_id', id).limit(1);
     if (audio?.length) setAudioUploaded(true);
@@ -1658,14 +1658,14 @@ function BuilderInner() {
               {' '}<strong style={{ color: CMD_STYLE.stop.fg }}>Stop</strong> halts it mid-motion. Click again past Stop to clear.
               {' '}<span style={{ opacity: 0.7 }}>Dimmed cells are auto-choreographed for you; click any cell to override it.</span>
             </div>
-            {/* Auto-choreograph closures to the song (opt-in — physical doors move) */}
+            {/* Auto-choreograph closures to the song (default-on; uncheck to opt out — physical doors move) */}
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', userSelect: 'none', padding: '8px 10px', background: autoClosures ? 'rgba(157,107,255,0.12)' : 'rgba(255,255,255,0.03)', border: `1px solid ${autoClosures ? 'rgba(157,107,255,0.4)' : 'var(--border)'}`, borderRadius: 8 }}>
               <input type="checkbox" checked={autoClosures} onChange={e => setAutoClosures(e.target.checked)} style={{ accentColor: '#9d6bff', width: 15, height: 15, marginTop: 1 }} />
               <span style={{ fontSize: 12, lineHeight: 1.5 }}>
-                <strong style={{ color: 'var(--text)' }}>Auto-choreograph closures to the music</strong> — opens your car&apos;s
+                <strong style={{ color: 'var(--text)' }}>Auto-choreograph closures to the music</strong> — <strong style={{ color: '#b48cff' }}>on by default</strong>, opening your car&apos;s
                 {' '}{MODELS[model].zones.some(z => z.closure === 'falcon_doors') ? 'falcon/front doors' : MODELS[model].zones.some(z => z.closure === 'door_handles') ? 'doors & mirrors' : 'mirrors & windows'} to land open on the drops and dance through big sections,
-                {' '}<strong style={{ color: 'var(--muted)' }}>automatically within Tesla&apos;s limits</strong>.
-                <span style={{ color: '#ffb454', display: 'block', marginTop: 2 }}>⚠ Real doors/closures will move — make sure your Tesla has clearance.</span>
+                {' '}<strong style={{ color: 'var(--muted)' }}>automatically within Tesla&apos;s limits</strong>. Uncheck to keep your show lights-only.
+                <span style={{ color: '#ffb454', display: 'block', marginTop: 2 }}>⚠ Real doors/closures will move — make sure your Tesla has clearance. Your Tesla will also ask you to confirm on its screen before the show runs.</span>
               </span>
             </label>
             {Object.keys(closureBlocks).length > 0 && (

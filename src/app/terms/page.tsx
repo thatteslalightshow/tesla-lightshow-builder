@@ -10,7 +10,7 @@ export default function TermsPage() {
   return (
     <LegalPage
       title="Terms of Service"
-      updated="June 26, 2026"
+      updated="June 29, 2026"
       intro="These terms govern your use of ThatTeslaLightshow. By creating an account or using the service, you agree to them. Please read the music-rights and vehicle-safety sections carefully."
     >
       <h2>1. The service</h2>
@@ -33,14 +33,14 @@ export default function TermsPage() {
       <h2>5. Sharing &amp; community shows</h2>
       <p>If you make a show public or list it in the community gallery, you grant other users permission to view and acquire a copy of that show. Community shows are <strong>choreography only</strong> — the light sequence plus basic song metadata (title, artist, tempo); <strong>no audio is ever shared</strong>, and anyone running a community show brings their own copy of the song. You — not ThatTeslaLightshow — are responsible for the content you choose to make public. We may remove any show at our discretion.</p>
 
-      <h2>6. Vehicle safety — important</h2>
-      <p>Some light shows can command your vehicle&apos;s <strong>physical closures</strong> — doors, windows, mirrors, the liftgate/frunk, and the charge port — to move. <strong>You run light shows entirely at your own risk.</strong> Before running any show:</p>
+      <h2>6. Vehicle safety &amp; assumption of risk — important</h2>
+      <p>Light shows command your vehicle&apos;s <strong>lights</strong> and can command its <strong>physical closures</strong> — doors (including falcon-wing doors), windows, mirrors, the liftgate/frunk, and the charge port — to move. To make shows feel their best, <strong>closure choreography is included by default</strong>; you can turn it off in the builder (uncheck &quot;Auto-choreograph closures to the music&quot;) to keep any show lights-only. <strong>You run light shows entirely at your own risk.</strong> Before running any show:</p>
       <ul>
-        <li>Make sure your vehicle has clear space around it for any doors, windows, or the liftgate to move safely.</li>
-        <li>Keep people, pets, and objects away from moving parts.</li>
-        <li>Follow Tesla&apos;s own guidance and safety warnings for custom light shows.</li>
+        <li>Make sure your vehicle has clear space around it for any doors, windows, mirrors, or the liftgate to move safely.</li>
+        <li>Keep people, pets, and objects away from all moving parts.</li>
+        <li>Follow Tesla&apos;s own on-screen confirmation, guidance, and safety warnings for custom light shows.</li>
       </ul>
-      <p>ThatTeslaLightshow is not responsible for any damage, injury, or loss resulting from running a light show or from the movement of your vehicle&apos;s closures. We design shows to stay within Tesla&apos;s published limits, but you are responsible for safe operation.</p>
+      <p>By creating, downloading, or running any light show, you acknowledge and agree that you do so <strong>entirely at your own risk</strong> and that you <strong>assume all risk and liability</strong> for any damage to your vehicle — including its doors, windows, mirrors, liftgate, frunk, charge port, lights, paint, electronics, and any other component — and for any property damage, personal injury, or loss, to you or to anyone else, arising from running a show or from the movement of your vehicle&apos;s closures or the operation of its lights. We design shows to stay within Tesla&apos;s published limits, but <strong>you are solely responsible for safe operation</strong>, for ensuring adequate clearance, and for complying with Tesla&apos;s warnings and all applicable laws. To the fullest extent permitted by law, you <strong>release and hold harmless</strong> ThatTeslaLightshow, its owner, and its affiliates from any and all claims, damages, liabilities, and expenses of any kind resulting from your use of any light show or from the movement or operation of your vehicle.</p>
 
       <h2>7. Acceptable use</h2>
       <p>Don&apos;t misuse the service: no unlawful content, no infringing on others&apos; rights, no attempting to break, overload, or reverse-engineer the platform, and no reselling the service itself.</p>
@@ -52,7 +52,7 @@ export default function TermsPage() {
       <p>The service is provided &quot;as is&quot; and &quot;as available,&quot; without warranties of any kind. We do not guarantee that every show will work on every vehicle or software version, or that the service will be uninterrupted or error-free.</p>
 
       <h2>10. Limitation of liability</h2>
-      <p>To the maximum extent permitted by law, ThatTeslaLightshow will not be liable for any indirect, incidental, or consequential damages, or for vehicle damage or personal injury arising from your use of the service. Our total liability for any claim will not exceed the amount you paid us in the 12 months before the claim.</p>
+      <p>To the maximum extent permitted by law, ThatTeslaLightshow will not be liable for any indirect, incidental, or consequential damages, or for any vehicle damage or personal injury — including any arising from the movement of your vehicle&apos;s closures or the operation of its lights — arising from your use of the service. Our total liability for any claim will not exceed the amount you paid us in the 12 months before the claim.</p>
 
       <h2>11. Termination</h2>
       <p>You can stop using the service and delete your account at any time. We may suspend or terminate accounts that violate these terms.</p>
