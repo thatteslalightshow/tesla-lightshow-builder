@@ -6,6 +6,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import AdminSweepPanel from './AdminSweepPanel'
 import BroadcastPanel from './BroadcastPanel'
+import BatchPanel from './BatchPanel'
 import { fetchRecentSentryIssues } from '@/lib/sentry-issues'
 
 export const metadata: Metadata = { title: 'Admin' }
@@ -226,6 +227,15 @@ export default async function AdminPage() {
             Send a seasonal campaign or announcement. Always <strong>send a proof to yourself first</strong> and review it — &ldquo;Send to all&rdquo; only unlocks after. Opted-out users are skipped automatically, and every email includes an unsubscribe link.
           </p>
           <BroadcastPanel />
+        </section>
+
+        {/* Batch test exports (admin/tester) */}
+        <section>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 16 }}>Batch test exports</div>
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16, maxWidth: 660, lineHeight: 1.6 }}>
+            Drop in several songs (up to 8) and one model — we generate a full show for each and bundle them into a single ZIP of <code>Title-Artist.fseq</code> + <code>Title-Artist.wav</code> pairs (matching names so they pair on a USB). Admin/tester only.
+          </p>
+          <BatchPanel />
         </section>
 
         {/* Storage cleanup */}
