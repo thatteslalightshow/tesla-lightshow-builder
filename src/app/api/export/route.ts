@@ -111,10 +111,10 @@ const MODEL_LABELS: Record<string, string> = {
 // drop the client into the audio-less fallback path.
 export const maxDuration = 120
 
-// Signed URL TTL — 1 hour. Every export both downloads directly AND emails this same
-// link (+ BYOM setup steps) as a backup, so it must stay valid long enough to use from
-// the inbox.
-const EXPORT_EXPIRY_SEC = 3600
+// Signed URL TTL — 7 days. Every export both downloads directly AND emails this same
+// link (+ BYOM setup steps) as a backup, so it should stay valid long enough that a
+// customer can grab it from their inbox later (1 hour was far too short).
+const EXPORT_EXPIRY_SEC = 7 * 24 * 3600
 
 function buildFseq(channels: number, frames: number, stepMs: number, frameData: Uint8Array[]): Uint8Array {
   const headerSize = 32

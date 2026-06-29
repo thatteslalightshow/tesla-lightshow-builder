@@ -144,10 +144,11 @@ async function runLifecycle(admin: Admin) {
 
   const exportShowIds = [...new Set(recentExports.map(x => x.show_id))]
   const [{ data: profs }, { data: shows }] = await Promise.all([
-    admin.from('profiles').select('id, marketing_opt_out').in('id', userIds),
+    admin.from('profiles').select('id, marketing_opt_out, is_admin, is_tester').in('id', userIds),
     admin.from('shows').select('id, user_id, name').in('id', exportShowIds.length ? exportShowIds : ['00000000-0000-0000-0000-000000000000']),
   ])
-  const optedOut = new Set((profs ?? []).filter((p) => (p as { marketing_opt_out?: boolean }).marketing_opt_out).map((p) => (p as { id: string }).id))
+  // Skip opted-out AND admin/tester accounts — we don't email ourselves while testing.
+  const skip = new Set((profs ?? []).filter((p) => { const x = p as { marketing_opt_out?: boolean; is_admin?: boolean; is_tester?: boolean }; return x.marketing_opt_out || x.is_admin || x.is_tester }).map((p) => (p as { id: string }).id))
   const hasShow = new Set((shows ?? []).map((r) => (r as { user_id: string }).user_id))   // users who own an exported show
   const showName = new Map((shows ?? []).map((r) => [(r as { id: string }).id, (r as { name: string | null }).name]))
 
@@ -162,7 +163,7 @@ async function runLifecycle(admin: Admin) {
 
   let sent = 0
   const send = async (uid: string, kind: string, fn: (email: string) => Promise<void>) => {
-    if (logged.has(`${uid}|${kind}`) || optedOut.has(uid)) return
+    if (logged.has(`${uid}|${kind}`) || skip.has(uid)) return
     const email = await getEmail(uid)
     if (!email) return
     try {
@@ -198,9 +199,10 @@ async function runRetention(admin: Admin) {
   const base = appUrl()
   const unsub = (uid: string) => `${base}/api/email/unsubscribe?u=${uid}&t=${unsubToken(uid)}`
   const getEmail = async (uid: string) => (await admin.auth.admin.getUserById(uid)).data?.user?.email ?? null
-  const optedOut = async (uid: string) => {
-    const { data } = await admin.from('profiles').select('marketing_opt_out').eq('id', uid).maybeSingle()
-    return (data as { marketing_opt_out?: boolean } | null)?.marketing_opt_out === true
+  const optedOut = async (uid: string) => {                       // also skips admin/tester (no self-emails)
+    const { data } = await admin.from('profiles').select('marketing_opt_out, is_admin, is_tester').eq('id', uid).maybeSingle()
+    const p = data as { marketing_opt_out?: boolean; is_admin?: boolean; is_tester?: boolean } | null
+    return !!(p?.marketing_opt_out || p?.is_admin || p?.is_tester)
   }
   const logged = async (uid: string, kind: string) =>
     (((await admin.from('email_log').select('id').eq('user_id', uid).eq('kind', kind).limit(1)).data) ?? []).length > 0

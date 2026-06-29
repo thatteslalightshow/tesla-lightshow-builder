@@ -108,6 +108,11 @@ export async function sendExportDownload({
 }) {
   if (!resend) return;
   const song = songTitle ? escHtml(songTitle) : 'your song';
+  const expiresLabel = expiresMinutes >= 1440
+    ? `${Math.round(expiresMinutes / 1440)} day${expiresMinutes >= 2880 ? 's' : ''}`
+    : expiresMinutes >= 60
+      ? `${Math.round(expiresMinutes / 60)} hour${expiresMinutes >= 120 ? 's' : ''}`
+      : `${expiresMinutes} minutes`;
 
   await resend.emails.send({
     from: FROM,
@@ -138,7 +143,7 @@ export async function sendExportDownload({
           <a href="${downloadUrl}" style="display:inline-block;padding:14px 32px;background:#e8404a;color:#ffffff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:700;letter-spacing:-0.2px;">
             Download your show →
           </a>
-          <p style="font-size:12px;color:rgba(255,255,255,0.3);margin:14px 0 0;">Link expires in ${expiresMinutes} minutes.</p>
+          <p style="font-size:12px;color:rgba(255,255,255,0.3);margin:14px 0 0;">This download link stays active for ${expiresLabel}.</p>
           <hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:32px 0;" />
           <p style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.85);margin:0 0 14px;">One last step — add your music 🎵</p>
           <p style="font-size:13px;color:rgba(255,255,255,0.45);margin:0;line-height:1.95;">
