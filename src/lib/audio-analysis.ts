@@ -79,7 +79,7 @@ function flux(norm: number[]): number[] {
 
 type Side = 'L' | 'R' | 'C'
 function sideOf(z: LightZone): Side { return z.nz < -0.12 ? 'L' : z.nz > 0.12 ? 'R' : 'C' }
-type Band = 'bass' | 'mid' | 'high' | 'total'
+type Band = 'bass' | 'mid' | 'high' | 'presence' | 'total'
 function bandOf(type: string): Band {
   switch (type) {
     case 'headlight': case 'highbeam': case 'fog': case 'tail': case 'brake': return 'bass'
@@ -355,14 +355,17 @@ export interface MixParams {
   phrasing: number  // strength of beat-synced structure: L↔R ping-pong + L→R sweep (0 = off)
   expression: number  // per-fixture independence: stereo widen + cascade/chase/ripple in verses,
                       // snapping back to symmetric UNISON on drops (0 = off)
+  lead: number      // how hard PICKED/STRUMMED notes (guitar "presence" band ~2.5kHz) drive the lights
+  sustain: number   // light hold/release as a fraction of a beat — higher = lights breathe, less strobe
+  flourish: number  // signature move strength at big moments (360 chase / symmetric ping-pong)
 }
 export const MIX_PRESETS: Record<string, MixParams> = {
-  balanced:  { bassWeight: 1.0,  punch: 1.0, sparkle: 1.0,  contrast: 0.72, closureSections: 6, phrasing: 0.5, expression: 0.5 }, // = original feel
-  edm:       { bassWeight: 1.3,  punch: 1.5, sparkle: 1.3,  contrast: 0.62, closureSections: 8, phrasing: 0.9, expression: 0.5 }, // big drops, lots of movement
-  hiphop:    { bassWeight: 1.45, punch: 1.3, sparkle: 0.85, contrast: 0.70, closureSections: 4, phrasing: 0.6, expression: 0.6 }, // 808-forward
-  rock:      { bassWeight: 1.05, punch: 1.6, sparkle: 1.1,  contrast: 0.74, closureSections: 4, phrasing: 0.7, expression: 0.55 }, // punchy drums
-  pop:       { bassWeight: 1.0,  punch: 1.1, sparkle: 1.25, contrast: 0.78, closureSections: 4, phrasing: 0.7, expression: 0.7 }, // bright, melodic
-  cinematic: { bassWeight: 0.85, punch: 0.7, sparkle: 0.8,  contrast: 0.85, closureSections: 2, phrasing: 0.2, expression: 0.35 }, // smooth, minimal
+  balanced:  { bassWeight: 1.0,  punch: 1.0, sparkle: 1.0,  contrast: 0.72, closureSections: 6, phrasing: 0.5, expression: 0.5,  lead: 0.6,  sustain: 0.6,  flourish: 0.6 },  // = original feel
+  edm:       { bassWeight: 1.3,  punch: 1.5, sparkle: 1.3,  contrast: 0.62, closureSections: 8, phrasing: 0.9, expression: 0.5,  lead: 0.4,  sustain: 0.45, flourish: 0.85 }, // big drops, lots of movement
+  hiphop:    { bassWeight: 1.45, punch: 1.3, sparkle: 0.85, contrast: 0.70, closureSections: 4, phrasing: 0.6, expression: 0.6,  lead: 0.35, sustain: 0.55, flourish: 0.6 },  // 808-forward
+  rock:      { bassWeight: 1.05, punch: 1.6, sparkle: 1.1,  contrast: 0.74, closureSections: 4, phrasing: 0.7, expression: 0.55, lead: 1.0,  sustain: 0.5,  flourish: 0.9 },  // punchy drums + guitar
+  pop:       { bassWeight: 1.0,  punch: 1.1, sparkle: 1.25, contrast: 0.78, closureSections: 4, phrasing: 0.7, expression: 0.7,  lead: 0.7,  sustain: 0.6,  flourish: 0.7 },  // bright, melodic
+  cinematic: { bassWeight: 0.85, punch: 0.7, sparkle: 0.8,  contrast: 0.85, closureSections: 2, phrasing: 0.2, expression: 0.35, lead: 0.5,  sustain: 0.9,  flourish: 0.4 },  // smooth, minimal
 }
 
 // ─── Phase 2: musical phrasing + deliberate asymmetry ───────────────────────────
@@ -425,6 +428,73 @@ function applyExpression(frames: Uint8Array[], density: number[], bpm: number, F
       const ripple = 0.5 + 0.5 * Math.sin((t * 2.2 + z.nz * 2.4 + nx * 3.1) * Math.PI)   // per-fixture shimmer
       const expressive = Math.min(1, base * (0.4 + 0.6 * ripple) + near * 0.45)
       frames[f][ch] = Math.min(255, Math.round((base * (1 - expr) + expressive * expr) * 255))
+    }
+  }
+}
+
+// Phase 1: light HOLD / RELEASE envelope. The reactive base is instantaneous, so fast transients
+// made the lights blink faster than the beat (strobey). Give every fixture a snappy attack but a
+// release tied to the tempo — each hit lands, holds, then decays toward the next beat. A ~120ms
+// floor means nothing strobes even on busy tracks. `sustain` = release length as a fraction of a beat.
+function applyLightEnvelope(frames: Uint8Array[], zones: LightZone[], bpm: number, FPS: number, sustain: number): void {
+  if (sustain <= 0) return
+  const beatFrames = (60 / bpm) * FPS
+  const releaseFrames = Math.max(6, beatFrames * sustain)        // ~120ms floor → no strobe
+  const coef = Math.exp(-1 / releaseFrames)
+  for (const z of zones) {
+    if (z.type === 'closure') continue
+    const ch = z.channel
+    let prev = 0
+    for (let f = 0; f < frames.length; f++) {
+      const cur = frames[f][ch]
+      prev = cur >= prev ? cur : Math.max(cur, Math.round(prev * coef))   // fast attack, slow release
+      frames[f][ch] = prev
+    }
+  }
+}
+
+// Phase 2c: SIGNATURE MOVES at the big moments. When the song peaks AND the guitar/lead is driving
+// (a solo, a drop), take creative liberty — either a 360° CHASE that rotates a bright arc around the
+// car stepping on each picked note, or a symmetric L↔R PING-PONG that snaps side-to-side with the
+// instrument. Gated to those moments (rare = special) and clocked to the presence onsets so it
+// "matches the instrument playing." `strength` = the vibe's flourish amount.
+function applyFlourish(
+  frames: Uint8Array[], density: number[], presenceEnv: number[], bassEnv: number[],
+  presenceOnsets: number[], bpm: number, FPS: number, zones: LightZone[], strength: number,
+): void {
+  if (strength <= 0 || frames.length === 0) return
+  void bpm; void FPS
+  const lights = zones.filter(z => z.type !== 'closure' && z.type !== 'highbeam' && z.type !== 'headlight')
+  if (lights.length < 2) return
+  // Ring order: sort fixtures by their angle around the car so advancing the index rotates a sweep.
+  const ring = [...lights].sort((a, b) => Math.atan2(a.nz, a.nx) - Math.atan2(b.nz, b.nx))
+  const ringIdx = new Map(ring.map((z, i) => [z.channel, i] as const))
+  const R = ring.length
+  // step[f] = how many presence onsets have fired by frame f (the "note counter" the moves clock to).
+  const step = new Array<number>(frames.length).fill(0)
+  { let s = 0, oi = 0
+    for (let f = 0; f < frames.length; f++) { while (oi < presenceOnsets.length && presenceOnsets[oi] <= f) { s++; oi++ } step[f] = s } }
+  for (let f = 0; f < frames.length; f++) {
+    const moment = Math.min(1, density[f] * presenceEnv[f] * 2.4)       // a peak AND the lead is present
+    if (moment < 0.4) continue
+    const s = strength * moment
+    if (presenceEnv[f] >= bassEnv[f] * 0.9) {                           // lead-driven → rotate a 360° arc
+      const head = step[f] % R
+      for (const z of lights) {
+        const i = ringIdx.get(z.channel)!
+        let d = Math.abs(i - head); d = Math.min(d, R - d)             // circular distance around the ring
+        const near = Math.max(0, 1 - d / Math.max(1, R * 0.28))         // a lit arc that rotates around the car
+        if (near > 0) frames[f][z.channel] = Math.min(255, frames[f][z.channel] + Math.round(near * s * 255))
+      }
+    } else {                                                            // drum-driven → symmetric ping-pong
+      const side = step[f] % 2 === 0 ? -1 : 1
+      for (const z of lights) {
+        if (Math.abs(z.nz) < 0.1) continue
+        const onSide = z.nz < 0 ? side < 0 : side > 0
+        frames[f][z.channel] = onSide
+          ? Math.min(255, frames[f][z.channel] + Math.round(s * 200))
+          : Math.round(frames[f][z.channel] * (1 - s * 0.6))
+      }
     }
   }
 }
@@ -552,18 +622,26 @@ export function analyzePCM(
     frameRms(biquad(left, 'highpass', 4500, 0.8, sampleRate), totalFrames, frameSize),
     frameRms(biquad(right, 'highpass', 4500, 0.8, sampleRate), totalFrames, frameSize),
   ])
+  // PRESENCE band (~2.5kHz) — the pick/strum attack range of guitars & leads, which sat in the
+  // GAP between the mid (1kHz) and high (4.5kHz) bands, so the engine couldn't "see" riffs like
+  // Thunderstruck. Its flux gives us per-note attacks to drive the lights + spot guitar solos.
+  const [pN_L, pN_R] = normShared([
+    frameRms(biquad(left, 'bandpass', 2600, 0.9, sampleRate), totalFrames, frameSize),
+    frameRms(biquad(right, 'bandpass', 2600, 0.9, sampleRate), totalFrames, frameSize),
+  ])
 
   const avg = (a: number[], b: number[]) => a.map((v, i) => (v + b[i]) / 2)
-  const bN_C = avg(bN_L, bN_R), mN_C = avg(mN_L, mN_R), hN_C = avg(hN_L, hN_R)
+  const bN_C = avg(bN_L, bN_R), mN_C = avg(mN_L, mN_R), hN_C = avg(hN_L, hN_R), pN_C = avg(pN_L, pN_R)
   const totalC = bN_C.map((v, i) => Math.min(1, (v + mN_C[i] + hN_C[i]) / 2.2))
 
   const E: Record<Band, Record<Side, number[]>> = {
     bass: { L: bN_L, R: bN_R, C: bN_C },
     mid: { L: mN_L, R: mN_R, C: mN_C },
     high: { L: hN_L, R: hN_R, C: hN_C },
+    presence: { L: pN_L, R: pN_R, C: pN_C },
     total: { L: totalC, R: totalC, C: totalC },
   }
-  const O: Record<Band, number[]> = { bass: flux(bN_C), mid: flux(mN_C), high: flux(hN_C), total: flux(totalC) }
+  const O: Record<Band, number[]> = { bass: flux(bN_C), mid: flux(mN_C), high: flux(hN_C), presence: flux(pN_C), total: flux(totalC) }
 
   // Density envelope (how busy the show should be right now).
   const density: number[] = new Array(totalFrames).fill(0)
@@ -633,23 +711,37 @@ export function analyzePCM(
       const band = bandOf(zone.type), side = sideOf(zone)
       const energy = E[band][side][f]
       const punch = O[band][f]
+      const gtr = O.presence[f] * P.lead   // picked/strummed-note attack → lights react to the guitar, not just volume
       let b: number
       switch (zone.type) {
-        case 'turn_front': case 'turn_rear': b = punch * 1.5 * P.sparkle * (0.4 + 0.6 * dens); break
-        case 'marker': b = (energy * 0.45 + punch * 0.9) * P.sparkle * (0.3 + 0.7 * dens); break
-        case 'drl': case 'highbeam': b = energy * 0.95 + punch * 0.5 * P.punch; break
-        default: b = (energy * 0.9 + punch * 1.0 * P.punch) * P.bassWeight; break
+        case 'turn_front': case 'turn_rear': b = (punch * 1.5 + gtr * 0.8) * P.sparkle * (0.4 + 0.6 * dens); break
+        case 'marker': b = (energy * 0.45 + punch * 0.9 + gtr * 0.6) * P.sparkle * (0.3 + 0.7 * dens); break
+        case 'drl': case 'highbeam': b = energy * 0.95 + punch * 0.5 * P.punch + gtr * 0.7; break
+        default: b = (energy * 0.9 + punch * 1.0 * P.punch) * P.bassWeight + gtr * 0.45; break
       }
       frame[zone.channel] = Math.round(curve(b) * 255)
     })
     return frame
   })
 
+  // Phase 1: light hold/release envelope so flashes land WITH the beat instead of strobing.
+  applyLightEnvelope(frames, zones, bpm, FPS, P.sustain)
+
   // Phase 2: layer beat-synced phrasing (ping-pong + sweep) over the reactive base.
   const lightAnchor = triggerFrames.size ? Math.min(...triggerFrames) : 0
   applyPhrasing(frames, totalC, bpm, FPS, zones, P.phrasing, lightAnchor)
   // Phase 2b: per-fixture spatial expression (cascade/chase/ripple in verses, unison on drops).
   applyExpression(frames, density, bpm, FPS, zones, P.expression, lightAnchor)
+  // Phase 2c: signature moves at the guitar/drum-solo peaks — clocked to the picked-note onsets.
+  const presenceEnv = new Array<number>(totalFrames).fill(0)
+  { let acc = 0; for (let f = 0; f < totalFrames; f++) { acc = acc * 0.90 + pN_C[f] * 0.10; presenceEnv[f] = Math.min(1, acc * 1.5) } }
+  const presenceOnsets: number[] = []
+  { const Op = O.presence, minGap = Math.max(3, Math.floor(beatFrames * 0.18)); let last = -minGap
+    for (let f = 2; f < totalFrames - 2; f++) {
+      let s = 0, n = 0; for (let k = f - 6; k <= f + 6; k++) if (k >= 0 && k < totalFrames) { s += Op[k]; n++ }
+      if (Op[f] > Op[f - 1] && Op[f] >= Op[f + 1] && Op[f] > (s / n) * 1.6 + 0.02 && f - last >= minGap) { presenceOnsets.push(f); last = f }
+    } }
+  applyFlourish(frames, density, presenceEnv, bN_C, presenceOnsets, bpm, FPS, zones, P.flourish)
 
   // Phase 3: auto-choreograph closures to the song structure (opt-in per show).
   // Feed it the SAME musical landmarks the lights use: the onset hits + beat anchor.
