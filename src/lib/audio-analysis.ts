@@ -353,14 +353,16 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], density: nu
 export interface MixParams {
   bassWeight: number; punch: number; sparkle: number; contrast: number; closureSections: number
   phrasing: number  // strength of beat-synced structure: L↔R ping-pong + L→R sweep (0 = off)
+  expression: number  // per-fixture independence: stereo widen + cascade/chase/ripple in verses,
+                      // snapping back to symmetric UNISON on drops (0 = off)
 }
 export const MIX_PRESETS: Record<string, MixParams> = {
-  balanced:  { bassWeight: 1.0,  punch: 1.0, sparkle: 1.0,  contrast: 0.72, closureSections: 6, phrasing: 0.5 }, // = original feel
-  edm:       { bassWeight: 1.3,  punch: 1.5, sparkle: 1.3,  contrast: 0.62, closureSections: 8, phrasing: 0.9 }, // big drops, lots of movement
-  hiphop:    { bassWeight: 1.45, punch: 1.3, sparkle: 0.85, contrast: 0.70, closureSections: 4, phrasing: 0.6 }, // 808-forward
-  rock:      { bassWeight: 1.05, punch: 1.6, sparkle: 1.1,  contrast: 0.74, closureSections: 4, phrasing: 0.7 }, // punchy drums
-  pop:       { bassWeight: 1.0,  punch: 1.1, sparkle: 1.25, contrast: 0.78, closureSections: 4, phrasing: 0.7 }, // bright, melodic
-  cinematic: { bassWeight: 0.85, punch: 0.7, sparkle: 0.8,  contrast: 0.85, closureSections: 2, phrasing: 0.2 }, // smooth, minimal
+  balanced:  { bassWeight: 1.0,  punch: 1.0, sparkle: 1.0,  contrast: 0.72, closureSections: 6, phrasing: 0.5, expression: 0.5 }, // = original feel
+  edm:       { bassWeight: 1.3,  punch: 1.5, sparkle: 1.3,  contrast: 0.62, closureSections: 8, phrasing: 0.9, expression: 0.5 }, // big drops, lots of movement
+  hiphop:    { bassWeight: 1.45, punch: 1.3, sparkle: 0.85, contrast: 0.70, closureSections: 4, phrasing: 0.6, expression: 0.6 }, // 808-forward
+  rock:      { bassWeight: 1.05, punch: 1.6, sparkle: 1.1,  contrast: 0.74, closureSections: 4, phrasing: 0.7, expression: 0.55 }, // punchy drums
+  pop:       { bassWeight: 1.0,  punch: 1.1, sparkle: 1.25, contrast: 0.78, closureSections: 4, phrasing: 0.7, expression: 0.7 }, // bright, melodic
+  cinematic: { bassWeight: 0.85, punch: 0.7, sparkle: 0.8,  contrast: 0.85, closureSections: 2, phrasing: 0.2, expression: 0.35 }, // smooth, minimal
 }
 
 // ─── Phase 2: musical phrasing + deliberate asymmetry ───────────────────────────
@@ -392,6 +394,37 @@ function applyPhrasing(frames: Uint8Array[], totalC: number[], bpm: number, FPS:
         v = Math.min(255, v + Math.round(near * phrasing * energy * 170))
       }
       frames[f][ch] = v
+    }
+  }
+}
+
+// Phase 2b: spatial EXPRESSION — make the lights act like INDEPENDENT fixtures (cascade /
+// chase / per-fixture ripple) instead of moving as one symmetric block. Gated by `expr`,
+// which is ≈0 on loud drops (so drops snap back to symmetric UNISON for impact) and high in
+// verses / builds (independent, asymmetric movement for personality). Only shapes the accent
+// fixtures (DRLs, signatures, markers, turns) — the main beams stay an anchor (and keep their
+// cinematic ramping). Scaled by the vibe's `expression`. Symmetry for power, asymmetry for
+// expression — exactly how a world-class designer balances a show.
+function applyExpression(frames: Uint8Array[], density: number[], bpm: number, FPS: number, zones: LightZone[], strength: number, anchor: number): void {
+  if (strength <= 0) return
+  const fpb = Math.max(1, (60 / bpm) * FPS)
+  const lights = zones.filter(z => z.type !== 'closure' && z.type !== 'highbeam' && z.type !== 'headlight')
+  for (let f = 0; f < frames.length; f++) {
+    const expr = strength * Math.max(0, 1 - density[f] * 1.2)         // unison on drops, expressive when calm
+    if (expr < 0.03) continue
+    const t = (f - anchor) / fpb                                       // beats since the grid anchor
+    const dir = Math.floor(t / 8) % 2 === 0 ? 1 : -1                   // sweep direction flips every 8 beats
+    const headX = (((t / 4) % 1) + 1) % 1                              // chase head 0→1 across the car / 4 beats
+    for (const z of lights) {
+      const ch = z.channel
+      const base = frames[f][ch] / 255
+      if (base < 0.015) continue                                       // only reshape fixtures the music already lit
+      const nx = (z.nx + 1) / 2                                        // 0 (rear) … 1 (front)
+      const along = dir > 0 ? nx : 1 - nx
+      const near = Math.max(0, 1 - Math.abs(along - headX) * 2.2)      // moving spatial chase head
+      const ripple = 0.5 + 0.5 * Math.sin((t * 2.2 + z.nz * 2.4 + nx * 3.1) * Math.PI)   // per-fixture shimmer
+      const expressive = Math.min(1, base * (0.4 + 0.6 * ripple) + near * 0.45)
+      frames[f][ch] = Math.min(255, Math.round((base * (1 - expr) + expressive * expr) * 255))
     }
   }
 }
@@ -536,6 +569,20 @@ export function analyzePCM(
   const density: number[] = new Array(totalFrames).fill(0)
   { let acc = 0; for (let f = 0; f < totalFrames; f++) { acc = acc * 0.92 + totalC[f] * 0.08; density[f] = Math.min(1, acc * 1.6) } }
 
+  // Expression: stronger STEREO separation — push each band's L/R away from the center mix
+  // so panned content reads as visibly independent sides. Gated to calmer passages (eased off
+  // on drops, which stay punchy + symmetric). Mutates the per-side energy the frame build reads.
+  if (P.expression > 0) {
+    const widen = (L: number[], R: number[], C: number[]) => {
+      for (let f = 0; f < totalFrames; f++) {
+        const w = P.expression * 0.7 * Math.max(0, 1 - density[f] * 1.2)
+        L[f] = Math.max(0, Math.min(1, L[f] + (L[f] - C[f]) * w))
+        R[f] = Math.max(0, Math.min(1, R[f] + (R[f] - C[f]) * w))
+      }
+    }
+    widen(bN_L, bN_R, bN_C); widen(mN_L, mN_R, mN_C); widen(hN_L, hN_R, hN_C)
+  }
+
   // BPM via autocorrelation of the onset envelope.
   const onset = O.bass.map((v, i) => v * 0.7 + O.mid[i] * 0.3)
   let bpm = 120
@@ -599,7 +646,10 @@ export function analyzePCM(
   })
 
   // Phase 2: layer beat-synced phrasing (ping-pong + sweep) over the reactive base.
-  applyPhrasing(frames, totalC, bpm, FPS, zones, P.phrasing, triggerFrames.size ? Math.min(...triggerFrames) : 0)
+  const lightAnchor = triggerFrames.size ? Math.min(...triggerFrames) : 0
+  applyPhrasing(frames, totalC, bpm, FPS, zones, P.phrasing, lightAnchor)
+  // Phase 2b: per-fixture spatial expression (cascade/chase/ripple in verses, unison on drops).
+  applyExpression(frames, density, bpm, FPS, zones, P.expression, lightAnchor)
 
   // Phase 3: auto-choreograph closures to the song structure (opt-in per show).
   // Feed it the SAME musical landmarks the lights use: the onset hits + beat anchor.
