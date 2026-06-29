@@ -23,6 +23,9 @@ interface Props {
   // Fire a closure immediately on click (instant feedback, vs waiting for the
   // looping playhead to reach that beat). `n` changes each click to retrigger.
   pulse?: { ch: number; cmd: string; n: number } | null;
+  // Builder only: play the idle demo animation ONCE on load, then rest (don't loop forever).
+  // Default (community embed / show preview) keeps looping.
+  idleOnce?: boolean;
 }
 interface Tooltip { label: string; x: number; y: number }
 
@@ -540,7 +543,7 @@ function closureTarget(byte: number, tSec: number): number {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function TeslaScene({
   teslaModel, style, intensity, bpm, previewBeat,
-  customFrames, pulse,
+  customFrames, pulse, idleOnce = false,
 }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
@@ -556,6 +559,9 @@ export default function TeslaScene({
   const previewBeatRef = useRef<number | null>(null);
   const customFramesRef = useRef<Uint8Array[] | null>(null);
   const bpmRef = useRef(bpm);   // current bpm for the render loop (avoids stale closure)
+  const idleOnceRef = useRef(idleOnce);
+  useEffect(() => { idleOnceRef.current = idleOnce; }, [idleOnce]);
+  const restFrameRef = useRef<Uint8Array | null>(null);   // all-off frame for the idle-once rest state
 
   // Keep style/intensity/bpm in sync without rebuilding scene
   useEffect(() => {
@@ -880,19 +886,23 @@ export default function TeslaScene({
         lastFrame = now;
         const frames = customFramesRef.current ?? frameDataRef.current;
         if (frames.length > 0) {
-          let frameIdx: number;
+          let frame: Uint8Array;
           const pb = previewBeatRef.current;
           if (pb !== null) {
             // pb is the playback BEAT; frames are 50fps. Convert beat → seconds → frame
             // index so the preview tracks the song (was indexing by beat = ~1s of show
             // stretched over the whole preview, hence "lights don't match the song").
             const secs = (pb * 60) / (bpmRef.current || 120);
-            frameIdx = Math.floor(secs * FPS) % frames.length;
+            frame = frames[Math.floor(secs * FPS) % frames.length];
+          } else if (idleOnceRef.current && frameIdxRef.current >= Math.min(frames.length, 15 * FPS)) {
+            // Builder: the idle demo has played through once (≤15s) — rest with the lights off
+            // instead of looping forever, so the car sits calm while you build.
+            if (!restFrameRef.current || restFrameRef.current.length !== frames[0].length) restFrameRef.current = new Uint8Array(frames[0].length);
+            frame = restFrameRef.current;
           } else {
-            frameIdx = frameIdxRef.current % frames.length;
+            frame = frames[frameIdxRef.current % frames.length];
             frameIdxRef.current++;
           }
-          const frame = frames[frameIdx];
           activeFrameRef.current = frame;
           // Don't drive the lights until the model has loaded — otherwise the
           // proxy fixtures glow at their pre-positioned spots ("floating lights").

@@ -697,7 +697,6 @@ function BuilderInner() {
   const [autoClosures, setAutoClosures] = useState(false);   // opt-in: choreograph closures to the song
   const [mixPreset, setMixPreset] = useState('balanced');    // genre/vibe preset for the audio engine
   const [detectedVibe, setDetectedVibe] = useState<string | null>(null);  // auto-detected vibe (for the badge)
-  const [closureSuggestion, setClosureSuggestion] = useState<number | null>(null);  // drop count when closures fit
   const vibeUserSet = useRef(false);                         // true once the user manually picks a vibe
   const decodedRef = useRef<AudioBuffer | null>(null);       // last decoded audio, for re-analysis on toggle
 
@@ -858,7 +857,6 @@ function BuilderInner() {
 
     wavBlobRef.current = null;
     vibeUserSet.current = false;        // new song → allow auto-vibe detection
-    setClosureSuggestion(null);
     setAudioFrames(null);
     setAudioTriggers(new Set());
     setWaveformData(null);
@@ -906,7 +904,6 @@ function BuilderInner() {
           if (!vibeUserSet.current && result.suggestedPreset !== mixPreset) {
             setMixPreset(result.suggestedPreset); // triggers re-analysis with the detected vibe
           }
-          if (result.closuresRecommended && !autoClosures) setClosureSuggestion(result.dropCount);
         } catch { /* fall back to generated frames */ }
         setAnalyzing(false);
       } catch { /* ignore */ }
@@ -1422,23 +1419,6 @@ function BuilderInner() {
               </div>
             )}
 
-            {/* Closure suggestion — suggest-and-confirm (the car physically moves) */}
-            {closureSuggestion !== null && !autoClosures && (
-              <div style={{ marginTop: 10, padding: '0.7rem 0.85rem', background: 'rgba(157,107,255,0.08)', border: '1px solid rgba(157,107,255,0.35)', borderRadius: 'var(--radius-lg)' }}>
-                <div style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--muted)' }}>
-                  <strong style={{ color: '#b48cff' }}>✨ We found {closureSuggestion} big drop{closureSuggestion === 1 ? '' : 's'}.</strong> Want to add
-                  {' '}<strong style={{ color: 'var(--text)' }}>door &amp; closure choreography</strong> timed to land on them?
-                  <span style={{ color: '#ffb454', display: 'block', marginTop: 2 }}>⚠ Your Tesla&apos;s doors/closures will physically move — ensure clearance.</span>
-                </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button onClick={() => { setAutoClosures(true); setClosureSuggestion(null); }}
-                    style={{ padding: '5px 12px', fontSize: 12, fontWeight: 600, borderRadius: 7, cursor: 'pointer', background: 'rgba(157,107,255,0.25)', border: '1px solid #9d6bff', color: 'var(--text)' }}>Add choreography</button>
-                  <button onClick={() => setClosureSuggestion(null)}
-                    style={{ padding: '5px 12px', fontSize: 12, borderRadius: 7, cursor: 'pointer', background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)' }}>No thanks</button>
-                </div>
-              </div>
-            )}
-
             {/* Preview button */}
             {audioFile && (
               <button
@@ -1535,6 +1515,7 @@ function BuilderInner() {
                 previewBeat={previewBeat}
                 customFrames={sceneFrames}
                 pulse={closurePulse}
+                idleOnce
               />
             </div>
 
