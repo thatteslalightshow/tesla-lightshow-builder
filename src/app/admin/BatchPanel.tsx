@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { parseId3, titleFromFilename } from '@/lib/id3'
+import { audioBufferToWav, resampleTo44100 } from '@/lib/wav'
 
 const MODELS = [
   { value: 'model3', label: 'Model 3' }, { value: 'modelY', label: 'Model Y' },
@@ -40,10 +41,17 @@ export default function BatchPanel() {
         const tags = await parseId3(f)
         const title = tags.title?.trim() || titleFromFilename(f.name)
         const baseName = tags.artist?.trim() ? `${title}-${tags.artist.trim()}` : title
-        const signRes = await fetch('/api/admin/batch-upload-sign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file_name: f.name, file_size: f.size }) })
+        // Decode ANY browser-supported format (mp3/mp4/m4a/aac/ogg/flac/wav) → 44.1kHz WAV
+        // so the server can always read it. Same client-side conversion the builder uses.
+        const raw = await f.arrayBuffer()
+        const ctx = new AudioContext()
+        let wav: Blob
+        try { const ab = await ctx.decodeAudioData(raw.slice(0)); wav = audioBufferToWav(await resampleTo44100(ab)) }
+        finally { ctx.close() }
+        const signRes = await fetch('/api/admin/batch-upload-sign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file_name: `${baseName}.wav`, file_size: wav.size }) })
         const sign = await signRes.json().catch(() => ({}))
         if (!signRes.ok || !sign.path) throw new Error(sign.error || 'sign failed')
-        const { error } = await supabase.storage.from('audio-files').uploadToSignedUrl(sign.path, sign.token, f, { contentType: f.type || 'audio/mpeg' })
+        const { error } = await supabase.storage.from('audio-files').uploadToSignedUrl(sign.path, sign.token, wav, { contentType: 'audio/wav' })
         if (error) throw error
         items.push({ path: sign.path, baseName })
         st[f.name] = 'done'; setStatuses({ ...st })
@@ -69,7 +77,7 @@ export default function BatchPanel() {
     <div style={{ padding: '1.5rem', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <label style={{ ...input }}>
-          <input type="file" accept="audio/*,.mp3,.wav,.m4a" multiple onChange={onPick} style={{ display: 'none' }} disabled={busy} />
+          <input type="file" accept="audio/*,video/mp4,.mp3,.wav,.m4a,.mp4,.aac,.ogg,.flac" multiple onChange={onPick} style={{ display: 'none' }} disabled={busy} />
           {files.length ? `${files.length} song${files.length === 1 ? '' : 's'} selected` : 'Choose songs…'}
         </label>
         <select value={model} onChange={e => setModel(e.target.value)} disabled={busy} style={{ ...input }}>

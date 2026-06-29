@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAdminClient, sanitizeFileName, validateAudioMeta } from '@/lib/supabase'
+import { getAdminClient, sanitizeFileName } from '@/lib/supabase'
 import { getAuthedUser } from '@/lib/auth'
 
 // Admin/tester batch tool — sign a direct upload to a temp batch/ path (no show row).
@@ -15,8 +15,10 @@ export async function POST(req: Request) {
   let body: { file_name?: string; file_size?: number }
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
   if (!body.file_name) return NextResponse.json({ error: 'Missing file_name' }, { status: 400 })
-  const ve = validateAudioMeta(body.file_name, body.file_size ?? 0)
-  if (ve) return NextResponse.json({ error: ve }, { status: 400 })
+  // The browser converts every song to a 44.1kHz WAV client-side before upload, so we accept
+  // .wav here (and a few raw types for safety). WAVs are large → a generous 250MB cap.
+  if (!/\.(wav|mp3|m4a|aac|ogg|flac|mp4)$/i.test(body.file_name)) return NextResponse.json({ error: 'Unsupported file type' }, { status: 400 })
+  if ((body.file_size ?? 0) > 250 * 1024 * 1024) return NextResponse.json({ error: 'File too large (250MB max)' }, { status: 400 })
 
   const path = `batch/${user.id}/${crypto.randomUUID()}-${sanitizeFileName(body.file_name)}`
   const { data, error } = await admin.storage.from('audio-files').createSignedUploadUrl(path)
