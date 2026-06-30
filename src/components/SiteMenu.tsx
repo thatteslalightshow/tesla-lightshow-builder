@@ -41,11 +41,15 @@ export default function SiteMenu({ align = 'right' }: { align?: 'left' | 'right'
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open}
-        style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', fontSize: 13, color: 'rgba(255,255,255,0.6)', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 6, transition: 'color .15s' }}
+      <button onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open} aria-label="Menu"
+        style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', fontSize: 13, color: 'rgba(255,255,255,0.6)', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 6, transition: 'color .15s' }}
         onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
         onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.6)')}>
-        Menu <span style={{ fontSize: 9, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>▼</span>
+        <span className="site-menu-label">Menu</span>
+        <span className="site-menu-chev" style={{ fontSize: 9, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>▼</span>
+        <svg className="site-menu-burger" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+          <line x1="3.5" y1="7" x2="20.5" y2="7" /><line x1="3.5" y1="12" x2="20.5" y2="12" /><line x1="3.5" y1="17" x2="20.5" y2="17" />
+        </svg>
       </button>
       {open && (
         <div role="menu" style={{ position: 'absolute', top: 'calc(100% + 8px)', [align]: 0, minWidth: 188, padding: 6, background: 'rgba(15,15,20,0.97)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, boxShadow: '0 12px 40px rgba(0,0,0,0.5)', zIndex: 100 } as React.CSSProperties}>
