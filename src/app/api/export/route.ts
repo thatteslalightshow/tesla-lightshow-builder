@@ -174,7 +174,7 @@ export async function POST(req: Request) {
     { data: purchase },
   ] = await Promise.all([
     admin.from('shows').select('*').eq('id', body.show_id).eq('user_id', user.id).single(),
-    admin.from('profiles').select('is_admin').eq('id', user.id).single(),
+    admin.from('profiles').select('is_admin, gift_credits').eq('id', user.id).single(),
     admin.from('exports').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
     // .limit(1) (not .maybeSingle) — a duplicate active subscription or a twice-bought show would
     // make .maybeSingle THROW (>1 row) and wrongly DENY a paying customer. Tolerate duplicates.
@@ -194,8 +194,21 @@ export async function POST(req: Request) {
   // A show acquired from the community was already paid for at acquisition time.
   const isAcquired = !!show.source_show_id
 
-  if (!isPrivileged && !isSubscribed && !hasPaid && !isFreeExport && !isAcquired) {
-    return NextResponse.json({ error: 'subscription_required' }, { status: 402 })
+  const entitled = isPrivileged || isSubscribed || hasPaid || isFreeExport || isAcquired
+  if (!entitled) {
+    // No free/sub/purchase entitlement → spend a banked GIFT credit if they have one. Atomic
+    // compare-and-set so two concurrent exports can never both spend the same credit (Phase-0 lesson).
+    const giftCredits = (profile as { gift_credits?: number } | null)?.gift_credits ?? 0
+    if (giftCredits <= 0) {
+      return NextResponse.json({ error: 'subscription_required' }, { status: 402 })
+    }
+    const { data: spent } = await admin.from('profiles')
+      .update({ gift_credits: giftCredits - 1 })
+      .eq('id', user.id).eq('gift_credits', giftCredits)
+      .select('id')
+    if (!spent || spent.length === 0) {
+      return NextResponse.json({ error: 'subscription_required' }, { status: 402 })
+    }
   }
 
   // ── Load audio (each show has at most one row; no fragile column ordering) ──

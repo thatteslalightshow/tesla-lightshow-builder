@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { getAdminClient, type TeslaModel } from '@/lib/supabase'
 import { cloneCommunityShow } from '@/lib/community'
-import { sendExportReceipt } from '@/lib/email'
+import { sendExportReceipt, sendGiftCode } from '@/lib/email'
 
 // Fallback keeps module load from throwing during `next build` when the key isn't in the build env
 // (real calls are gated by the STRIPE_SECRET_KEY guards below, so the placeholder is never used).
@@ -42,6 +42,9 @@ export async function POST(req: Request) {
       // their model (their own private copy; the listing isn't re-published).
       if (meta.kind === 'community' && meta.source_show_id && meta.user_id && session.payment_status === 'paid') {
         await cloneCommunityShow(meta.source_show_id, meta.user_id, (meta.tesla_model as TeslaModel) || 'model3')
+      } else if (meta.kind === 'gift' && session.payment_status === 'paid') {
+        // Gift purchase → mint a redeem code (idempotent on the session id) and email it.
+        await createGiftCode(admin, session)
       } else {
         // Per-export purchase → unlock the buyer's own show for export.
         const { show_id, user_id } = meta
@@ -129,4 +132,47 @@ async function upsertSubscription(
     current_period_end: currentPeriodEnd,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'stripe_subscription_id' })
+}
+
+// Readable code, no ambiguous characters (0/O, 1/I/L).
+const GIFT_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+function genGiftCode(): string {
+  let s = ''
+  for (let i = 0; i < 8; i++) s += GIFT_ALPHABET[Math.floor(Math.random() * GIFT_ALPHABET.length)]
+  return s
+}
+
+async function createGiftCode(admin: ReturnType<typeof getAdminClient>, session: Stripe.Checkout.Session) {
+  // Idempotent: Stripe retries webhooks and stripe_session_id is UNIQUE — if a code already exists for
+  // this session, reuse it and DON'T re-email.
+  const { data: existing } = await admin.from('gift_codes').select('code').eq('stripe_session_id', session.id).limit(1)
+  const meta = session.metadata ?? {}
+  const recipient = (meta.recipient_email || '').trim() || null
+  const purchaser = session.customer_details?.email ?? session.customer_email ?? null
+
+  let code = existing?.[0]?.code as string | undefined
+  let justCreated = false
+  if (!code) {
+    for (let attempt = 0; attempt < 6 && !code; attempt++) {
+      const candidate = genGiftCode()
+      const { error } = await admin.from('gift_codes').insert({
+        code: candidate, credits: 1, purchaser_email: purchaser, recipient_email: recipient, stripe_session_id: session.id,
+      })
+      if (!error) { code = candidate; justCreated = true; break }
+      // a concurrent webhook already inserted the row for this session → reuse it (no double code)
+      const { data: again } = await admin.from('gift_codes').select('code').eq('stripe_session_id', session.id).limit(1)
+      if (again?.[0]?.code) { code = again[0].code as string; break }
+      // otherwise it was a code collision → loop with a fresh candidate
+    }
+  }
+  if (!code || !justCreated) return   // only email when we just minted it (idempotent)
+
+  const origin = process.env.NEXT_PUBLIC_APP_URL ?? 'https://thatteslalightshow.com'
+  const to = recipient || purchaser
+  if (to) {
+    await sendGiftCode({
+      to, code, redeemUrl: `${origin}/redeem?code=${code}`,
+      forRecipient: !!recipient, fromEmail: purchaser ?? undefined,
+    }).catch(() => null)
+  }
 }

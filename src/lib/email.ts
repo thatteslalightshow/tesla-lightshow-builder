@@ -11,6 +11,47 @@ const REPLY_TO = 'support@thatteslalightshow.com';   // a customer replying to a
 // Resend setup. Protects transactional deliverability if marketing ever gets flagged.
 const MARKETING_FROM = 'ThatTeslaLightshow <notifications@thatteslalightshow.com>';
 
+// Gift code delivery (transactional — from noreply@, replies to support@).
+export async function sendGiftCode({
+  to, code, redeemUrl, forRecipient, fromEmail,
+}: {
+  to: string;
+  code: string;
+  redeemUrl: string;
+  forRecipient: boolean;
+  fromEmail?: string;
+}) {
+  if (!resend) return;
+  const intro = forRecipient
+    ? `${fromEmail ? `${fromEmail} sent` : 'Someone sent'} you a Tesla light show ⚡ Turn your favorite song into a beat-synced show your Tesla performs — this one's on them.`
+    : `Thanks for gifting a Tesla light show ⚡ Here's the code to pass along — whoever you send it to can turn their favorite song into a show their Tesla performs.`;
+  await resend.emails.send({
+    from: FROM,
+    replyTo: REPLY_TO,
+    to,
+    subject: forRecipient ? 'You’ve been gifted a Tesla light show ⚡' : 'Your gift code is ready ⚡',
+    html: `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/></head>
+<body style="margin:0;padding:0;background:#08080f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#ffffff;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;padding:40px 24px;">
+    <tr><td>
+      <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:32px;">
+        <div style="width:36px;height:36px;background:#e8404a;border-radius:9px;display:inline-block;"></div>
+        <span style="font-size:16px;font-weight:700;color:rgba(255,255,255,0.8);">ThatTeslaLightshow</span>
+      </div>
+      <h1 style="font-size:24px;font-weight:700;margin:0 0 16px;color:#fff;">${forRecipient ? 'A light show, just for you 🎁' : 'Your gift is ready 🎁'}</h1>
+      <p style="font-size:15px;color:rgba(255,255,255,0.55);margin:0 0 24px;line-height:1.7;">${intro}</p>
+      <div style="background:#12121c;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:24px;text-align:center;margin:0 0 24px;">
+        <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,0.35);margin-bottom:10px;">Gift code</div>
+        <div style="font-size:30px;font-weight:700;letter-spacing:4px;color:#fff;font-family:monospace;">${code}</div>
+      </div>
+      <a href="${redeemUrl}" style="display:inline-block;background:#e8404a;color:#fff;text-decoration:none;font-weight:600;font-size:15px;padding:14px 28px;border-radius:8px;">Redeem your gift →</a>
+      <p style="font-size:13px;color:rgba(255,255,255,0.35);margin:24px 0 0;line-height:1.7;">Or visit thatteslalightshow.com/redeem and enter the code. You'll need a free account to redeem — it adds one export to it. Choreography by us, soundtrack by you.</p>
+    </td></tr>
+  </table>
+</body></html>`,
+  });
+}
+
 export async function sendExportReceipt({
   to,
   showName,

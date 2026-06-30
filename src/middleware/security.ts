@@ -31,6 +31,7 @@ const PUBLIC_API_ROUTES = new Set([
   '/api/stripe/webhook', // verified via Stripe signature
   '/api/shows/view',     // anonymous view counter (increment-only)
   '/api/stats',          // public homepage counter (aggregate counts, no PII)
+  '/api/gift/checkout',  // anyone can buy a gift (no account needed); Stripe collects the buyer email
 ])
 
 export async function middleware(req: NextRequest) {
