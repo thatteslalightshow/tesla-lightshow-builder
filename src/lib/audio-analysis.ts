@@ -405,13 +405,20 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], density: nu
   // or the still-closing falcon overlaps the window close (a false-pinch that halts the show).
   const falconTail = toClose.includes('falcon_doors') ? FALCON_STAGGER : 0
   const doorFinishBy = windowsLast ? windowsStart - GAP - falconTail : N - BUFFER
-  for (const fam of toClose) {
+  // DOORS first: if a late climax forces a collision, we drop the (benign) window close, never a
+  // door. Every finale close is routed through canPlace() + a fit check, so a Model X door can never
+  // be closing while a window moves, and a close can never truncate or leave the 2nd falcon door open.
+  const closeOrder = [...toClose].sort((a, b) => (isDoorFam(b) ? 1 : 0) - (isDoorFam(a) ? 1 : 0))
+  for (const fam of closeOrder) {
     if (!room(fam, 1)) continue
     const cf = closeF(fam)
     let at = (isDoorFam(fam) && windowsLast) ? doorFinishBy - cf      // doors close first…
       : N - cf - BUFFER                                              // …windows (last) + liftgate/charge-port finish ~1s before end
     const ownEnd = moves.filter(m => m.fam === fam).reduce((mx, m) => Math.max(mx, m.to), 0)
-    at = Math.min(Math.max(0, Math.max(at, ownEnd)), N - 1)          // never before its own open/dance; keep in-bounds
+    at = Math.max(0, Math.max(at, ownEnd))                           // never before its own open/dance
+    const tail = falconStag(fam, chOf(fam).length - 1)               // 2nd falcon door's close finishes this much later
+    if (at + cf + tail > N - 1) continue                             // no room to finish in time → leave it (safe vs. truncating)
+    if (!canPlace(fam, 'close', at, at + cf + tail)) continue        // would collide (Model X window↔door) → skip
     place(fam, 'close', at, cf); spend(fam, 1)
   }
 }
