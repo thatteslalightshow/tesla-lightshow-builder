@@ -187,7 +187,7 @@ async function runLifecycle(admin: Admin) {
   for (const x of recentExports) {
     if (seen.has(x.user_id)) continue
     seen.add(x.user_id)
-    await send(x.user_id, 'first_export', (email) => sendFirstExportCheers({ to: email, showName: showName.get(x.show_id) || 'your show', unsubscribeUrl: unsub(x.user_id) }))
+    await send(x.user_id, 'first_export', (email) => sendFirstExportCheers({ to: email, showName: showName.get(x.show_id) || 'your show', builderUrl: `${base}/builder`, unsubscribeUrl: unsub(x.user_id) }))
   }
   return { sent }
 }

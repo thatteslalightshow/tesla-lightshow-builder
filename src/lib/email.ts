@@ -320,12 +320,14 @@ export async function sendCreatorWelcome({ to, builderUrl, unsubscribeUrl }: { t
   await resend.emails.send({ from: MARKETING_FROM, replyTo: REPLY_TO, to, subject: 'Welcome to Creator ⚡ here’s what you unlocked', html: lifecycleShell({ headline: 'Welcome to Creator ⚡', bodyHtml: body, ctaHref: builderUrl, ctaText: 'Start creating →', unsubscribeUrl }) });
 }
 
-// First successful export → celebrate + invite them to share (and tag us).
-export async function sendFirstExportCheers({ to, showName, unsubscribeUrl }: { to: string; showName: string; unsubscribeUrl: string }) {
+// First successful export → celebrate, invite the NEXT show (peak-intent upsell), then share.
+export async function sendFirstExportCheers({ to, showName, builderUrl, unsubscribeUrl }: { to: string; showName: string; builderUrl: string; unsubscribeUrl: string }) {
   if (!resend) return;
-  const body = `<p style="font-size:15px;color:rgba(255,255,255,0.55);margin:0 0 18px;line-height:1.7;">You just exported <strong style="color:rgba(255,255,255,0.8);">${escHtml(showName)}</strong> — your first light show is ready to run. 🎉</p>`
-    + `<p style="font-size:14px;color:rgba(255,255,255,0.5);margin:0 0 6px;line-height:1.7;">When you run it on your Tesla, film it and tag <strong style="color:rgba(255,255,255,0.7);">@ThatTeslaLightshow</strong> on TikTok or Instagram — we love featuring community shows, and it’s the best way to get yours seen.</p>`;
-  await resend.emails.send({ from: MARKETING_FROM, replyTo: REPLY_TO, to, subject: 'Your first light show is ready 🎉', html: lifecycleShell({ headline: 'Your first show is done 🎉', bodyHtml: body, unsubscribeUrl }) });
+  const body = `<p style="font-size:15px;color:rgba(255,255,255,0.55);margin:0 0 16px;line-height:1.7;">You just exported <strong style="color:rgba(255,255,255,0.8);">${escHtml(showName)}</strong> — your first light show is ready to run. 🎉</p>`
+    + `<p style="font-size:14px;color:rgba(255,255,255,0.5);margin:0 0 14px;line-height:1.7;">Got another song stuck in your head? Your next show is one upload away — a fresh one only takes a few minutes.</p>`
+    + `<p style="font-size:13px;color:rgba(255,255,255,0.42);margin:0 0 4px;line-height:1.7;">Making a few? <strong style="color:rgba(255,255,255,0.6);">Creator</strong> unlocks unlimited exports, multi-Tesla packs, and free community downloads.</p>`
+    + `<p style="font-size:14px;color:rgba(255,255,255,0.5);margin:16px 0 6px;line-height:1.7;">And when you run it on your Tesla, film it and tag <strong style="color:rgba(255,255,255,0.7);">@ThatTeslaLightshow</strong> on TikTok or Instagram — we love featuring community shows.</p>`;
+  await resend.emails.send({ from: MARKETING_FROM, replyTo: REPLY_TO, to, subject: 'Your first light show is ready 🎉', html: lifecycleShell({ headline: 'Your first show is done 🎉', bodyHtml: body, ctaHref: builderUrl, ctaText: 'Make your next show →', unsubscribeUrl }) });
 }
 
 // Dormant user (built a show a while ago, gone quiet) → a no-pressure "come back".

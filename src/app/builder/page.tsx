@@ -1746,39 +1746,41 @@ function BuilderInner() {
         >
           <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 420, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '1.5rem', boxShadow: '0 12px 50px rgba(0,0,0,0.6)' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, marginBottom: 4 }}>You&apos;ve used your free export</div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 18 }}>Choose how you&apos;d like to export this show.</div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 18 }}>Pay just for this one — or go unlimited if you&apos;re making a lot.</div>
+
+            {/* Primary: the one-time $2.99 they came here for */}
+            <button
+              onClick={checkoutPerExport}
+              disabled={!!payBusy}
+              style={{ width: '100%', textAlign: 'left', padding: '13px 14px', marginBottom: 14, borderRadius: 10, background: 'var(--red)', border: '1px solid var(--red)', color: '#fff', cursor: payBusy ? 'default' : 'pointer', opacity: payBusy && payBusy !== 'once' ? 0.5 : 1 }}
+            >
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{payBusy === 'once' ? 'Redirecting…' : 'Export this show — $2.99'}</div>
+              <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>One-time, no subscription</div>
+            </button>
+
+            <div style={{ fontSize: 11, color: 'var(--muted2)', textTransform: 'uppercase', letterSpacing: '.08em', margin: '2px 0 10px' }}>Making a lot of shows?</div>
 
             {/* Yearly — best value */}
             <button
               onClick={() => checkoutSubscription('yearly')}
               disabled={!!payBusy}
-              style={{ width: '100%', textAlign: 'left', padding: '12px 14px', marginBottom: 10, borderRadius: 10, background: 'var(--red)', border: '1px solid var(--red)', color: '#fff', cursor: payBusy ? 'default' : 'pointer', opacity: payBusy && payBusy !== 'yearly' ? 0.5 : 1 }}
+              style={{ width: '100%', textAlign: 'left', padding: '11px 14px', marginBottom: 8, borderRadius: 10, background: 'rgba(232,64,74,0.1)', border: '1px solid rgba(232,64,74,0.4)', color: 'var(--text)', cursor: payBusy ? 'default' : 'pointer', opacity: payBusy && payBusy !== 'yearly' ? 0.5 : 1 }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontWeight: 700, fontSize: 14 }}>{payBusy === 'yearly' ? 'Redirecting…' : 'Go Unlimited — $59.99/yr'}</span>
-                <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(255,255,255,0.22)', padding: '2px 7px', borderRadius: 20 }}>BEST VALUE</span>
+                <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(232,64,74,0.25)', padding: '2px 7px', borderRadius: 20 }}>BEST VALUE</span>
               </div>
-              <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>Unlimited exports · save 28%</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Unlimited exports · save 28%</div>
             </button>
 
             {/* Monthly */}
             <button
               onClick={() => checkoutSubscription('monthly')}
               disabled={!!payBusy}
-              style={{ width: '100%', textAlign: 'left', padding: '12px 14px', marginBottom: 10, borderRadius: 10, background: 'rgba(80,160,255,0.1)', border: '1px solid rgba(80,160,255,0.4)', color: 'var(--text)', cursor: payBusy ? 'default' : 'pointer', opacity: payBusy && payBusy !== 'monthly' ? 0.5 : 1 }}
+              style={{ width: '100%', textAlign: 'left', padding: '11px 14px', borderRadius: 10, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', cursor: payBusy ? 'default' : 'pointer', opacity: payBusy && payBusy !== 'monthly' ? 0.5 : 1 }}
             >
               <div style={{ fontWeight: 700, fontSize: 14 }}>{payBusy === 'monthly' ? 'Redirecting…' : 'Unlimited — $6.99/mo'}</div>
               <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Export as many shows as you want</div>
-            </button>
-
-            {/* One-time $2.99 */}
-            <button
-              onClick={checkoutPerExport}
-              disabled={!!payBusy}
-              style={{ width: '100%', textAlign: 'left', padding: '12px 14px', borderRadius: 10, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', cursor: payBusy ? 'default' : 'pointer', opacity: payBusy && payBusy !== 'once' ? 0.5 : 1 }}
-            >
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{payBusy === 'once' ? 'Redirecting…' : 'Just this export — $2.99'}</div>
-              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>One-time, no subscription</div>
             </button>
 
             {payErr && <div style={{ color: 'var(--red)', fontSize: 12, marginTop: 12 }}>{payErr}</div>}
