@@ -439,12 +439,12 @@ export interface MixParams {
                     // (mostly dark, a few sharp accents) — this dials the sparse "hand-placed" look per vibe.
 }
 export const MIX_PRESETS: Record<string, MixParams> = {
-  balanced:  { bassWeight: 1.0,  punch: 1.0, sparkle: 1.0,  contrast: 0.72, closureSections: 6, phrasing: 0.5, expression: 0.5,  lead: 0.6,  sustain: 0.6,  flourish: 0.6, density: 0.20 },  // = original feel
-  edm:       { bassWeight: 1.3,  punch: 1.5, sparkle: 1.3,  contrast: 0.62, closureSections: 8, phrasing: 0.9, expression: 0.5,  lead: 0.4,  sustain: 0.45, flourish: 0.85, density: 0.35 }, // big drops, lots of movement
-  hiphop:    { bassWeight: 1.45, punch: 1.3, sparkle: 0.85, contrast: 0.70, closureSections: 4, phrasing: 0.6, expression: 0.6,  lead: 0.35, sustain: 0.55, flourish: 0.6, density: 0.22 },  // 808-forward
-  rock:      { bassWeight: 1.05, punch: 1.6, sparkle: 1.1,  contrast: 0.74, closureSections: 4, phrasing: 0.7, expression: 0.55, lead: 1.0,  sustain: 0.5,  flourish: 0.9, density: 0.32 },  // punchy drums + guitar
-  pop:       { bassWeight: 1.0,  punch: 1.1, sparkle: 1.25, contrast: 0.78, closureSections: 4, phrasing: 0.7, expression: 0.7,  lead: 0.7,  sustain: 0.6,  flourish: 0.7, density: 0.18 },  // bright, melodic
-  cinematic: { bassWeight: 0.85, punch: 0.7, sparkle: 0.8,  contrast: 0.85, closureSections: 2, phrasing: 0.2, expression: 0.35, lead: 0.5,  sustain: 0.9,  flourish: 0.4, density: 0.12 },  // smooth, minimal
+  balanced:  { bassWeight: 1.0,  punch: 1.0, sparkle: 1.0,  contrast: 0.72, closureSections: 6, phrasing: 0.5, expression: 0.5,  lead: 0.6,  sustain: 0.6,  flourish: 0.6, density: 0.82 },  // = original feel
+  edm:       { bassWeight: 1.3,  punch: 1.5, sparkle: 1.3,  contrast: 0.62, closureSections: 8, phrasing: 0.9, expression: 0.5,  lead: 0.4,  sustain: 0.45, flourish: 0.85, density: 0.90 }, // big drops, lots of movement
+  hiphop:    { bassWeight: 1.45, punch: 1.3, sparkle: 0.85, contrast: 0.70, closureSections: 4, phrasing: 0.6, expression: 0.6,  lead: 0.35, sustain: 0.55, flourish: 0.6, density: 0.80 },  // 808-forward
+  rock:      { bassWeight: 1.05, punch: 1.6, sparkle: 1.1,  contrast: 0.74, closureSections: 4, phrasing: 0.7, expression: 0.55, lead: 1.0,  sustain: 0.5,  flourish: 0.9, density: 0.88 },  // punchy drums + guitar
+  pop:       { bassWeight: 1.0,  punch: 1.1, sparkle: 1.25, contrast: 0.78, closureSections: 4, phrasing: 0.7, expression: 0.7,  lead: 0.7,  sustain: 0.6,  flourish: 0.7, density: 0.80 },  // bright, melodic
+  cinematic: { bassWeight: 0.85, punch: 0.7, sparkle: 0.8,  contrast: 0.85, closureSections: 2, phrasing: 0.2, expression: 0.35, lead: 0.5,  sustain: 0.9,  flourish: 0.4, density: 0.72 },  // smooth, minimal
 }
 
 // ─── Phase 2: musical phrasing + deliberate asymmetry ───────────────────────────
@@ -530,27 +530,6 @@ function applyNegativeSpace(frames: Uint8Array[], zones: LightZone[], density: n
       const j = idx[i]
       wasOn[j] = keep ? 1 : 0
       if (!keep) frames[f][ch[j]] = 0                     // dark all but the top K → exactly K lit
-    }
-  }
-}
-
-// ── CRISP ON/OFF (hysteresis) ─────────────────────────────────────────────────────────────────────
-// Pro shows are ~88% OFF / ~11% FULL-ON / ~2% dimmed — lights snap decisively, they don't fade. And the
-// car binarizes most channels at ~50%, so our continuous values FLICKER near that line. A per-fixture
-// SCHMITT TRIGGER (ON above tHi, OFF below tLo) gives crisp, flicker-free on/off; the hold LENGTH still
-// comes from the envelope. Ramp-capable channels are re-ramped by applyRamping right after, so real
-// fades survive; closures + interior RGB are left untouched.
-function crispen(frames: Uint8Array[], zones: LightZone[]): void {
-  const tHi = 150, tLo = 70
-  for (const z of zones) {
-    if (z.type === 'closure') continue
-    const ch = z.channel
-    let on = false
-    for (let f = 0; f < frames.length; f++) {
-      const v = frames[f][ch]
-      if (!on && v >= tHi) on = true
-      else if (on && v <= tLo) on = false
-      frames[f][ch] = on ? 255 : 0
     }
   }
 }
@@ -931,12 +910,11 @@ export function analyzePCM(
     } }
   applyFlourish(frames, density, presenceEnv, presenceOnsets, FPS, zones, P.flourish)
 
-  // Phase 2d: NEGATIVE SPACE then CRISP — keep only the brightest few fixtures per frame (the vibe's
-  // density target, widening on drops), then snap them to decisive on/off. This is the sparse, crisp,
-  // "hand-placed" pro look — most of the canvas dark, sharp intentional accents. Runs after all light
-  // shaping, before closures/ramp/interior (applyRamping re-ramps its channels on the clean runs).
+  // Phase 2d: a LIGHT touch of negative space — rest only the DIMMEST fixtures (the per-vibe `density`
+  // target is HIGH, so the bright, "breathing" majority is untouched). This nods to the pro "less is
+  // more" contrast WITHOUT the crisp/sparse look that felt like a step back — gradation is fully kept,
+  // no hard on/off. Easily dialed per vibe (or removed) in MIX_PRESETS.density.
   applyNegativeSpace(frames, zones, density, P.density)
-  crispen(frames, zones)
 
   // Phase 3: auto-choreograph closures to the song structure (opt-in per show).
   // Feed it the SAME musical landmarks the lights use: the onset hits + beat anchor.
