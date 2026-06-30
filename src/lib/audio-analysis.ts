@@ -446,23 +446,72 @@ export const MIX_PRESETS: Record<string, MixParams> = {
 }
 
 // ─── Phase 2: musical phrasing + deliberate asymmetry ───────────────────────────
+// ── BEAT GRID ───────────────────────────────────────────────────────────────────────────────────
+// A tempo-TRACKING beat grid, so the phrasing + expression layers stay locked to the actual beats
+// even when a song's tempo drifts (live drummers, rubato, ritardando) — where a single fixed BPM
+// grid slowly slips out of phase and the moves land off-beat by the last chorus.
+//
+// It's a BOUNDED corrector: start from the nominal grid (the global beat period) and nudge each beat
+// toward the strongest nearby onset, but never more than ~18% of a beat. So on a steady song the
+// corrections are ≈0 and the grid is identical to the old fixed grid (the shows you love are
+// unchanged); on a drifting song each beat snaps to the real onset and the grid follows the music.
+// Returns a CONTINUOUS per-frame beat phase (fractional beats since the anchor), offset so phase==0
+// at the anchor — i.e. on a steady song phase[f] === (f-anchor)/beatFrames, exactly as before.
+function buildBeatGrid(onset: number[], totalFrames: number, FPS: number, bpm: number, anchor: number): Float64Array {
+  const P = Math.max(2, (60 / bpm) * FPS)                 // nominal frames per beat
+  const maxCorr = Math.max(1, Math.round(P * 0.18))       // a beat may snap ≤18% of a beat toward an onset
+  // lightly smoothed onset so one noisy sample can't grab a beat
+  const sm = new Float64Array(totalFrames)
+  for (let f = 0; f < totalFrames; f++) sm[f] = onset[f] + 0.5 * (onset[f - 1] || 0) + 0.5 * (onset[f + 1] || 0)
+  // place a beat near `nominal`: pick the strongest onset within ±maxCorr, penalizing distance so a
+  // weak far onset can't yank the beat; keep the nominal position if there's no real onset nearby.
+  const placeBeat = (nominal: number): number => {
+    const c0 = Math.round(nominal)
+    const lo = Math.max(0, c0 - maxCorr), hi = Math.min(totalFrames - 1, c0 + maxCorr)
+    let best = c0, bestScore = -Infinity
+    for (let c = lo; c <= hi; c++) {
+      const score = sm[c] - (Math.abs(c - nominal) / P) * 0.6
+      if (score > bestScore) { bestScore = score; best = c }
+    }
+    return sm[best] > 0.04 ? best : c0                    // no real onset → keep the steady-grid position
+  }
+  const fwd: number[] = []
+  for (let pos = anchor; pos < totalFrames + P; pos = fwd[fwd.length - 1] + P) fwd.push(placeBeat(pos))
+  const back: number[] = []
+  for (let pos = anchor - P; pos > -P; pos = back[back.length - 1] - P) back.push(placeBeat(pos))
+  // strictly-increasing grid: …back(reversed)… then forward (forward[0] is the anchor beat)
+  const grid: number[] = []
+  for (const b of [...back.reverse(), ...fwd]) if (grid.length === 0 || b > grid[grid.length - 1]) grid.push(b)
+  // index of the anchor beat → phase is offset so phase==0 there (matches the old (f-anchor)/fpb)
+  let anchorIdx = 0, bestD = Infinity
+  for (let i = 0; i < grid.length; i++) { const d = Math.abs(grid[i] - anchor); if (d < bestD) { bestD = d; anchorIdx = i } }
+  const phase = new Float64Array(totalFrames)
+  if (grid.length < 2) { for (let f = 0; f < totalFrames; f++) phase[f] = (f - anchor) / P; return phase }
+  let gi = 0
+  for (let f = 0; f < totalFrames; f++) {
+    while (gi < grid.length - 2 && f >= grid[gi + 1]) gi++
+    const a = grid[gi], span = Math.max(1, grid[gi + 1] - a)
+    phase[f] = (gi - anchorIdx) + (f - a) / span          // continuous fractional beats, 0 at the anchor
+  }
+  return phase
+}
+
 // Layered on top of the reactive base, aligned to the beat grid (anchored to the
 // first detected onset). Two effects: (1) ping-pong — the accent fixtures (turn
 // signals + markers) alternate LEFT↔RIGHT each beat; (2) sweep — a highlight runs
 // L→R across the front/rear bars over two beats. Both gated by energy (so quiet
 // parts stay calm) and scaled by the vibe's `phrasing`.
-function applyPhrasing(frames: Uint8Array[], totalC: number[], bpm: number, FPS: number, zones: LightZone[], phrasing: number, anchor: number): void {
+function applyPhrasing(frames: Uint8Array[], totalC: number[], zones: LightZone[], phrasing: number, phase: Float64Array): void {
   if (phrasing <= 0) return
-  const fpb = Math.max(1, (60 / bpm) * FPS)
   const lights = zones.filter(z => z.type !== 'closure')
-  const span = fpb * 2 // sweep period = 2 beats
   for (let f = 0; f < frames.length; f++) {
     const energy = totalC[f]
     if (energy < 0.15) continue
-    const rel = f - anchor
-    const beatIdx = Math.floor(rel / fpb)
+    const ph = phase[f]                                                // continuous beat position (tempo-tracked grid)
+    const beatIdx = Math.floor(ph)
     const ppSide = beatIdx % 2 === 0 ? -1 : 1                          // accents fire this side this beat
-    const head = -1 + 2 * (((rel % span) + span) % span) / span        // sweep head -1(L)→+1(R)
+    const fp2 = (((ph / 2) % 1) + 1) % 1                               // position within the 2-beat sweep window
+    const head = -1 + 2 * fp2                                          // sweep head -1(L)→+1(R)
     for (const z of lights) {
       const ch = z.channel
       let v = frames[f][ch]
@@ -485,14 +534,13 @@ function applyPhrasing(frames: Uint8Array[], totalC: number[], bpm: number, FPS:
 // fixtures (DRLs, signatures, markers, turns) — the main beams stay an anchor (and keep their
 // cinematic ramping). Scaled by the vibe's `expression`. Symmetry for power, asymmetry for
 // expression — exactly how a world-class designer balances a show.
-function applyExpression(frames: Uint8Array[], density: number[], bpm: number, FPS: number, zones: LightZone[], strength: number, anchor: number): void {
+function applyExpression(frames: Uint8Array[], density: number[], zones: LightZone[], strength: number, phase: Float64Array): void {
   if (strength <= 0) return
-  const fpb = Math.max(1, (60 / bpm) * FPS)
   const lights = zones.filter(z => z.type !== 'closure' && z.type !== 'highbeam' && z.type !== 'headlight')
   for (let f = 0; f < frames.length; f++) {
     const expr = strength * Math.max(0, 1 - density[f] * 1.2)         // unison on drops, expressive when calm
     if (expr < 0.03) continue
-    const t = (f - anchor) / fpb                                       // beats since the grid anchor
+    const t = phase[f]                                                 // beats since the anchor (tempo-tracked grid)
     const dir = Math.floor(t / 8) % 2 === 0 ? 1 : -1                   // sweep direction flips every 8 beats
     const headX = (((t / 4) % 1) + 1) % 1                              // chase head 0→1 across the car / 4 beats
     for (const z of lights) {
@@ -807,9 +855,12 @@ export function analyzePCM(
 
   // Phase 2: layer beat-synced phrasing (ping-pong + sweep) over the reactive base.
   const lightAnchor = triggerFrames.size ? Math.min(...triggerFrames) : 0
-  applyPhrasing(frames, totalC, bpm, FPS, zones, P.phrasing, lightAnchor)
+  // Tempo-tracking beat grid (built once): a bounded corrector so phrasing + expression stay locked to
+  // the beat even when the song's tempo drifts — ≈ the old fixed grid on steady songs.
+  const beatPhase = buildBeatGrid(onset, totalFrames, FPS, bpm, lightAnchor)
+  applyPhrasing(frames, totalC, zones, P.phrasing, beatPhase)
   // Phase 2b: per-fixture spatial expression (cascade/chase/ripple in verses, unison on drops).
-  applyExpression(frames, density, bpm, FPS, zones, P.expression, lightAnchor)
+  applyExpression(frames, density, zones, P.expression, beatPhase)
   // Phase 2c: signature moves at the guitar/drum-solo peaks — clocked to the picked-note onsets.
   const presenceEnv = new Array<number>(totalFrames).fill(0)
   { let acc = 0; for (let f = 0; f < totalFrames; f++) { acc = acc * 0.90 + O.presence[f] * 0.10; presenceEnv[f] = Math.min(1, acc * 1.8) } }
