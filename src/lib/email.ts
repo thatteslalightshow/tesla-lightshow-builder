@@ -6,6 +6,10 @@ const resend = process.env.RESEND_API_KEY
 
 const FROM = 'ThatTeslaLightshow <noreply@thatteslalightshow.com>';
 const REPLY_TO = 'support@thatteslalightshow.com';   // a customer replying to any of our emails reaches support@ (not the noreply void)
+// Lifecycle / marketing / re-engagement sends go from notifications@ to keep them OFF the
+// transactional stream (noreply@ = receipts + export delivery). Same verified domain → no extra
+// Resend setup. Protects transactional deliverability if marketing ever gets flagged.
+const MARKETING_FROM = 'ThatTeslaLightshow <notifications@thatteslalightshow.com>';
 
 export async function sendExportReceipt({
   to,
@@ -210,7 +214,7 @@ export async function sendReengagement({
   const cta = touch === 'first' ? 'Finish &amp; export →' : 'Pick up where you left off →';
 
   await resend.emails.send({
-    from: FROM,
+    from: MARKETING_FROM,
     replyTo: REPLY_TO,
     to,
     subject,
@@ -304,7 +308,7 @@ export async function sendWelcome({ to, hasShow, builderUrl, unsubscribeUrl }: {
     ? `<p style="font-size:15px;color:rgba(255,255,255,0.55);margin:0 0 22px;line-height:1.7;">You’ve started a show — nice. When it’s ready, one click exports a Tesla-ready light sequence, and we’ll walk you through dropping in your song and copying it to a USB. <em style="color:rgba(255,255,255,0.45);">Choreography by us. Soundtrack by you.</em></p>`
     : `<p style="font-size:15px;color:rgba(255,255,255,0.55);margin:0 0 18px;line-height:1.7;">Welcome aboard ⚡ Making your first Tesla light show takes about three minutes:</p>`
       + `<p style="font-size:14px;color:rgba(255,255,255,0.5);margin:0 0 22px;line-height:1.9;">1. Pick your Tesla &amp; upload a song — our engine choreographs the lights to it.<br/>2. Preview it live in 3D on your exact model.<br/>3. Export, add your own copy of the song, plug in the USB. Done.</p>`;
-  await resend.emails.send({ from: FROM, replyTo: REPLY_TO, to, subject: 'Welcome to ThatTeslaLightshow ⚡', html: lifecycleShell({ headline: hasShow ? 'Welcome ⚡' : 'Let’s build your first show ⚡', bodyHtml: body, ctaHref: builderUrl, ctaText: hasShow ? 'Open the builder →' : 'Build your first show →', unsubscribeUrl }) });
+  await resend.emails.send({ from: MARKETING_FROM, replyTo: REPLY_TO, to, subject: 'Welcome to ThatTeslaLightshow ⚡', html: lifecycleShell({ headline: hasShow ? 'Welcome ⚡' : 'Let’s build your first show ⚡', bodyHtml: body, ctaHref: builderUrl, ctaText: hasShow ? 'Open the builder →' : 'Build your first show →', unsubscribeUrl }) });
 }
 
 // New Creator subscriber → spell out everything they just unlocked.
@@ -312,7 +316,7 @@ export async function sendCreatorWelcome({ to, builderUrl, unsubscribeUrl }: { t
   if (!resend) return;
   const body = `<p style="font-size:15px;color:rgba(255,255,255,0.55);margin:0 0 18px;line-height:1.7;">You’re a Creator now — thank you. Here’s everything you just unlocked:</p>`
     + `<p style="font-size:14px;color:rgba(255,255,255,0.55);margin:0 0 22px;line-height:1.95;">★ <strong style="color:rgba(255,255,255,0.8);">Unlimited exports</strong> — no per-show fee, ever<br/>★ <strong style="color:rgba(255,255,255,0.8);">Free re-exports</strong> of any show, forever<br/>★ <strong style="color:rgba(255,255,255,0.8);">Multi-model export</strong> — build once, export for every Tesla you own<br/>★ <strong style="color:rgba(255,255,255,0.8);">Unlimited cloud library</strong> — every show saved &amp; backed up<br/>★ Remix any community show + priority support</p>`;
-  await resend.emails.send({ from: FROM, replyTo: REPLY_TO, to, subject: 'Welcome to Creator ⚡ here’s what you unlocked', html: lifecycleShell({ headline: 'Welcome to Creator ⚡', bodyHtml: body, ctaHref: builderUrl, ctaText: 'Start creating →', unsubscribeUrl }) });
+  await resend.emails.send({ from: MARKETING_FROM, replyTo: REPLY_TO, to, subject: 'Welcome to Creator ⚡ here’s what you unlocked', html: lifecycleShell({ headline: 'Welcome to Creator ⚡', bodyHtml: body, ctaHref: builderUrl, ctaText: 'Start creating →', unsubscribeUrl }) });
 }
 
 // First successful export → celebrate + invite them to share (and tag us).
@@ -320,7 +324,7 @@ export async function sendFirstExportCheers({ to, showName, unsubscribeUrl }: { 
   if (!resend) return;
   const body = `<p style="font-size:15px;color:rgba(255,255,255,0.55);margin:0 0 18px;line-height:1.7;">You just exported <strong style="color:rgba(255,255,255,0.8);">${escHtml(showName)}</strong> — your first light show is ready to run. 🎉</p>`
     + `<p style="font-size:14px;color:rgba(255,255,255,0.5);margin:0 0 6px;line-height:1.7;">When you run it on your Tesla, film it and tag <strong style="color:rgba(255,255,255,0.7);">@ThatTeslaLightshow</strong> on TikTok or Instagram — we love featuring community shows, and it’s the best way to get yours seen.</p>`;
-  await resend.emails.send({ from: FROM, replyTo: REPLY_TO, to, subject: 'Your first light show is ready 🎉', html: lifecycleShell({ headline: 'Your first show is done 🎉', bodyHtml: body, unsubscribeUrl }) });
+  await resend.emails.send({ from: MARKETING_FROM, replyTo: REPLY_TO, to, subject: 'Your first light show is ready 🎉', html: lifecycleShell({ headline: 'Your first show is done 🎉', bodyHtml: body, unsubscribeUrl }) });
 }
 
 // Dormant user (built a show a while ago, gone quiet) → a no-pressure "come back".
@@ -329,7 +333,7 @@ export async function sendWinBack({ to, builderUrl, unsubscribeUrl }: { to: stri
   if (!resend) return;
   const body = `<p style="font-size:15px;color:rgba(255,255,255,0.55);margin:0 0 18px;line-height:1.7;">It’s been a minute. New song stuck in your head? Turn it into a light show — your Tesla’s been waiting. ⚡</p>`
     + `<p style="font-size:14px;color:rgba(255,255,255,0.5);margin:0 0 22px;line-height:1.7;">Upload a track, our engine choreographs the lights to it, preview in 3D, and export. Two minutes, start to finish. <em style="color:rgba(255,255,255,0.45);">Choreography by us. Soundtrack by you.</em></p>`;
-  await resend.emails.send({ from: FROM, replyTo: REPLY_TO, to, subject: 'Your Tesla misses the spotlight ⚡', html: lifecycleShell({ headline: 'Make something new ⚡', bodyHtml: body, ctaHref: builderUrl, ctaText: 'Build a show →', unsubscribeUrl }) });
+  await resend.emails.send({ from: MARKETING_FROM, replyTo: REPLY_TO, to, subject: 'Your Tesla misses the spotlight ⚡', html: lifecycleShell({ headline: 'Make something new ⚡', bodyHtml: body, ctaHref: builderUrl, ctaText: 'Build a show →', unsubscribeUrl }) });
 }
 
 // Yearly subscriber nearing renewal → a courtesy heads-up (transparency + retention).
@@ -337,7 +341,7 @@ export async function sendRenewalReminder({ to, renewDateLabel, manageUrl, unsub
   if (!resend) return;
   const body = `<p style="font-size:15px;color:rgba(255,255,255,0.55);margin:0 0 18px;line-height:1.7;">Your Creator annual plan renews on <strong style="color:rgba(255,255,255,0.8);">${escHtml(renewDateLabel)}</strong>. No action needed — we just like to give a heads-up.</p>`
     + `<p style="font-size:14px;color:rgba(255,255,255,0.5);margin:0 0 22px;line-height:1.7;">You’ll keep unlimited exports, multi-model export, your unlimited cloud library, and free re-exports for another year. Manage or change your plan anytime from your dashboard.</p>`;
-  await resend.emails.send({ from: FROM, replyTo: REPLY_TO, to, subject: 'Your Creator plan renews soon', html: lifecycleShell({ headline: 'Your Creator year is almost up ⚡', bodyHtml: body, ctaHref: manageUrl, ctaText: 'Manage your plan →', unsubscribeUrl }) });
+  await resend.emails.send({ from: MARKETING_FROM, replyTo: REPLY_TO, to, subject: 'Your Creator plan renews soon', html: lifecycleShell({ headline: 'Your Creator year is almost up ⚡', bodyHtml: body, ctaHref: manageUrl, ctaText: 'Manage your plan →', unsubscribeUrl }) });
 }
 
 // Admin broadcast (seasonal / announcement). `bodyHtml` is owner-authored content the
@@ -345,7 +349,7 @@ export async function sendRenewalReminder({ to, renewDateLabel, manageUrl, unsub
 export async function sendBroadcast({ to, subject, bodyHtml, unsubscribeUrl }: { to: string; subject: string; bodyHtml: string; unsubscribeUrl: string }): Promise<boolean> {
   if (!resend) return false;
   try {
-    await resend.emails.send({ from: FROM, replyTo: REPLY_TO, to, subject, html: lifecycleShell({ headline: '', bodyHtml, unsubscribeUrl }) });
+    await resend.emails.send({ from: MARKETING_FROM, replyTo: REPLY_TO, to, subject, html: lifecycleShell({ headline: '', bodyHtml, unsubscribeUrl }) });
     return true;
   } catch { return false; }
 }
