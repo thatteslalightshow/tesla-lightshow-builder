@@ -27,6 +27,7 @@ const SECURITY_HEADERS = {
 const PUBLIC_API_ROUTES = new Set([
   '/api/stripe/webhook', // verified via Stripe signature
   '/api/shows/view',     // anonymous view counter (increment-only)
+  '/api/stats',          // public homepage counter (aggregate counts, no PII)
 ])
 
 export async function middleware(req: NextRequest) {

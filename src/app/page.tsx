@@ -135,6 +135,10 @@ function HowStep({ n, title, desc }: { n: string; title: string; desc: string })
 export default function Home() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  // Live social-proof counts (shows built + exports, incl. our own) for the stats band.
+  const [counts, setCounts] = useState<{ shows: number; exports: number } | null>(null);
+  useEffect(() => { fetch('/api/stats').then(r => r.ok ? r.json() : null).then(d => { if (d) setCounts(d); }).catch(() => {}); }, []);
   const heroReveal = useReveal();
   const statsReveal = useReveal();
 
@@ -205,12 +209,12 @@ export default function Home() {
       <section style={{ position:'relative', zIndex:1, padding:'6rem 2rem', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
         <div ref={statsReveal.ref} style={{ ...statsReveal.style, maxWidth:960, margin:'0 auto', display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'2rem', textAlign:'center' }}>
           {[
-            { n:'48', sub:'light channels' },
+            { n: counts ? counts.shows.toLocaleString() : '—', sub:'shows built' },
+            { n: counts ? counts.exports.toLocaleString() : '—', sub:'light shows exported' },
             { n:'5',  sub:'Tesla models' },
-            { n:'50fps', sub:'export frame rate' },
             { n:'$2.99', sub:'per export after first free' },
           ].map(s => (
-            <div key={s.n}>
+            <div key={s.sub}>
               <div style={{ fontFamily:'var(--font-display)', fontSize:'clamp(2.2rem,4vw,3.5rem)', fontWeight:700, letterSpacing:'-2px', color:'#fff', marginBottom:8 }}>{s.n}</div>
               <div style={{ fontSize:13, color:'rgba(255,255,255,0.3)', letterSpacing:'.04em' }}>{s.sub}</div>
             </div>
