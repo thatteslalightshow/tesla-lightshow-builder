@@ -363,6 +363,7 @@ export default function Home() {
             Build your first show — free →
           </Link>
           <div style={{ marginTop:16, fontSize:13, color:'rgba(255,255,255,0.2)' }}>No credit card required</div>
+          <div style={{ marginTop:10, fontSize:13, color:'rgba(255,255,255,0.3)', maxWidth:440, marginLeft:'auto', marginRight:'auto', lineHeight:1.6 }}>Your first show is on us, so you can test it before you pay. Run into trouble? Reach out to support — if it&apos;s on our end, we&apos;ll make it right.</div>
         </div>
       </section>
 

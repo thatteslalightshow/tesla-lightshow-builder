@@ -11,10 +11,11 @@ export default function ContactPage() {
   return (
     <LegalPage
       title="Contact us"
-      intro="Real people, happy to help. We usually reply within a day or two."
+      intro="Real people, happy to help — we usually respond within 48–72 business hours."
     >
       <h2>Support &amp; help</h2>
       <p>Questions about building a show, exporting, running it on your Tesla, or your account — email <a href="mailto:support@thatteslalightshow.com"><strong>support@thatteslalightshow.com</strong></a>. Our <Link href="/faq">FAQ</Link> and <Link href="/guide">setup guide</Link> answer most common questions instantly.</p>
+      <p><strong>Run into trouble?</strong> Reach out to support — we&apos;ll help you get your show running. And if the problem&apos;s on our end, we&apos;ll make it right.</p>
 
       <h2>Billing &amp; subscriptions</h2>
       <p>For payments, refunds, or anything about your Creator plan, email <a href="mailto:billing@thatteslalightshow.com"><strong>billing@thatteslalightshow.com</strong></a>. You can also manage or cancel your plan anytime from your <Link href="/dashboard">dashboard</Link>.</p>

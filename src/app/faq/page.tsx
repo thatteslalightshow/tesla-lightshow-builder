@@ -70,8 +70,12 @@ export default function FaqPage() {
         We use encrypted connections and trusted providers (payments via Stripe, never stored by us). See our <Link href="/privacy">Privacy Policy</Link> for details.
       </Q>
 
+      <Q q="What if my show doesn’t run right?">
+        Reach out to <a href="mailto:support@thatteslalightshow.com"><strong>support@thatteslalightshow.com</strong></a> — we&apos;ll help you get it running. And if the problem turns out to be on our end, we&apos;ll make it right. We usually respond within <strong>48–72 business hours</strong>.
+      </Q>
+
       <Q q="Still need help?">
-        We&apos;re happy to help. Email <a href="mailto:support@thatteslalightshow.com"><strong>support@thatteslalightshow.com</strong></a> for anything about your shows or your account, or <a href="mailto:billing@thatteslalightshow.com"><strong>billing@thatteslalightshow.com</strong></a> for payments, refunds, or subscription questions. You can also DM <strong>@ThatTeslaLightshow</strong> on Instagram or TikTok. See our <Link href="/contact">contact page</Link> for all the ways to reach us.
+        We&apos;re happy to help — we usually respond within <strong>48–72 business hours</strong>. Email <a href="mailto:support@thatteslalightshow.com"><strong>support@thatteslalightshow.com</strong></a> for anything about your shows or your account, or <a href="mailto:billing@thatteslalightshow.com"><strong>billing@thatteslalightshow.com</strong></a> for payments, refunds, or subscription questions. You can also DM <strong>@ThatTeslaLightshow</strong> on Instagram or TikTok. See our <Link href="/contact">contact page</Link> for all the ways to reach us.
       </Q>
     </LegalPage>
   )
