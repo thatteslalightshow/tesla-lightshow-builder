@@ -114,11 +114,11 @@ function spectralOnsets(mono: Float32Array, sr: number, outFrames: number, FPS: 
   const raw: Record<Band, number[]> = { bass: [], mid: [], high: [], presence: [], total: [] }
   const times: number[] = []
   let prev = new Float32Array(half + 1)
+  let mag = new Float32Array(half + 1)   // ping-ponged with prev each frame — no per-frame allocation (phone GC)
   for (let t = 0; t < nf; t++) {
     const off = t * H
     for (let i = 0; i < N; i++) { re[i] = (m[off + i] || 0) * win[i]; im[i] = 0 }
     fft.transform(re, im)
-    const mag = new Float32Array(half + 1)
     for (let k = 0; k <= half; k++) mag[k] = Math.sqrt(re[k] * re[k] + im[k] * im[k])
     let broad = 0
     const acc: Record<string, number> = { bass: 0, mid: 0, presence: 0, high: 0 }
@@ -133,7 +133,7 @@ function spectralOnsets(mono: Float32Array, sr: number, outFrames: number, FPS: 
     }
     raw.bass.push(acc.bass); raw.mid.push(acc.mid); raw.presence.push(acc.presence); raw.high.push(acc.high); raw.total.push(broad)
     times.push(off / fs)
-    prev = mag
+    const tmp = prev; prev = mag; mag = tmp   // ping-pong: this frame's mag becomes next frame's prev (mag fully overwritten next iter)
   }
   const toGrid = (arr: number[]) => {                       // STFT rate → engine FPS grid (max-pool)
     const out = new Array<number>(outFrames).fill(0)
@@ -700,23 +700,18 @@ export function analyzePCM(
     frameRms(biquad(left, 'highpass', 4500, 0.8, sampleRate), totalFrames, frameSize),
     frameRms(biquad(right, 'highpass', 4500, 0.8, sampleRate), totalFrames, frameSize),
   ])
-  // PRESENCE band (~2.5kHz) — the pick/strum attack range of guitars & leads, which sat in the
-  // GAP between the mid (1kHz) and high (4.5kHz) bands, so the engine couldn't "see" riffs like
-  // Thunderstruck. Its flux gives us per-note attacks to drive the lights + spot guitar solos.
-  const [pN_L, pN_R] = normShared([
-    frameRms(biquad(left, 'bandpass', 2600, 0.9, sampleRate), totalFrames, frameSize),
-    frameRms(biquad(right, 'bandpass', 2600, 0.9, sampleRate), totalFrames, frameSize),
-  ])
-
   const avg = (a: number[], b: number[]) => a.map((v, i) => (v + b[i]) / 2)
-  const bN_C = avg(bN_L, bN_R), mN_C = avg(mN_L, mN_R), hN_C = avg(hN_L, hN_R), pN_C = avg(pN_L, pN_R)
+  const bN_C = avg(bN_L, bN_R), mN_C = avg(mN_L, mN_R), hN_C = avg(hN_L, hN_R)
   const totalC = bN_C.map((v, i) => Math.min(1, (v + mN_C[i] + hN_C[i]) / 2.2))
 
   const E: Record<Band, Record<Side, number[]>> = {
     bass: { L: bN_L, R: bN_R, C: bN_C },
     mid: { L: mN_L, R: mN_R, C: mN_C },
     high: { L: hN_L, R: hN_R, C: hN_C },
-    presence: { L: pN_L, R: pN_R, C: pN_C },
+    // Lights never read the presence BAND energy — guitars/leads drive the lights via the FFT
+    // presence ONSET (O.presence, below). This key is just a placeholder to keep the Band record
+    // complete; the costly biquad presence filtering that used to fill it was dead work (removed).
+    presence: { L: totalC, R: totalC, C: totalC },
     total: { L: totalC, R: totalC, C: totalC },
   }
   // Onset detection via FFT spectral flux (sees fast re-picked notes that RMS flux can't) — the
