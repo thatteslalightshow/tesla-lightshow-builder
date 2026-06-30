@@ -202,7 +202,7 @@ const CLOSE_SECONDS: Record<ClosureFamily, number> = {
 //       from the grammar; carries the groove between the big moments).
 //   3.  FINALE — everything buttons up, windows clear of door motion.
 // Always inside per-closure command limits + ~30s/≤8s thermal dance budget.
-function choreographClosures(frames: Uint8Array[], totalC: number[], density: number[], triggers: number[], FPS: number, model: TeslaModel, zones: LightZone[], maxSections: number, bpm: number, anchor: number): void {
+function choreographClosures(frames: Uint8Array[], totalC: number[], density: number[], triggers: number[], FPS: number, model: TeslaModel, zones: LightZone[], maxSections: number, bpm: number, anchor: number, slam: number[]): void {
   const all = detectSections(totalC, FPS)
   if (!all.length) return
   const N = frames.length
@@ -271,8 +271,19 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], density: nu
   // Quantize a length to a whole number of beats (≥1) so dances resolve on the grid.
   const qbeat = (len: number) => Math.max(Math.round(beat), Math.round(len / beat) * beat)
 
-  // Each section's true musical hit = its start snapped to the nearest strong onset.
-  const drops = all.map(s => ({ ...s, hit: snap(s.start, Math.round(beat * 0.9)) }))
+  // ── STRUCTURE: land the bloom on the TRUE drop. detectSections marks a section from a ~1.5s
+  // SMOOTHED envelope, so its start LAGS the real hit by up to ~1s — doors would land open a beat
+  // late. Re-find the actual slam: the strongest LOW-END onset in a window straddling the section
+  // start (searching ~2 bars BEFORE it too, since smoothing delays the crossing — and the drop's
+  // defining feature is bass slamming in, which a riser lacks), then snap to the grid. The doors
+  // already anticipate by their long travel, so this only sharpens WHAT they land on, nothing else.
+  const dropHit = (start: number): number => {
+    const lo = Math.max(anchor, start - bars(2)), hi = Math.min(N - 1, start + Math.round(beat))
+    let best = start, bv = -1
+    for (let f = lo; f <= hi; f++) { const v = slam[f] ?? 0; if (v > bv) { bv = v; best = f } }
+    return snap(best, Math.round(beat * 0.5))
+  }
+  const drops = all.map(s => ({ ...s, hit: dropHit(s.start) }))
   const byPeak = [...drops].sort((a, b) => b.peak - a.peak)
   const byTime = [...drops].sort((a, b) => a.start - b.start)
   const topPeak = byPeak[0]?.peak ?? 0
@@ -813,7 +824,9 @@ export function analyzePCM(
   if (opts?.autoClosures && opts.model) {
     const triggers = [...triggerFrames].sort((p, q) => p - q)
     const anchor = triggerFrames.size ? Math.min(...triggerFrames) : 0
-    choreographClosures(frames, totalC, density, triggers, FPS, opts.model, zones, P.closureSections, bpm, anchor)
+    // "slam" = bass-weighted onset strength → finds the true drop (bass crashing in) for closures.
+    const slam = O.bass.map((v, i) => v * 1.5 + O.total[i])
+    choreographClosures(frames, totalC, density, triggers, FPS, opts.model, zones, P.closureSections, bpm, anchor, slam)
   }
 
   // Phase 4: graceful ramping on the inner main beam (cinematic fades; runs last
