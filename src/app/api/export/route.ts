@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAdminClient, type TeslaModel } from '@/lib/supabase'
 import { getAuthedUser } from '@/lib/auth'
-import { getChannelCount, generateFrames, buildEditFrames, hasEdits, MODELS, FPS, STEP_MS, type EditData } from '@/lib/tesla-channels'
+import { getChannelCount, generateFrames, buildEditFrames, hasEdits, MODELS, FPS, STEP_MS, validateClosureSafety, type EditData } from '@/lib/tesla-channels'
 import { analyzePCM } from '@/lib/audio-analysis'
 import { sendExportDownload } from '@/lib/email'
 import { deleteShowAudio } from '@/lib/audio-storage'
@@ -240,7 +240,13 @@ export async function POST(req: Request) {
   let clientFseq: Uint8Array | null = null
   if (body.client_fseq === true && !hasEdits(editData)) {
     const { data: blob } = await admin.storage.from('fseq-exports').download(incomingPath)
-    if (blob) clientFseq = validateClientFseq(new Uint8Array(await blob.arrayBuffer()), channels)
+    if (blob) {
+      const bytes = validateClientFseq(new Uint8Array(await blob.arrayBuffer()), channels)
+      // Closure channels move a REAL CAR — only trust the client fast-path if its closures are also
+      // safe; otherwise ignore it and re-derive on the server (safe by construction). Never store
+      // an unvalidated client fseq as the canonical.
+      clientFseq = bytes && validateClosureSafety(bytes, show.tesla_model as TeslaModel).ok ? bytes : null
+    }
   }
 
   let fseq: Uint8Array
@@ -307,6 +313,17 @@ export async function POST(req: Request) {
       mf = buildFseq(mCh, fr.length, Math.round(STEP_MS), fr)
     }
     extraFseqs.push({ model: m, fseq: mf })
+  }
+
+  // ── SAFETY GATE: never ship closure bytes that violate a real-car invariant — covers manual
+  // edits, a stale stored canonical, every model, and any path. The auto-engine output passes by
+  // construction; this catches the cases that bypass the choreographer's own safety mechanics.
+  for (const { fseq: f, model: mm } of [{ fseq, model: show.tesla_model as TeslaModel }, ...extraFseqs]) {
+    const safety = validateClosureSafety(f, mm)
+    if (!safety.ok) {
+      console.error(`[export] closure-safety REJECT (${mm}): ${safety.reason} — show ${body.show_id}`)
+      return NextResponse.json({ error: 'This show has closure moves that aren’t safe to run — please rebuild or adjust the door/window edits.', detail: safety.reason }, { status: 422 })
+    }
   }
 
   // ── BYOM: ship the choreography ONLY (the .fseq + a setup README). The customer

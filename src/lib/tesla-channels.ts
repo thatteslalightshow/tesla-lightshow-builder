@@ -195,6 +195,80 @@ export const MODEL_CLOSURES: Record<TeslaModel, ClosureFamily[]> = {
   cybertruck: ['mirrors', 'windows', 'charge_port', 'liftgate'],
 }
 
+// ─── Server-side CLOSURE-SAFETY validator ────────────────────────────────────────
+// Closures move a REAL CAR, but the safety mechanics in the auto-choreographer only protect the
+// AUTO path. This validates the CLOSURE channels (30-45) of ANY finished fseq — auto, manual edits,
+// a client-uploaded "fast-path" fseq, or a stored canonical — so an unsafe pattern can never ship
+// (and can't be cloned onto other owners' cars). Enforces the same invariants the engine upholds:
+//   • only valid closure command bytes (0/63/127/191/255),
+//   • per-family actuation counts within CLOSURE_LIMITS,
+//   • falcon doors NEVER actuate on the same frame (the simultaneous-actuation fault), and
+//   • Model X: a window never moves while a door moves (the false-pinch).
+// Returns { ok:true } or { ok:false, reason }. Designed to PASS all legit engine output.
+export function validateClosureSafety(fseq: Uint8Array, model: TeslaModel): { ok: boolean; reason?: string } {
+  if (fseq.length < 32) return { ok: false, reason: 'fseq too short' }
+  const dv = new DataView(fseq.buffer, fseq.byteOffset, fseq.byteLength)
+  const headerSize = dv.getUint16(4, true)
+  const channels = dv.getUint32(10, true)
+  const frames = dv.getUint32(14, true)
+  if (headerSize < 32 || channels < 46 || frames < 1 || headerSize + frames * channels > fseq.length) {
+    return { ok: false, reason: 'fseq header/size invalid' }
+  }
+  const valAt = (f: number, ch: number) => fseq[headerSize + f * channels + ch]
+
+  // channel → closure family (the channel map is identical for every model)
+  const chFam = new Map<number, ClosureFamily>()
+  for (const z of MODELS[model].zones) if (z.closure) chFam.set(z.channel, z.closure)
+  const closureChs = [...chFam.keys()].filter(ch => ch >= 0 && ch < channels)
+  const VALID = new Set<number>(Object.values(CLOSURE_CMD))
+
+  // per channel: validate every byte, collect rising-edge frames + non-zero runs
+  const edges: Record<number, number[]> = {}
+  const runs: Record<number, [number, number][]> = {}
+  for (const ch of closureChs) {
+    edges[ch] = []; runs[ch] = []
+    let prev = 0, runStart = -1
+    for (let f = 0; f < frames; f++) {
+      const v = valAt(f, ch)
+      if (!VALID.has(v)) return { ok: false, reason: `invalid closure byte ${v} on ch${ch} @${f}` }
+      if (v !== prev && v !== 0) edges[ch].push(f)            // a new actuation command starts here
+      if (v !== 0 && runStart < 0) runStart = f
+      else if (v === 0 && runStart >= 0) { runs[ch].push([runStart, f]); runStart = -1 }
+      prev = v
+    }
+    if (runStart >= 0) runs[ch].push([runStart, frames])
+  }
+
+  // group channels by family
+  const famChs: Partial<Record<ClosureFamily, number[]>> = {}
+  for (const ch of closureChs) { const fam = chFam.get(ch)!; (famChs[fam] ??= []).push(ch) }
+
+  // 1) per-family actuation limit (worst channel in the family)
+  for (const fam of Object.keys(famChs) as ClosureFamily[]) {
+    const n = Math.max(0, ...famChs[fam]!.map(ch => edges[ch].length))
+    if (n > CLOSURE_LIMITS[fam]) return { ok: false, reason: `${fam} actuations ${n} > limit ${CLOSURE_LIMITS[fam]}` }
+  }
+
+  // 2) falcon doors must never actuate on the SAME frame
+  const falconChs = famChs.falcon_doors ?? []
+  if (falconChs.length === 2) {
+    const other = new Set(edges[falconChs[1]])
+    for (const f of edges[falconChs[0]]) if (other.has(f)) return { ok: false, reason: `falcon doors actuate on the same frame @${f}` }
+  }
+
+  // 3) Model X: a window may never be in motion while a door is in motion (false-pinch)
+  if (model === 'modelX') {
+    const overlap = (x: [number, number], y: [number, number]) => x[0] < y[1] && y[0] < x[1]
+    const winChs = famChs.windows ?? []
+    const doorChs = [...(famChs.falcon_doors ?? []), ...(famChs.front_doors ?? [])]
+    for (const wc of winChs) for (const wr of runs[wc])
+      for (const dc of doorChs) for (const dr of runs[dc])
+        if (overlap(wr, dr)) return { ok: false, reason: `Model X window ch${wc} moves while door ch${dc} moves @${wr[0]}` }
+  }
+
+  return { ok: true }
+}
+
 function placeFromSpec(spec: ChannelSpec, p: CarProportions): [number, number, number] {
   // nx/ny/nz are normalized car coords (front+, up, right+) from Tesla's xLights
   // model; scale to each car's length / full height / width.
