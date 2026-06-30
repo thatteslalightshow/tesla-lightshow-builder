@@ -1456,6 +1456,14 @@ function BuilderInner() {
               {!audioFile && <div style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 2 }}>MP3, WAV, M4A… · auto-converted to Tesla WAV</div>}
             </label>
             {audioError && <div style={{ fontSize: 11, color: '#ff8a8a', marginTop: 4 }}>{audioError}</div>}
+            {/* Re-opened a saved show: the song was cleared (privacy), so preview + re-choreography
+                won't work until they re-upload. Surface it instead of silently doing nothing. */}
+            {savedShowId && !audioFile && !analyzing && (
+              <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.5, padding: '8px 10px', borderRadius: 'var(--radius)', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)' }}>
+                Your settings are saved, but we don&apos;t keep your song after you export — that&apos;s your privacy.
+                <strong style={{ color: 'var(--text)' }}> Re-upload it above</strong> to preview or change the choreography for this show.
+              </div>
+            )}
             {analyzing && (
               <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--red)', display: 'inline-block', animation: 'pulse 1s infinite' }} />
