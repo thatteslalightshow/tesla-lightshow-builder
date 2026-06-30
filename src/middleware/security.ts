@@ -22,33 +22,12 @@ const SECURITY_HEADERS = {
   ].join('; '),
 }
 
-const RATE_LIMITS: Record<string, number> = {
-  '/api/upload':   10,
-  '/api/generate': 20,
-  '/api/export':   10,
-}
-
 // Routes that authenticate themselves (signature / token) and must NOT be
 // gated by the cookie-session check in middleware.
 const PUBLIC_API_ROUTES = new Set([
   '/api/stripe/webhook', // verified via Stripe signature
   '/api/shows/view',     // anonymous view counter (increment-only)
 ])
-
-const rateLimitStore = new Map<string, { count: number; resetAt: number }>()
-
-function edgeRateLimit(key: string, max: number): boolean {
-  const now = Date.now()
-  const windowMs = 60 * 60 * 1000
-  const entry = rateLimitStore.get(key)
-  if (!entry || now > entry.resetAt) {
-    rateLimitStore.set(key, { count: 1, resetAt: now + windowMs })
-    return true
-  }
-  if (entry.count >= max) return false
-  entry.count++
-  return true
-}
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
@@ -100,26 +79,14 @@ export async function middleware(req: NextRequest) {
     const authHeader = req.headers.get('authorization')
     const hasBearer = !!authHeader?.toLowerCase().startsWith('bearer ')
 
-    let rateKey: string
-    if (hasBearer) {
-      rateKey = authHeader!.slice(7).trim()
-    } else {
+    // Cookie sessions are validated here; bearer (mobile) tokens are validated by the route handler.
+    // Per-user RATE LIMITING now lives in the route handlers (shared Supabase `check_rate`) — the old
+    // in-memory limiter was per serverless instance, reset on cold start, and easy to evade.
+    if (!hasBearer) {
       const supabase = createMiddlewareClient({ req, res })
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-      rateKey = session.user.id
-    }
-
-    const routeLimit = RATE_LIMITS[req.nextUrl.pathname]
-    if (routeLimit) {
-      const key = `${rateKey}:${req.nextUrl.pathname}`
-      if (!edgeRateLimit(key, routeLimit)) {
-        return NextResponse.json(
-          { error: 'Rate limit exceeded. Try again in an hour.' },
-          { status: 429, headers: { 'Retry-After': '3600' } }
-        )
       }
     }
   }

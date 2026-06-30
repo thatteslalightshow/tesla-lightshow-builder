@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAdminClient, type TeslaModel } from '@/lib/supabase'
 import { getAuthedUser } from '@/lib/auth'
+import { rateLimitOk } from '@/lib/rate-limit'
 import { getChannelCount, generateFrames, buildEditFrames, hasEdits, MODELS, FPS, STEP_MS, validateClosureSafety, type EditData } from '@/lib/tesla-channels'
 import { analyzePCM } from '@/lib/audio-analysis'
 import { sendExportDownload } from '@/lib/email'
@@ -160,6 +161,9 @@ export async function POST(req: Request) {
   if (!body.show_id) return NextResponse.json({ error: 'Missing show_id' }, { status: 400 })
 
   const admin = getAdminClient()
+  if (!(await rateLimitOk(admin, user.id, 'export', 10))) {
+    return NextResponse.json({ error: 'Too many exports — please try again later.' }, { status: 429, headers: { 'Retry-After': '3600' } })
+  }
 
   // ── Load show + authorization (in one round-trip) ─────────────────────────
   const [

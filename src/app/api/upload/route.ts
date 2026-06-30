@@ -2,6 +2,7 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { getAdminClient, validateAudioMeta, sanitizeFileName } from '@/lib/supabase'
+import { rateLimitOk } from '@/lib/rate-limit'
 
 // Step 1 of audio upload: verify ownership, clear any previous audio, and hand
 // back a signed URL the browser uploads to DIRECTLY. The file never passes
@@ -24,6 +25,9 @@ export async function POST(req: Request) {
   if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
 
   const admin = getAdminClient()
+  if (!(await rateLimitOk(admin, session.user.id, 'upload', 10))) {
+    return NextResponse.json({ error: 'Too many uploads — please try again later.' }, { status: 429, headers: { 'Retry-After': '3600' } })
+  }
   const { data: show, error: showErr } = await admin
     .from('shows').select('id').eq('id', showId).eq('user_id', session.user.id).single()
   if (showErr || !show) return NextResponse.json({ error: 'Show not found' }, { status: 404 })

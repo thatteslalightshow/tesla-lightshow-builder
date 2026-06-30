@@ -2,6 +2,7 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { getAdminClient, type ShowStyle } from '@/lib/supabase'
+import { rateLimitOk } from '@/lib/rate-limit'
 
 // Heuristic: map BPM ranges to recommended styles
 function recommendStyle(bpm: number): ShowStyle {
@@ -29,6 +30,9 @@ export async function POST(req: Request) {
   if (!body.show_id) return NextResponse.json({ error: 'Missing show_id' }, { status: 400 })
 
   const admin = getAdminClient()
+  if (!(await rateLimitOk(admin, session.user.id, 'generate', 20))) {
+    return NextResponse.json({ error: 'Too many requests — please try again later.' }, { status: 429, headers: { 'Retry-After': '3600' } })
+  }
   const { data: show, error: showErr } = await admin
     .from('shows')
     .select('*')
