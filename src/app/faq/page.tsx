@@ -20,7 +20,7 @@ export default function FaqPage() {
   return (
     <LegalPage
       title="Frequently asked questions"
-      intro="Everything you need to know about building a show and running it on your Tesla. Still stuck? Check the step-by-step guide or reach out to us on social."
+      intro="Everything you need to know about building a show and running it on your Tesla. Still stuck? Check the step-by-step guide or email us at support@thatteslalightshow.com."
     >
       <Q q="What is ThatTeslaLightshow?">
         It&apos;s a web app that builds custom light shows for your Tesla, synced to your music. You pick a song, our engine choreographs the lights (and optionally the doors, windows, and other closures) to the beat, and you export a file package you load onto a USB drive to run on your car.
@@ -68,6 +68,10 @@ export default function FaqPage() {
 
       <Q q="Is my data safe?">
         We use encrypted connections and trusted providers (payments via Stripe, never stored by us). See our <Link href="/privacy">Privacy Policy</Link> for details.
+      </Q>
+
+      <Q q="Still need help?">
+        We&apos;re happy to help. Email <a href="mailto:support@thatteslalightshow.com"><strong>support@thatteslalightshow.com</strong></a> for anything about your shows or your account, or <a href="mailto:billing@thatteslalightshow.com"><strong>billing@thatteslalightshow.com</strong></a> for payments, refunds, or subscription questions. You can also DM <strong>@ThatTeslaLightshow</strong> on Instagram or TikTok. See our <Link href="/contact">contact page</Link> for all the ways to reach us.
       </Q>
     </LegalPage>
   )

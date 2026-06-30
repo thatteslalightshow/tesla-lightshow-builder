@@ -14,6 +14,7 @@ export default function LegalPage({ title, updated, intro, children }: {
         <Link href="/" style={{ display: 'flex' }}><BrandLogo boxSize={30} /></Link>
         <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
           <Link href="/faq" style={{ color: 'var(--muted)' }}>FAQ</Link>
+          <Link href="/contact" style={{ color: 'var(--muted)' }}>Contact</Link>
           <Link href="/privacy" style={{ color: 'var(--muted)' }}>Privacy</Link>
           <Link href="/terms" style={{ color: 'var(--muted)' }}>Terms</Link>
         </div>
