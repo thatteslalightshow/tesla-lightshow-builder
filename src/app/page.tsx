@@ -159,7 +159,7 @@ export default function Home() {
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
       <section style={{ position:'relative', zIndex:1, minHeight:'100svh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'8rem 2rem 0', textAlign:'center' }}>
         {/* Radial glow behind text */}
-        <div style={{ position:'absolute', top:'30%', left:'50%', transform:'translate(-50%,-50%)', width:700, height:400, background:'radial-gradient(ellipse, rgba(232,64,74,0.12) 0%, transparent 70%)', pointerEvents:'none' }} />
+        <div style={{ position:'absolute', top:'30%', left:'50%', transform:'translate(-50%,-50%)', width:'min(700px, 100%)', height:400, background:'radial-gradient(ellipse, rgba(232,64,74,0.12) 0%, transparent 70%)', pointerEvents:'none' }} />
 
         <div ref={heroReveal.ref} style={heroReveal.style}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -340,7 +340,7 @@ export default function Home() {
 
       {/* ── FINAL CTA ────────────────────────────────────────────────────── */}
       <section style={{ position:'relative', zIndex:1, borderTop:'1px solid rgba(255,255,255,0.06)', padding:'10rem 2rem', textAlign:'center', overflow:'hidden' }}>
-        <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:800, height:400, background:'radial-gradient(ellipse,rgba(232,64,74,0.1) 0%,transparent 70%)', pointerEvents:'none' }} />
+        <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:'min(800px, 100%)', height:400, background:'radial-gradient(ellipse,rgba(232,64,74,0.1) 0%,transparent 70%)', pointerEvents:'none' }} />
         <div style={{ position:'relative' }}>
           <h2 style={{ fontFamily:'var(--font-display)', fontSize:'clamp(2.5rem,7vw,5.5rem)', fontWeight:700, letterSpacing:'-3px', lineHeight:.96, marginBottom:'2rem' }}>
             Your Tesla is ready.<br />
