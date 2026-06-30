@@ -172,8 +172,10 @@ export async function POST(req: Request) {
     admin.from('shows').select('*').eq('id', body.show_id).eq('user_id', user.id).single(),
     admin.from('profiles').select('is_admin').eq('id', user.id).single(),
     admin.from('exports').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-    admin.from('subscriptions').select('status').eq('user_id', user.id).in('status', ['active', 'trialing']).maybeSingle(),
-    admin.from('show_purchases').select('id').eq('user_id', user.id).eq('show_id', body.show_id).maybeSingle(),
+    // .limit(1) (not .maybeSingle) — a duplicate active subscription or a twice-bought show would
+    // make .maybeSingle THROW (>1 row) and wrongly DENY a paying customer. Tolerate duplicates.
+    admin.from('subscriptions').select('status').eq('user_id', user.id).in('status', ['active', 'trialing']).limit(1),
+    admin.from('show_purchases').select('id').eq('user_id', user.id).eq('show_id', body.show_id).limit(1),
   ])
   if (showErr || !show) return NextResponse.json({ error: 'Show not found' }, { status: 404 })
 
@@ -182,8 +184,8 @@ export async function POST(req: Request) {
   // query so a missing is_tester column (pre-migration) can't break the profile load.
   const { data: testerRow } = await admin.from('profiles').select('is_tester').eq('id', user.id).maybeSingle()
   const isPrivileged = isAdmin || (testerRow as { is_tester?: boolean } | null)?.is_tester === true
-  const isSubscribed = !!subscription
-  const hasPaid = !!purchase
+  const isSubscribed = ((subscription as unknown[] | null)?.length ?? 0) > 0
+  const hasPaid = ((purchase as unknown[] | null)?.length ?? 0) > 0
   const isFreeExport = (exportCount ?? 0) === 0
   // A show acquired from the community was already paid for at acquisition time.
   const isAcquired = !!show.source_show_id

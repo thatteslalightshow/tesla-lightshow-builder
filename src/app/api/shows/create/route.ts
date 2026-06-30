@@ -21,13 +21,13 @@ export async function POST(req: Request) {
   // Privilege + current library size in one round-trip.
   const [{ data: profile }, { data: subscription }, { count: showCount }] = await Promise.all([
     admin.from('profiles').select('is_admin').eq('id', user.id).single(),
-    admin.from('subscriptions').select('status').eq('user_id', user.id).in('status', ['active', 'trialing']).maybeSingle(),
+    admin.from('subscriptions').select('status').eq('user_id', user.id).in('status', ['active', 'trialing']).limit(1),
     admin.from('shows').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
   ])
   const { data: testerRow } = await admin.from('profiles').select('is_tester').eq('id', user.id).maybeSingle()
   const isPrivileged = profile?.is_admin === true
     || (testerRow as { is_tester?: boolean } | null)?.is_tester === true
-    || !!subscription
+    || ((subscription as unknown[] | null)?.length ?? 0) > 0   // .limit(1): tolerate duplicate active subs
 
   if (!isPrivileged && (showCount ?? 0) >= FREE_SHOW_CAP) {
     return NextResponse.json({ error: 'cap_reached', cap: FREE_SHOW_CAP }, { status: 403 })

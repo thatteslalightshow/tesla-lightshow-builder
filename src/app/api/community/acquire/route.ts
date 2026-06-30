@@ -28,12 +28,13 @@ export async function POST(req: Request) {
   // Free for admins, testers + active subscribers; otherwise it needs the $2.99 purchase.
   const [{ data: profile }, { data: subscription }] = await Promise.all([
     admin.from('profiles').select('is_admin').eq('id', user.id).single(),
-    admin.from('subscriptions').select('status').eq('user_id', user.id).in('status', ['active', 'trialing']).maybeSingle(),
+    admin.from('subscriptions').select('status').eq('user_id', user.id).in('status', ['active', 'trialing']).limit(1),
   ])
   // is_tester read separately so a missing column (pre-migration) can't break this.
   const { data: testerRow } = await admin.from('profiles').select('is_tester').eq('id', user.id).maybeSingle()
   const isPrivileged = profile?.is_admin === true || (testerRow as { is_tester?: boolean } | null)?.is_tester === true
-  if (!(isPrivileged || !!subscription)) {
+  const isSubscribed = ((subscription as unknown[] | null)?.length ?? 0) > 0   // .limit(1): tolerate duplicate active subs
+  if (!(isPrivileged || isSubscribed)) {
     return NextResponse.json({ needs_payment: true })
   }
 
