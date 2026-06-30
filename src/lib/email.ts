@@ -309,7 +309,7 @@ export async function sendWelcome({ to, hasShow, builderUrl, unsubscribeUrl }: {
     ? `<p style="font-size:15px;color:rgba(255,255,255,0.55);margin:0 0 22px;line-height:1.7;">You’ve started a show — nice. When it’s ready, one click exports a Tesla-ready light sequence, and we’ll walk you through dropping in your song and copying it to a USB. <em style="color:rgba(255,255,255,0.45);">Choreography by us. Soundtrack by you.</em></p>`
     : `<p style="font-size:15px;color:rgba(255,255,255,0.55);margin:0 0 18px;line-height:1.7;">Welcome aboard ⚡ Making your first Tesla light show takes about three minutes:</p>`
       + `<p style="font-size:14px;color:rgba(255,255,255,0.5);margin:0 0 22px;line-height:1.9;">1. Pick your Tesla &amp; upload a song — our engine choreographs the lights to it.<br/>2. Preview it live in 3D on your exact model.<br/>3. Export, add your own copy of the song, plug in the USB. Done.</p>`;
-  await resend.emails.send({ from: MARKETING_FROM, replyTo: REPLY_TO, to, subject: 'Welcome to ThatTeslaLightshow ⚡', html: lifecycleShell({ headline: hasShow ? 'Welcome ⚡' : 'Let’s build your first show ⚡', bodyHtml: body, ctaHref: builderUrl, ctaText: hasShow ? 'Open the builder →' : 'Build your first show →', unsubscribeUrl }) });
+  await resend.emails.send({ from: MARKETING_FROM, replyTo: REPLY_TO, to, subject: 'Welcome ⚡ let’s turn your song into a light show', html: lifecycleShell({ headline: hasShow ? 'Welcome ⚡' : 'Let’s build your first show ⚡', bodyHtml: body, ctaHref: builderUrl, ctaText: hasShow ? 'Open the builder →' : 'Build your first show →', unsubscribeUrl }) });
 }
 
 // New Creator subscriber → spell out everything they just unlocked.

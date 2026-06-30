@@ -1451,10 +1451,15 @@ function BuilderInner() {
               <input type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac" onChange={onAudioChange} style={{ display: 'none' }} />
               <div style={{ fontSize: '1.4rem', marginBottom: 4 }}>🎵</div>
               <div style={{ fontSize: 12, color: audioUploaded ? 'var(--green)' : audioFile ? '#ff8c00' : 'var(--muted)' }}>
-                {audioUploaded ? `✓ ${audioFile?.name ?? 'Audio saved'}` : audioFile ? audioFile.name : 'Click to upload your song'}
+                {audioUploaded ? `✓ ${audioFile?.name ?? 'Audio saved'}` : audioFile ? audioFile.name : 'Drop in any song to start'}
               </div>
-              {!audioFile && <div style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 2 }}>MP3, WAV, M4A… · auto-converted to Tesla WAV</div>}
+              {!audioFile && <div style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 2 }}>MP3, WAV, M4A… · we choreograph your Tesla to it</div>}
             </label>
+            {!audioFile && !savedShowId && (
+              <div style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 6, lineHeight: 1.5 }}>
+                🔒 We only use your song to build the show — it&apos;s deleted the moment you export.
+              </div>
+            )}
             {audioError && <div style={{ fontSize: 11, color: '#ff8a8a', marginTop: 4 }}>{audioError}</div>}
             {/* Re-opened a saved show: the song was cleared (privacy), so preview + re-choreography
                 won't work until they re-upload. Surface it instead of silently doing nothing. */}
