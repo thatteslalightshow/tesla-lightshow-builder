@@ -6,7 +6,7 @@ import SiteMenu from '@/components/SiteMenu'
 
 export const metadata: Metadata = {
   title: 'Pricing',
-  description: 'Build and preview Tesla light shows free. Pay $2.99 per export, or go unlimited with Creator at $6.99/mo.',
+  description: 'Build and preview Tesla light shows free. Pay $3.99 per export, or go unlimited with Creator at $6.99/mo.',
 }
 
 const FREE_FEATURES = [
@@ -21,7 +21,7 @@ const FREE_FEATURES = [
 
 const PER_EXPORT_FEATURES = [
   'Everything in Free',
-  'Export any show for $2.99',
+  'Export any show for $3.99',
   'Beat-synced FSEQ light sequence',
   'Emailed backup + BYOM setup steps',
   'FSEQ v2 validation report',
@@ -44,11 +44,11 @@ const CREATOR_FEATURES: { text: string; unlock?: boolean }[] = [
 const FAQ = [
   {
     q: 'What does "free export" mean?',
-    a: 'Your very first USB export — the ZIP file that goes on your Tesla — is completely free. After that, you can either pay $2.99 per export or subscribe to Creator for unlimited exports.',
+    a: 'Your very first USB export — the ZIP file that goes on your Tesla — is completely free. After that, you can either pay $3.99 per export or subscribe to Creator for unlimited exports.',
   },
   {
     q: 'Should I pay per export or subscribe?',
-    a: 'If you only need a show or two, pay $2.99 per export — no commitment. If you create regularly (new shows for holidays, meetups, seasons), Creator at $6.99/mo pays for itself after about three shows a month, and the annual plan ($59.99/yr — save 28%) is the best value.',
+    a: 'If you only need a show or two, pay $3.99 per export — no commitment. If you create regularly (new shows for holidays, meetups, seasons), Creator at $6.99/mo pays for itself after about three shows a month, and the annual plan ($59.99/yr — save 28%) is the best value.',
   },
   {
     q: 'What extra do I get with Creator?',
@@ -114,7 +114,7 @@ export default function PricingPage() {
             Build free.<br />Export your way.
           </h1>
           <p style={{ color: 'var(--muted)', fontSize: '1rem', maxWidth: 520, margin: '0 auto', lineHeight: 1.7 }}>
-            Create, preview, and perfect your Tesla light show for free. When you&apos;re ready to export, pay once at $2.99 — or go unlimited with Creator.
+            Create, preview, and perfect your Tesla light show for free. When you&apos;re ready to export, pay once at $3.99 — or go unlimited with Creator.
           </p>
         </div>
 
@@ -140,7 +140,7 @@ export default function PricingPage() {
           <div style={{ padding: '2rem', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 18 }}>Per export</div>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, marginBottom: 6 }}>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: '2.6rem', fontWeight: 700, lineHeight: 1 }}>$2.99</span>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: '2.6rem', fontWeight: 700, lineHeight: 1 }}>$3.99</span>
               <span style={{ fontSize: 14, color: 'var(--muted)', paddingBottom: 6 }}>/ export</span>
             </div>
             <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: '1.75rem' }}>Pay as you go, no commitment</div>
@@ -177,7 +177,7 @@ export default function PricingPage() {
             Start free. Upgrade only if you love it.
           </div>
           <p style={{ color: 'var(--muted)', fontSize: 14, maxWidth: 520, margin: '0 auto', lineHeight: 1.7 }}>
-            Every account gets a free export to try the whole flow end to end. Pay $2.99 for the occasional show, or subscribe to Creator once you&apos;re building regularly — about three shows a month already beats per-export pricing.
+            Every account gets a free export to try the whole flow end to end. Pay $3.99 for the occasional show, or subscribe to Creator once you&apos;re building regularly — about three shows a month already beats per-export pricing.
           </p>
         </div>
 

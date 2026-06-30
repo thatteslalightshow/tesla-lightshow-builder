@@ -206,7 +206,7 @@ export default function DashboardPage() {
               <>
                 <div>
                   <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 14, marginBottom: 2 }}>Free plan</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>1 free export · $2.99/export after that</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>1 free export · $3.99/export after that</div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button

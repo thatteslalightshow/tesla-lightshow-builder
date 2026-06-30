@@ -1150,7 +1150,7 @@ function BuilderInner() {
   async function checkoutPerExport() {
     setPayBusy('once'); setPayErr('');
     try {
-      // $2.99 is per-show, so make sure the show is saved (and current) first.
+      // $3.99 is per-show, so make sure the show is saved (and current) first.
       const id = await save();
       if (!id) { setPayErr('Could not save your show — please try again.'); setPayBusy(''); return; }
       const res = await fetch('/api/stripe/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ show_id: id }) });
@@ -1192,7 +1192,7 @@ function BuilderInner() {
     if (!showId) { setSaveMsg('Save failed — please try again.'); setExporting(false); return; }
 
     // Non-admin, non-subscriber, used free export → show the pay/subscribe choice.
-    // The show is already saved above, so savedShowId is set for the $2.99 route.
+    // The show is already saved above, so savedShowId is set for the $3.99 route.
     if (exportCount > 0 && !isAdmin && !isSubscribed) {
       setExporting(false);
       setPayErr('');
@@ -1377,7 +1377,7 @@ function BuilderInner() {
               {exporting ? 'Exporting…' : (
                 <>
                   <span className="desktop-only">
-                    {(isAdmin || isSubscribed) ? '⬇ Export ZIP — Unlimited' : exportCount === 0 ? '⬇ Export ZIP — Free' : '⬇ Export ZIP — $2.99'}
+                    {(isAdmin || isSubscribed) ? '⬇ Export ZIP — Unlimited' : exportCount === 0 ? '⬇ Export ZIP — Free' : '⬇ Export ZIP — $3.99'}
                   </span>
                   <span className="mobile-only">⬇ Export</span>
                 </>
@@ -1861,13 +1861,13 @@ function BuilderInner() {
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, marginBottom: 4 }}>You&apos;ve used your free export</div>
             <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 18 }}>Pay just for this one — or go unlimited if you&apos;re making a lot.</div>
 
-            {/* Primary: the one-time $2.99 they came here for */}
+            {/* Primary: the one-time $3.99 they came here for */}
             <button
               onClick={checkoutPerExport}
               disabled={!!payBusy}
               style={{ width: '100%', textAlign: 'left', padding: '13px 14px', marginBottom: 14, borderRadius: 10, background: 'var(--red)', border: '1px solid var(--red)', color: '#fff', cursor: payBusy ? 'default' : 'pointer', opacity: payBusy && payBusy !== 'once' ? 0.5 : 1 }}
             >
-              <div style={{ fontWeight: 700, fontSize: 15 }}>{payBusy === 'once' ? 'Redirecting…' : 'Export this show — $2.99'}</div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{payBusy === 'once' ? 'Redirecting…' : 'Export this show — $3.99'}</div>
               <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>One-time, no subscription</div>
             </button>
 

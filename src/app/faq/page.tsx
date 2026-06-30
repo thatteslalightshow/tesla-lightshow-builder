@@ -35,7 +35,7 @@ export default function FaqPage() {
       </Q>
 
       <Q q="Is it free?">
-        You can build and preview shows for free, forever. Your <strong>first export is free</strong>. After that it&apos;s $2.99 per export, or you can subscribe to Creator for unlimited exports (and free community-show downloads). See <Link href="/pricing">pricing</Link>.
+        You can build and preview shows for free, forever. Your <strong>first export is free</strong>. After that it&apos;s $3.99 per export, or you can subscribe to Creator for unlimited exports (and free community-show downloads). See <Link href="/pricing">pricing</Link>.
       </Q>
 
       <Q q="Do the doors and windows really move?">
@@ -55,7 +55,7 @@ export default function FaqPage() {
       </Q>
 
       <Q q="Can I share or buy community shows?">
-        Yes. You can make your shows public in the community gallery, and acquire shows others have shared. Community shows are <strong>choreography only</strong> — the <code>.fseq</code> plus the song&apos;s title, artist, and tempo, never anyone&apos;s audio — so it&apos;s BYOM just like your own exports: bring your own copy of the listed song to run it. When you add a community show to your library, it&apos;s tailored to your Tesla model automatically. Subscribers get community downloads free; otherwise it&apos;s $2.99.
+        Yes. You can make your shows public in the community gallery, and acquire shows others have shared. Community shows are <strong>choreography only</strong> — the <code>.fseq</code> plus the song&apos;s title, artist, and tempo, never anyone&apos;s audio — so it&apos;s BYOM just like your own exports: bring your own copy of the listed song to run it. When you add a community show to your library, it&apos;s tailored to your Tesla model automatically. Subscribers get community downloads free; otherwise it&apos;s $3.99.
       </Q>
 
       <Q q="Can I cancel my subscription?">

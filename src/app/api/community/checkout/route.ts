@@ -7,7 +7,7 @@ import { MODELS } from '@/lib/tesla-channels'
 // Fallback keeps module load from throwing during `next build` when the key isn't in the build env
 // (real calls are gated by the STRIPE_SECRET_KEY guards below, so the placeholder is never used).
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_unset_build_placeholder', { apiVersion: '2026-05-27.dahlia' })
-const PRICE_CENTS = 299 // $2.99
+const PRICE_CENTS = 399 // $3.99
 
 // Stripe checkout to buy a community show. On success the webhook clones it into
 // the buyer's library (tailored to tesla_model) — see stripe/webhook.

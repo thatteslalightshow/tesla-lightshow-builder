@@ -212,7 +212,7 @@ export default function Home() {
             { n: counts ? counts.shows.toLocaleString() : '—', sub:'shows built' },
             { n: counts ? counts.exports.toLocaleString() : '—', sub:'light shows exported' },
             { n:'5',  sub:'Tesla models' },
-            { n:'$2.99', sub:'per export after first free' },
+            { n:'$3.99', sub:'per export after first free' },
           ].map(s => (
             <div key={s.sub}>
               <div style={{ fontFamily:'var(--font-display)', fontSize:'clamp(2.2rem,4vw,3.5rem)', fontWeight:700, letterSpacing:'-2px', color:'#fff', marginBottom:8 }}>{s.n}</div>
@@ -284,7 +284,7 @@ export default function Home() {
           Simple. No surprises.
         </h2>
         <p style={{ fontSize:15, color:'rgba(255,255,255,0.35)', marginBottom:'3rem', lineHeight:1.7 }}>
-          Build and preview for free, forever. Pay $2.99 per export, or go unlimited with Creator when you&apos;re building regularly.
+          Build and preview for free, forever. Pay $3.99 per export, or go unlimited with Creator when you&apos;re building regularly.
         </p>
         <div className="home-pricing-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:1, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.06)', borderRadius:16, overflow:'hidden' }}>
           {/* Free */}
@@ -306,9 +306,9 @@ export default function Home() {
           {/* Per export */}
           <div style={{ padding:'2.5rem', background:'#000' }}>
             <div style={{ fontSize:12, fontWeight:600, letterSpacing:'.12em', color:'rgba(255,255,255,0.3)', textTransform:'uppercase', marginBottom:20 }}>Per Export</div>
-            <div style={{ fontFamily:'var(--font-display)', fontSize:'3.2rem', fontWeight:700, letterSpacing:'-2px', marginBottom:4 }}>$2.99</div>
+            <div style={{ fontFamily:'var(--font-display)', fontSize:'3.2rem', fontWeight:700, letterSpacing:'-2px', marginBottom:4 }}>$3.99</div>
             <div style={{ fontSize:13, color:'rgba(255,255,255,0.3)', marginBottom:'2rem', paddingBottom:'2rem', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>per USB download</div>
-            {['Everything in Free','Export any show for $2.99','Beat-synced FSEQ + emailed setup steps','FSEQ v2 validation report','Pay only when you export'].map(f=>(
+            {['Everything in Free','Export any show for $3.99','Beat-synced FSEQ + emailed setup steps','FSEQ v2 validation report','Pay only when you export'].map(f=>(
               <div key={f} style={{ display:'flex', gap:10, fontSize:14, color:'rgba(255,255,255,0.5)', marginBottom:10, alignItems:'center' }}>
                 <span style={{ color:'#00e887', fontSize:12 }}>✓</span>{f}
               </div>

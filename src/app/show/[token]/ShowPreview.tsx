@@ -103,7 +103,7 @@ export default function ShowPreview({ show, audioUrl, audioName, songLinks }: Pr
       if (res.status === 401) { router.push('/auth?mode=signup'); return; }
       const data = await res.json().catch(() => ({}));
       if (data.needs_payment) {
-        // Not a subscriber → $2.99 one-time checkout, then the webhook clones it.
+        // Not a subscriber → $3.99 one-time checkout, then the webhook clones it.
         const c = await fetch('/api/community/checkout', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ show_id: show.id, tesla_model: pickModel }),
@@ -269,7 +269,7 @@ export default function ShowPreview({ show, audioUrl, audioName, songLinks }: Pr
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem', borderRadius: 14, background: 'rgba(232,64,74,0.06)', border: '1px solid rgba(232,64,74,0.25)' }}>
             <div style={{ flex: 1, minWidth: 200 }}>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, marginBottom: 2 }}>Run this on your Tesla</div>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>We tailor the doors, windows &amp; lights to your model. Free with Creator · $2.99 otherwise.</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)' }}>We tailor the doors, windows &amp; lights to your model. Free with Creator · $3.99 otherwise.</div>
             </div>
             <select
               value={pickModel}

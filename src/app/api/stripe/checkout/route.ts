@@ -7,7 +7,7 @@ import Stripe from 'stripe'
 // (real calls are gated by the STRIPE_SECRET_KEY guards below, so the placeholder is never used).
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_unset_build_placeholder', { apiVersion: '2026-05-27.dahlia' })
 
-const EXPORT_PRICE_CENTS = 299 // $2.99
+const EXPORT_PRICE_CENTS = 399 // $3.99
 
 export async function POST(req: Request) {
   if (!process.env.STRIPE_SECRET_KEY) {
