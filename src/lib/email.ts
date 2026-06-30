@@ -70,9 +70,10 @@ export async function sendExportReceipt({
 
               <p style="font-size:13px;color:rgba(255,255,255,0.35);margin:0 0 8px;line-height:1.7;">
                 <strong style="color:rgba(255,255,255,0.5);">How to use it:</strong><br />
-                1. Copy the ZIP to a USB drive (FAT32 formatted)<br />
-                2. Place in <code style="color:#e8404a;">/LightShow/</code> folder on the drive<br />
-                3. Plug into your Tesla and tap Entertainment → Light Show
+                1. Unzip the download — you'll get a <code style="color:#e8404a;">LightShow</code> folder.<br />
+                2. Add your own copy of the song, renamed to <code style="color:#e8404a;">lightshow.wav</code> (44.1&nbsp;kHz), next to <code style="color:#e8404a;">lightshow.fseq</code>.<br />
+                3. Copy the <code style="color:#e8404a;">LightShow</code> folder to a USB drive (exFAT or FAT32).<br />
+                4. Plug into your Tesla → <strong style="color:rgba(255,255,255,0.6);">Toybox → Light Show</strong>.
               </p>
             </td>
           </tr>

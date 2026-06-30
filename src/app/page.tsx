@@ -207,7 +207,7 @@ export default function Home() {
           {[
             { n:'48', sub:'light channels' },
             { n:'5',  sub:'Tesla models' },
-            { n:'20fps', sub:'export frame rate' },
+            { n:'50fps', sub:'export frame rate' },
             { n:'$2.99', sub:'per export after first free' },
           ].map(s => (
             <div key={s.n}>
