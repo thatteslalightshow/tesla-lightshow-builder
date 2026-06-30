@@ -11,7 +11,10 @@ const SECURITY_HEADERS = {
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
   'Content-Security-Policy': [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+    // Prod only needs 'wasm-unsafe-eval' (the audio decoder's WASM) — not blanket eval. Dev/HMR
+    // still needs 'unsafe-eval' for Fast Refresh. ('unsafe-inline' stays until inline scripts are
+    // nonce'd — a separate, larger change.)
+    `script-src 'self' ${process.env.NODE_ENV === 'production' ? "'wasm-unsafe-eval'" : "'unsafe-eval'"} 'unsafe-inline'`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob:",

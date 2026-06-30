@@ -8,8 +8,8 @@ import { getAdminClient } from '@/lib/supabase'
 // is sent here, so it's a tiny request well under Vercel's body limit.
 export async function POST(req: Request) {
   const supabase = createRouteHandlerClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: { user } } = await supabase.auth.getUser()   // getUser revalidates the JWT (rejects revoked cookies)
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let body: { show_id?: string; path?: string; original_name?: string; file_size?: number; mime_type?: string }
   try { body = await req.json() }
@@ -22,9 +22,9 @@ export async function POST(req: Request) {
 
   // Verify the show belongs to this user, and that the path is in their folder
   const { data: show, error: showErr } = await admin
-    .from('shows').select('id').eq('id', showId).eq('user_id', session.user.id).single()
+    .from('shows').select('id').eq('id', showId).eq('user_id', user.id).single()
   if (showErr || !show) return NextResponse.json({ error: 'Show not found' }, { status: 404 })
-  if (!path.startsWith(`${session.user.id}/${showId}/`)) {
+  if (!path.startsWith(`${user.id}/${showId}/`)) {
     return NextResponse.json({ error: 'Invalid path' }, { status: 400 })
   }
 
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
 
   const { data, error: dbErr } = await admin
     .from('audio_files').insert({
-      user_id: session.user.id,
+      user_id: user.id,
       show_id: showId,
       original_name: originalName ?? name,
       storage_path: path,

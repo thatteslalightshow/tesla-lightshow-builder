@@ -11,8 +11,8 @@ import { rateLimitOk } from '@/lib/rate-limit'
 // PUTs to Supabase Storage, then calls /api/upload/commit to record the row.
 export async function POST(req: Request) {
   const supabase = createRouteHandlerClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: { user } } = await supabase.auth.getUser()   // getUser revalidates the JWT (rejects revoked cookies)
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let body: { show_id?: string; file_name?: string; file_size?: number }
   try { body = await req.json() }
@@ -25,11 +25,11 @@ export async function POST(req: Request) {
   if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
 
   const admin = getAdminClient()
-  if (!(await rateLimitOk(admin, session.user.id, 'upload', 10))) {
+  if (!(await rateLimitOk(admin, user.id, 'upload', 10))) {
     return NextResponse.json({ error: 'Too many uploads — please try again later.' }, { status: 429, headers: { 'Retry-After': '3600' } })
   }
   const { data: show, error: showErr } = await admin
-    .from('shows').select('id').eq('id', showId).eq('user_id', session.user.id).single()
+    .from('shows').select('id').eq('id', showId).eq('user_id', user.id).single()
   if (showErr || !show) return NextResponse.json({ error: 'Show not found' }, { status: 404 })
 
   // Remove any previous audio for this show so we don't orphan files — but NOT
@@ -49,7 +49,7 @@ export async function POST(req: Request) {
   }
 
   const safeName = sanitizeFileName(fileName)
-  const storagePath = `${session.user.id}/${showId}/${Date.now()}-${safeName}`
+  const storagePath = `${user.id}/${showId}/${Date.now()}-${safeName}`
 
   const { data, error } = await admin.storage
     .from('audio-files').createSignedUploadUrl(storagePath)

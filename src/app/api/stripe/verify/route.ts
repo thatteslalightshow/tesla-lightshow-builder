@@ -17,8 +17,8 @@ export async function GET(req: Request) {
   if (!sessionId) return NextResponse.json({ error: 'Missing session_id' }, { status: 400 })
 
   const supabase = createRouteHandlerClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: { user } } = await supabase.auth.getUser()   // getUser revalidates the JWT (rejects revoked cookies)
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let checkoutSession: Stripe.Checkout.Session
   try {
@@ -31,7 +31,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Payment not completed', status: checkoutSession.payment_status }, { status: 402 })
   }
 
-  if (checkoutSession.metadata?.user_id !== session.user.id) {
+  if (checkoutSession.metadata?.user_id !== user.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
 

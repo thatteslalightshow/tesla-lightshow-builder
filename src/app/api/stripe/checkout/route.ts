@@ -15,8 +15,8 @@ export async function POST(req: Request) {
   }
 
   const supabase = createRouteHandlerClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: { user } } = await supabase.auth.getUser()   // getUser revalidates the JWT (rejects revoked cookies)
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let body: { show_id: string }
   try { body = await req.json() } catch {
@@ -41,9 +41,9 @@ export async function POST(req: Request) {
     }],
     metadata: {
       show_id: body.show_id,
-      user_id: session.user.id,
+      user_id: user.id,
     },
-    customer_email: session.user.email,
+    customer_email: user.email,
     success_url: `${origin}/builder?id=${body.show_id}&checkout_session={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/builder?id=${body.show_id}&checkout_cancelled=1`,
     allow_promotion_codes: true,

@@ -685,6 +685,7 @@ function BuilderInner() {
   // export tries to export again. payBusy = the option currently redirecting.
   const [payPromptOpen, setPayPromptOpen] = useState(false);
   const [libraryCapOpen, setLibraryCapOpen] = useState(false);
+  const [closureAckOpen, setClosureAckOpen] = useState(false);   // first-run "your car will move" confirmation
   const [payBusy, setPayBusy] = useState<'' | 'once' | 'monthly' | 'yearly'>('');
   const [payErr, setPayErr] = useState('');
 
@@ -1172,6 +1173,12 @@ function BuilderInner() {
 
   async function exportZip() {
     if (!authed) { await requireAuth('export'); return; }   // no account yet → sign up, then restore + continue
+    // First closure-enabled export → make sure they know the car will physically move (once per browser).
+    const showMovesCar = autoClosures || Object.keys(closureBlocks).length > 0;
+    if (showMovesCar && typeof window !== 'undefined' && !localStorage.getItem('ttls_closure_ack')) {
+      setClosureAckOpen(true);
+      return;
+    }
     setExporting(true);
     setCheckoutMsg('');
 
@@ -1801,6 +1808,33 @@ function BuilderInner() {
             )}
           </div>
           <style>{`@keyframes tlsIndeterminate { 0% { left: -40%; } 100% { left: 100%; } }`}</style>
+        </div>
+      )}
+
+      {/* First closure export → confirm the car will physically move (once per browser) */}
+      {closureAckOpen && (
+        <div
+          onClick={() => setClosureAckOpen(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 210, background: 'rgba(0,0,0,0.66)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 440, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '1.5rem', boxShadow: '0 12px 50px rgba(0,0,0,0.6)' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, marginBottom: 8 }}>Heads up — this show moves your car</div>
+            <div style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.65, marginBottom: 10 }}>
+              You&apos;ve got <strong style={{ color: 'var(--text)' }}>Auto-choreograph closures</strong> on, so during the show your Tesla will physically open and close its doors, windows, mirrors{model === 'modelX' ? ', and falcon-wing doors' : ''}. Park somewhere with clearance all around — especially overhead and to the sides — and keep people and pets clear. Your Tesla will also show its own confirmation before the show runs.
+            </div>
+            <button
+              onClick={() => { try { localStorage.setItem('ttls_closure_ack', '1'); } catch { /* private mode */ } setClosureAckOpen(false); exportZip(); }}
+              style={{ width: '100%', padding: '13px 14px', marginTop: 8, marginBottom: 10, borderRadius: 10, background: 'var(--red)', border: '1px solid var(--red)', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer' }}
+            >
+              I understand — export with closures
+            </button>
+            <button
+              onClick={() => { try { localStorage.setItem('ttls_closure_ack', '1'); } catch { /* private mode */ } setAutoClosures(false); setClosureBlocks({}); setClosureAckOpen(false); setSaveMsg('Switched to lights-only — tap Export when ready.'); setTimeout(() => setSaveMsg(''), 6000); }}
+              style={{ width: '100%', padding: '11px 14px', borderRadius: 10, background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}
+            >
+              Make it lights-only instead
+            </button>
+          </div>
         </div>
       )}
 

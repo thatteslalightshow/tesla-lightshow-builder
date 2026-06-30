@@ -18,8 +18,8 @@ function recommendIntensity(bpm: number): number {
 
 export async function POST(req: Request) {
   const supabase = createRouteHandlerClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: { user } } = await supabase.auth.getUser()   // getUser revalidates the JWT (rejects revoked cookies)
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let body: { show_id: string; bpm?: number }
   try {
@@ -30,14 +30,14 @@ export async function POST(req: Request) {
   if (!body.show_id) return NextResponse.json({ error: 'Missing show_id' }, { status: 400 })
 
   const admin = getAdminClient()
-  if (!(await rateLimitOk(admin, session.user.id, 'generate', 20))) {
+  if (!(await rateLimitOk(admin, user.id, 'generate', 20))) {
     return NextResponse.json({ error: 'Too many requests — please try again later.' }, { status: 429, headers: { 'Retry-After': '3600' } })
   }
   const { data: show, error: showErr } = await admin
     .from('shows')
     .select('*')
     .eq('id', body.show_id)
-    .eq('user_id', session.user.id)
+    .eq('user_id', user.id)
     .single()
   if (showErr || !show) return NextResponse.json({ error: 'Show not found' }, { status: 404 })
 

@@ -30,11 +30,12 @@ export async function getAuthedUser(req: Request): Promise<AuthedUser | null> {
     }
   }
 
-  // 2. Cookie session (web)
+  // 2. Cookie session (web) — getUser() REVALIDATES the JWT with the auth server, so a revoked or
+  // tampered cookie is rejected (getSession() only trusts the cookie's local signature).
   const supabase = createRouteHandlerClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (session) {
-    return { id: session.user.id, email: session.user.email ?? null }
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user) {
+    return { id: user.id, email: user.email ?? null }
   }
 
   return null
