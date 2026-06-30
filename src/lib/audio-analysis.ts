@@ -1,6 +1,7 @@
 import { CLOSURE_CMD, CLOSURE_LIMITS, CLOSURE_DURATIONS, DANCE_SUPPORTED, MODEL_CLOSURES, INTERIOR_RGB } from './tesla-channels'
 import type { ModelDefinition, LightZone, ClosureFamily } from './tesla-channels'
 import type { TeslaModel } from './supabase'
+import { FFT, hann } from './fft'
 
 export interface AudioAnalysisResult {
   frames: Uint8Array[]
@@ -71,11 +72,6 @@ function normShared(series: number[][], p = 0.95): number[][] {
   const cap = all[Math.floor(all.length * p)] || 1
   return series.map(s => s.map(v => Math.min(v / cap, 1)))
 }
-function flux(norm: number[]): number[] {
-  const out = new Array(norm.length).fill(0)
-  for (let f = 1; f < norm.length; f++) out[f] = Math.max(0, norm[f] - norm[f - 1])
-  return out
-}
 
 type Side = 'L' | 'R' | 'C'
 function sideOf(z: LightZone): Side { return z.nz < -0.12 ? 'L' : z.nz > 0.12 ? 'R' : 'C' }
@@ -86,6 +82,69 @@ function bandOf(type: string): Band {
     case 'drl': return 'mid'
     case 'turn_front': case 'turn_rear': case 'marker': return 'high'
     default: return 'total'
+  }
+}
+
+// FFT-based per-band SPECTRAL-FLUX onset detection (SuperFlux-style). RMS loudness can't see
+// fast RE-ARTICULATED notes (e.g. tremolo-picked guitar) because the level barely moves — but the
+// SPECTRUM changes on every new note. We STFT a mono, down-sampled mix and sum the positive
+// frame-to-frame magnitude change per band, with a frequency max-filter so vibrato/tremolo doesn't
+// smear it. Returns onset strength per band, max-pooled onto the engine's FPS grid + normalized 0-1.
+// This replaces the old time-domain RMS flux as the onset source for lights/BPM/closures/flourishes.
+function spectralOnsets(mono: Float32Array, sr: number, outFrames: number, FPS: number): Record<Band, number[]> {
+  const dec = Math.max(1, Math.round(sr / 22050))          // work at ~22kHz (covers guitar/cymbals) for speed
+  let m = mono, fs = sr
+  if (dec > 1) {                                            // box-average decimate (light anti-alias)
+    const len = Math.floor(mono.length / dec)
+    const d = new Float32Array(len)
+    for (let i = 0; i < len; i++) { let s = 0; for (let k = 0; k < dec; k++) s += mono[i * dec + k]; d[i] = s / dec }
+    m = d; fs = sr / dec
+  }
+  const N = 1024, H = 256, half = N / 2
+  const fft = new FFT(N), win = hann(N)
+  const re = new Float32Array(N), im = new Float32Array(N)
+  const binOf = (hz: number) => Math.max(0, Math.min(half, Math.round(hz * N / fs)))
+  const ranges: [Band, number, number][] = [
+    ['bass', binOf(20), binOf(160)],
+    ['mid', binOf(300), binOf(1400)],
+    ['presence', binOf(1400), binOf(5000)],
+    ['high', binOf(5000), half],
+  ]
+  const nf = Math.max(1, Math.floor((m.length - N) / H) + 1)
+  const raw: Record<Band, number[]> = { bass: [], mid: [], high: [], presence: [], total: [] }
+  const times: number[] = []
+  let prev = new Float32Array(half + 1)
+  for (let t = 0; t < nf; t++) {
+    const off = t * H
+    for (let i = 0; i < N; i++) { re[i] = (m[off + i] || 0) * win[i]; im[i] = 0 }
+    fft.transform(re, im)
+    const mag = new Float32Array(half + 1)
+    for (let k = 0; k <= half; k++) mag[k] = Math.sqrt(re[k] * re[k] + im[k] * im[k])
+    let broad = 0
+    const acc: Record<string, number> = { bass: 0, mid: 0, presence: 0, high: 0 }
+    for (const [name, lo, hi] of ranges) {
+      let s = 0
+      for (let k = lo; k < hi; k++) {
+        const ref = Math.max(prev[k], prev[k - 1] || 0, prev[k + 1] || 0)   // freq max-filter (vibrato/tremolo-robust)
+        const d = mag[k] - ref
+        if (d > 0) { s += d; broad += d }
+      }
+      acc[name] = s
+    }
+    raw.bass.push(acc.bass); raw.mid.push(acc.mid); raw.presence.push(acc.presence); raw.high.push(acc.high); raw.total.push(broad)
+    times.push(off / fs)
+    prev = mag
+  }
+  const toGrid = (arr: number[]) => {                       // STFT rate → engine FPS grid (max-pool)
+    const out = new Array<number>(outFrames).fill(0)
+    for (let t = 0; t < arr.length; t++) { const f = Math.min(outFrames - 1, Math.floor(times[t] * FPS)); if (arr[t] > out[f]) out[f] = arr[t] }
+    return out
+  }
+  const norm01 = (a: number[]) => { const s = [...a].sort((x, y) => x - y); const p = s[Math.floor(s.length * 0.97)] || 1; return a.map(v => Math.min(1, v / (p || 1))) }
+  return {
+    bass: norm01(toGrid(raw.bass)), mid: norm01(toGrid(raw.mid)),
+    high: norm01(toGrid(raw.high)), presence: norm01(toGrid(raw.presence)),
+    total: norm01(toGrid(raw.total)),
   }
 }
 
@@ -459,34 +518,27 @@ function applyLightEnvelope(frames: Uint8Array[], zones: LightZone[], bpm: numbe
 // instrument. Gated to those moments (rare = special) and clocked to the presence onsets so it
 // "matches the instrument playing." `strength` = the vibe's flourish amount.
 function applyFlourish(
-  frames: Uint8Array[], density: number[], presenceEnv: number[], bassEnv: number[],
-  presenceOnsets: number[], bpm: number, FPS: number, zones: LightZone[], strength: number,
+  frames: Uint8Array[], density: number[], presenceEnv: number[],
+  presenceOnsets: number[], FPS: number, zones: LightZone[], strength: number,
 ): void {
   if (strength <= 0 || frames.length === 0) return
-  void bpm; void FPS
   const lights = zones.filter(z => z.type !== 'closure' && z.type !== 'highbeam' && z.type !== 'headlight')
   if (lights.length < 2) return
   // Ring order: sort fixtures by their angle around the car so advancing the index rotates a sweep.
   const ring = [...lights].sort((a, b) => Math.atan2(a.nz, a.nx) - Math.atan2(b.nz, b.nx))
   const ringIdx = new Map(ring.map((z, i) => [z.channel, i] as const))
   const R = ring.length
-  // step[f] = how many presence onsets have fired by frame f (the "note counter" the moves clock to).
+  // step[f] = how many picked-note (presence) onsets have fired by frame f — the move clock.
   const step = new Array<number>(frames.length).fill(0)
   { let s = 0, oi = 0
     for (let f = 0; f < frames.length; f++) { while (oi < presenceOnsets.length && presenceOnsets[oi] <= f) { s++; oi++ } step[f] = s } }
   for (let f = 0; f < frames.length; f++) {
-    const moment = Math.min(1, density[f] * presenceEnv[f] * 2.4)       // a peak AND the lead is present
+    // Fire when the song peaks OR the lead alone is busy (e.g. a drum-less fast-guitar intro).
+    const moment = Math.min(1, Math.max(density[f] * presenceEnv[f] * 2.4, presenceEnv[f] * 1.25))
     if (moment < 0.4) continue
     const s = strength * moment
-    if (presenceEnv[f] >= bassEnv[f] * 0.9) {                           // lead-driven → rotate a 360° arc
-      const head = step[f] % R
-      for (const z of lights) {
-        const i = ringIdx.get(z.channel)!
-        let d = Math.abs(i - head); d = Math.min(d, R - d)             // circular distance around the ring
-        const near = Math.max(0, 1 - d / Math.max(1, R * 0.28))         // a lit arc that rotates around the car
-        if (near > 0) frames[f][z.channel] = Math.min(255, frames[f][z.channel] + Math.round(near * s * 255))
-      }
-    } else {                                                            // drum-driven → symmetric ping-pong
+    const rate = step[f] - step[Math.max(0, f - FPS)]                   // picked notes in the last ~1s
+    if (rate >= 6) {                                                    // FAST picking → quick symmetric ping-pong
       const side = step[f] % 2 === 0 ? -1 : 1
       for (const z of lights) {
         if (Math.abs(z.nz) < 0.1) continue
@@ -494,6 +546,14 @@ function applyFlourish(
         frames[f][z.channel] = onSide
           ? Math.min(255, frames[f][z.channel] + Math.round(s * 200))
           : Math.round(frames[f][z.channel] * (1 - s * 0.6))
+      }
+    } else {                                                           // melodic/moderate → rotate a 360° arc
+      const head = step[f] % R
+      for (const z of lights) {
+        const i = ringIdx.get(z.channel)!
+        let d = Math.abs(i - head); d = Math.min(d, R - d)             // circular distance around the ring
+        const near = Math.max(0, 1 - d / Math.max(1, R * 0.28))         // a lit arc that rotates around the car
+        if (near > 0) frames[f][z.channel] = Math.min(255, frames[f][z.channel] + Math.round(near * s * 255))
       }
     }
   }
@@ -641,7 +701,12 @@ export function analyzePCM(
     presence: { L: pN_L, R: pN_R, C: pN_C },
     total: { L: totalC, R: totalC, C: totalC },
   }
-  const O: Record<Band, number[]> = { bass: flux(bN_C), mid: flux(mN_C), high: flux(hN_C), presence: flux(pN_C), total: flux(totalC) }
+  // Onset detection via FFT spectral flux (sees fast re-picked notes that RMS flux can't) — the
+  // single onset source for every light hit, the BPM, the closure landmarks, and the flourishes.
+  const monoLen = Math.min(left.length, right.length)
+  const mono = new Float32Array(monoLen)
+  for (let i = 0; i < monoLen; i++) mono[i] = (left[i] + right[i]) * 0.5
+  const O: Record<Band, number[]> = spectralOnsets(mono, sampleRate, totalFrames, FPS)
 
   // Density envelope (how busy the show should be right now).
   const density: number[] = new Array(totalFrames).fill(0)
@@ -734,14 +799,14 @@ export function analyzePCM(
   applyExpression(frames, density, bpm, FPS, zones, P.expression, lightAnchor)
   // Phase 2c: signature moves at the guitar/drum-solo peaks — clocked to the picked-note onsets.
   const presenceEnv = new Array<number>(totalFrames).fill(0)
-  { let acc = 0; for (let f = 0; f < totalFrames; f++) { acc = acc * 0.90 + pN_C[f] * 0.10; presenceEnv[f] = Math.min(1, acc * 1.5) } }
+  { let acc = 0; for (let f = 0; f < totalFrames; f++) { acc = acc * 0.90 + O.presence[f] * 0.10; presenceEnv[f] = Math.min(1, acc * 1.8) } }
   const presenceOnsets: number[] = []
-  { const Op = O.presence, minGap = Math.max(3, Math.floor(beatFrames * 0.18)); let last = -minGap
+  { const Op = O.presence, minGap = 3; let last = -minGap   // ~60ms gap → tracks up to ~16 picked notes/sec
     for (let f = 2; f < totalFrames - 2; f++) {
       let s = 0, n = 0; for (let k = f - 6; k <= f + 6; k++) if (k >= 0 && k < totalFrames) { s += Op[k]; n++ }
-      if (Op[f] > Op[f - 1] && Op[f] >= Op[f + 1] && Op[f] > (s / n) * 1.6 + 0.02 && f - last >= minGap) { presenceOnsets.push(f); last = f }
+      if (Op[f] > Op[f - 1] && Op[f] >= Op[f + 1] && Op[f] > (s / n) * 1.5 + 0.02 && f - last >= minGap) { presenceOnsets.push(f); last = f }
     } }
-  applyFlourish(frames, density, presenceEnv, bN_C, presenceOnsets, bpm, FPS, zones, P.flourish)
+  applyFlourish(frames, density, presenceEnv, presenceOnsets, FPS, zones, P.flourish)
 
   // Phase 3: auto-choreograph closures to the song structure (opt-in per show).
   // Feed it the SAME musical landmarks the lights use: the onset hits + beat anchor.
