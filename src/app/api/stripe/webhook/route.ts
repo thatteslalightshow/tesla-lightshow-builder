@@ -4,7 +4,9 @@ import { getAdminClient, type TeslaModel } from '@/lib/supabase'
 import { cloneCommunityShow } from '@/lib/community'
 import { sendExportReceipt } from '@/lib/email'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-05-27.dahlia' })
+// Fallback keeps module load from throwing during `next build` when the key isn't in the build env
+// (real calls are gated by the STRIPE_SECRET_KEY guards below, so the placeholder is never used).
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_unset_build_placeholder', { apiVersion: '2026-05-27.dahlia' })
 
 const MODEL_LABELS: Record<string, string> = {
   model3: 'Model 3', modelY: 'Model Y', modelS: 'Model S',

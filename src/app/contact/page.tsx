@@ -19,6 +19,9 @@ export default function ContactPage() {
       <h2>Billing &amp; subscriptions</h2>
       <p>For payments, refunds, or anything about your Creator plan, email <a href="mailto:billing@thatteslalightshow.com"><strong>billing@thatteslalightshow.com</strong></a>. You can also manage or cancel your plan anytime from your <Link href="/dashboard">dashboard</Link>.</p>
 
+      <h2>Legal &amp; copyright</h2>
+      <p>For legal, copyright, or content-takedown matters, email <a href="mailto:legal@thatteslalightshow.com"><strong>legal@thatteslalightshow.com</strong></a>.</p>
+
       <h2>Social</h2>
       <p>Follow along — or just say hi — on Instagram and TikTok at <strong>@ThatTeslaLightshow</strong>. We love featuring community shows, so tag us when you run yours.</p>
 

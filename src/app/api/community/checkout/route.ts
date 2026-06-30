@@ -4,7 +4,9 @@ import { getAuthedUser } from '@/lib/auth'
 import { getAdminClient, type TeslaModel } from '@/lib/supabase'
 import { MODELS } from '@/lib/tesla-channels'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-05-27.dahlia' })
+// Fallback keeps module load from throwing during `next build` when the key isn't in the build env
+// (real calls are gated by the STRIPE_SECRET_KEY guards below, so the placeholder is never used).
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_unset_build_placeholder', { apiVersion: '2026-05-27.dahlia' })
 const PRICE_CENTS = 299 // $2.99
 
 // Stripe checkout to buy a community show. On success the webhook clones it into
