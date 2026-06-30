@@ -95,9 +95,11 @@ export default function PricingPage() {
 
       {/* Nav */}
       <header style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2rem', height: 60, background: 'rgba(10,10,15,0.9)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)' }}>
-        <BrandLogo boxSize={30} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <BrandLogo boxSize={30} />
+          <SiteMenu align="left" />
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <SiteMenu />
           <Link href="/auth" className="btn btn-ghost btn-sm">Sign in</Link>
           <Link href="/auth?mode=signup" className="btn btn-primary btn-sm">Start free →</Link>
         </div>

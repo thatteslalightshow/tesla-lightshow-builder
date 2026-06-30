@@ -102,11 +102,11 @@ export default async function GalleryPage() {
         background: 'rgba(10,10,15,0.9)', backdropFilter: 'blur(12px)',
         position: 'sticky', top: 0, zIndex: 10,
       }}>
-        <BrandLogo />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <SiteMenu />
-          <Link href="/builder" className="btn btn-primary btn-sm">+ New Show</Link>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <BrandLogo />
+          <SiteMenu align="left" />
         </div>
+        <Link href="/builder" className="btn btn-primary btn-sm">+ New Show</Link>
       </nav>
 
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: '48px 24px' }}>

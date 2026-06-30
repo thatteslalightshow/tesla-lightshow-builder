@@ -49,14 +49,6 @@ export default function SiteMenu({ align = 'right' }: { align?: 'left' | 'right'
       </button>
       {open && (
         <div role="menu" style={{ position: 'absolute', top: 'calc(100% + 8px)', [align]: 0, minWidth: 188, padding: 6, background: 'rgba(15,15,20,0.97)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, boxShadow: '0 12px 40px rgba(0,0,0,0.5)', zIndex: 100 } as React.CSSProperties}>
-          {/* Account — first so existing customers can sign in (esp. on mobile, where the nav hides it) */}
-          <Link href="/auth" onClick={() => setOpen(false)} role="menuitem"
-            style={{ display: 'block', padding: '9px 12px', fontSize: 13.5, fontWeight: 600, color: '#fff', borderRadius: 8, transition: 'background .12s' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(232,64,74,0.2)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}>
-            Sign in
-          </Link>
-          <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '5px 8px' }} />
           {PRIMARY.map(l => item(l, false))}
           <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '5px 8px' }} />
           {SECONDARY.map(l => item(l, true))}

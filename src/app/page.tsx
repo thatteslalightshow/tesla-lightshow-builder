@@ -144,12 +144,14 @@ export default function Home() {
 
       {/* ── NAV ──────────────────────────────────────────────────────────── */}
       <nav style={{ position:'fixed', top:0, left:0, right:0, zIndex:50, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 2.5rem', height:56, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(20px)', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
-        <BrandLogo boxSize={30} />
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <BrandLogo boxSize={30} />
+          <SiteMenu align="left" />
+        </div>
         <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-          <SiteMenu />
           <Link href="/auth" style={{ padding:'6px 14px', fontSize:13, color:'rgba(255,255,255,0.55)', transition:'color .15s' }}
             onMouseEnter={e=>(e.currentTarget.style.color='#fff')} onMouseLeave={e=>(e.currentTarget.style.color='rgba(255,255,255,0.55)')}>Sign in</Link>
-          <Link href="/auth?mode=signup" style={{ marginLeft:8, padding:'7px 20px', borderRadius:6, background:'#e8404a', color:'#fff', fontSize:13, fontWeight:600, transition:'background .15s', letterSpacing:'-.2px' }}
+          <Link href="/auth?mode=signup" style={{ marginLeft:8, padding:'7px 18px', borderRadius:6, background:'#e8404a', color:'#fff', fontSize:13, fontWeight:600, transition:'background .15s', letterSpacing:'-.2px' }}
             onMouseEnter={e=>(e.currentTarget.style.background='#c73038')} onMouseLeave={e=>(e.currentTarget.style.background='#e8404a')}>
             Start free
           </Link>
@@ -430,9 +432,8 @@ export default function Home() {
 
       <style>{`
         @media (max-width: 768px) {
-          /* Nav: tighten padding, hide secondary links */
-          nav { padding: 0 1.25rem !important; }
-          nav a[href="/gallery"], nav a[href="/pricing"], nav a[href="/auth"]:not([href*="signup"]) { display: none; }
+          /* Nav: tighten padding (Sign in stays visible next to Start free) */
+          nav { padding: 0 1rem !important; }
 
           /* Hero: reduce top padding so content isn't buried under fixed nav */
           section:first-of-type { padding-top: 5rem !important; }
