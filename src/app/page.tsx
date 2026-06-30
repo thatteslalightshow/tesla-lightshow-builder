@@ -155,7 +155,7 @@ export default function Home() {
         <div style={{ display:'flex', alignItems:'center', gap:4 }}>
           <Link href="/auth" style={{ padding:'6px 14px', fontSize:13, color:'rgba(255,255,255,0.55)', transition:'color .15s' }}
             onMouseEnter={e=>(e.currentTarget.style.color='#fff')} onMouseLeave={e=>(e.currentTarget.style.color='rgba(255,255,255,0.55)')}>Sign in</Link>
-          <Link href="/auth?mode=signup" style={{ marginLeft:8, padding:'7px 18px', borderRadius:6, background:'#e8404a', color:'#fff', fontSize:13, fontWeight:600, transition:'background .15s', letterSpacing:'-.2px' }}
+          <Link href="/builder" style={{ marginLeft:8, padding:'7px 18px', borderRadius:6, background:'#e8404a', color:'#fff', fontSize:13, fontWeight:600, transition:'background .15s', letterSpacing:'-.2px' }}
             onMouseEnter={e=>(e.currentTarget.style.background='#c73038')} onMouseLeave={e=>(e.currentTarget.style.background='#e8404a')}>
             Start free
           </Link>
@@ -189,7 +189,7 @@ export default function Home() {
           </p>
 
           <div style={{ display:'flex', gap:12, justifyContent:'center', flexWrap:'wrap', marginBottom:'5rem' }}>
-            <Link href="/auth?mode=signup" style={{ padding:'14px 32px', borderRadius:8, background:'#e8404a', color:'#fff', fontSize:15, fontWeight:600, letterSpacing:'-.2px', transition:'all .2s', boxShadow:'0 0 40px rgba(232,64,74,0.3)' }}
+            <Link href="/builder" style={{ padding:'14px 32px', borderRadius:8, background:'#e8404a', color:'#fff', fontSize:15, fontWeight:600, letterSpacing:'-.2px', transition:'all .2s', boxShadow:'0 0 40px rgba(232,64,74,0.3)' }}
               onMouseEnter={e=>{ e.currentTarget.style.background='#c73038'; e.currentTarget.style.boxShadow='0 0 60px rgba(232,64,74,0.5)'; }}
               onMouseLeave={e=>{ e.currentTarget.style.background='#e8404a'; e.currentTarget.style.boxShadow='0 0 40px rgba(232,64,74,0.3)'; }}>
               Build your first show →
@@ -297,7 +297,7 @@ export default function Home() {
                 <span style={{ color:'#00e887', fontSize:12 }}>✓</span>{f}
               </div>
             ))}
-            <Link href="/auth?mode=signup" style={{ marginTop:'2rem', display:'flex', alignItems:'center', justifyContent:'center', padding:'12px', borderRadius:8, border:'1px solid rgba(255,255,255,0.12)', color:'rgba(255,255,255,0.6)', fontSize:14, transition:'all .15s' }}
+            <Link href="/builder" style={{ marginTop:'2rem', display:'flex', alignItems:'center', justifyContent:'center', padding:'12px', borderRadius:8, border:'1px solid rgba(255,255,255,0.12)', color:'rgba(255,255,255,0.6)', fontSize:14, transition:'all .15s' }}
               onMouseEnter={e=>{ e.currentTarget.style.borderColor='rgba(255,255,255,0.3)'; e.currentTarget.style.color='#fff'; }}
               onMouseLeave={e=>{ e.currentTarget.style.borderColor='rgba(255,255,255,0.12)'; e.currentTarget.style.color='rgba(255,255,255,0.6)'; }}>
               Get started free
@@ -313,7 +313,7 @@ export default function Home() {
                 <span style={{ color:'#00e887', fontSize:12 }}>✓</span>{f}
               </div>
             ))}
-            <Link href="/auth?mode=signup" style={{ marginTop:'2rem', display:'flex', alignItems:'center', justifyContent:'center', padding:'12px', borderRadius:8, border:'1px solid rgba(255,255,255,0.12)', color:'rgba(255,255,255,0.6)', fontSize:14, transition:'all .15s' }}
+            <Link href="/builder" style={{ marginTop:'2rem', display:'flex', alignItems:'center', justifyContent:'center', padding:'12px', borderRadius:8, border:'1px solid rgba(255,255,255,0.12)', color:'rgba(255,255,255,0.6)', fontSize:14, transition:'all .15s' }}
               onMouseEnter={e=>{ e.currentTarget.style.borderColor='rgba(255,255,255,0.3)'; e.currentTarget.style.color='#fff'; }}
               onMouseLeave={e=>{ e.currentTarget.style.borderColor='rgba(255,255,255,0.12)'; e.currentTarget.style.color='rgba(255,255,255,0.6)'; }}>
               Start building →
@@ -357,7 +357,7 @@ export default function Home() {
           <p style={{ fontSize:16, color:'rgba(255,255,255,0.35)', marginBottom:'2.5rem', lineHeight:1.7 }}>
             Build your first custom light show free.<br />No experience needed — just your music and a USB drive.
           </p>
-          <Link href="/auth?mode=signup" style={{ display:'inline-flex', alignItems:'center', padding:'16px 40px', borderRadius:8, background:'#e8404a', color:'#fff', fontSize:16, fontWeight:600, letterSpacing:'-.2px', transition:'all .2s', boxShadow:'0 0 60px rgba(232,64,74,0.3)' }}
+          <Link href="/builder" style={{ display:'inline-flex', alignItems:'center', padding:'16px 40px', borderRadius:8, background:'#e8404a', color:'#fff', fontSize:16, fontWeight:600, letterSpacing:'-.2px', transition:'all .2s', boxShadow:'0 0 60px rgba(232,64,74,0.3)' }}
             onMouseEnter={e=>{ e.currentTarget.style.background='#c73038'; e.currentTarget.style.boxShadow='0 0 80px rgba(232,64,74,0.5)'; }}
             onMouseLeave={e=>{ e.currentTarget.style.background='#e8404a'; e.currentTarget.style.boxShadow='0 0 60px rgba(232,64,74,0.3)'; }}>
             Build your first show — free →

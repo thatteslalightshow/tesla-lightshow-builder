@@ -19,8 +19,11 @@ function AuthForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(searchParams.get('error') ?? '');
   const [message, setMessage] = useState('');
+  // Where to land after auth — defaults to the dashboard, but the builder passes ?next=/builder so a
+  // visitor who built a show anonymously returns right to it (with their work restored).
+  const next = searchParams.get('next') || '/dashboard';
 
-  const callbackUrl = () => `${window.location.origin}/auth/callback`;
+  const callbackUrl = () => `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,12 +36,12 @@ function AuthForm() {
           email, password, options: { emailRedirectTo: callbackUrl() },
         });
         if (error) setError(error.message);
-        else if (data.session) router.push('/dashboard');
+        else if (data.session) router.push(next);
         else setMessage('Check your email for a confirmation link.');
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) setError(error.message);
-        else router.push('/dashboard');
+        else router.push(next);
       }
     } finally {
       setLoading(false);

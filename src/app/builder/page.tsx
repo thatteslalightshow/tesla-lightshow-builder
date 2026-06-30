@@ -28,6 +28,7 @@ import { analyzeAudioToFrames } from '@/lib/audio-analysis';
 import { validateFseq, type FseqValidation } from '@/lib/fseq';
 import { parseId3, titleFromFilename } from '@/lib/id3';
 import { audioBufferToWav, resampleTo44100 } from '@/lib/wav';
+import { saveDraft, loadDraft, clearDraft } from '@/lib/builder-draft';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TESLA_MODELS: { value: TeslaModel; label: string }[] = [
@@ -725,11 +726,17 @@ function BuilderInner() {
   // ── Auth check ────────────────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) { router.replace('/auth'); return; }
+      if (!session) {
+        // No account yet — building + 3D-previewing is allowed; sign-up moves to Save/Export.
+        // Opening an existing SAVED show still requires signing in (it's someone's private show).
+        if (editId) router.replace(`/auth?next=${encodeURIComponent('/builder?id=' + editId)}`);
+        return;
+      }
       setAuthed(true);
       setUserId(session.user.id);
       if (editId) loadShow(editId);
       else if (remixToken) loadRemix(remixToken);
+      else await restoreDraftIfAny();   // returning from sign-up → bring their anonymous work back
 
       // Load profile (admin flag + export count + subscription)
       const [{ data: profile }, { count }, { data: sub }] = await Promise.all([
@@ -763,8 +770,9 @@ function BuilderInner() {
         }
       }
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT' || !session) router.replace('/auth');
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      // Don't bounce anonymous builders to auth — only a signed-OUT user on a saved show needs it.
+      if (event === 'SIGNED_OUT' && editId) router.replace('/auth');
     });
     return () => subscription.unsubscribe();
   }, [router, editId, remixToken, checkoutSession]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1035,6 +1043,7 @@ function BuilderInner() {
   }
 
   async function save(): Promise<string | null> {
+    if (!authed) { await requireAuth('save'); return null; }   // no account yet → sign up, then restore + continue
     setSaving(true); setSaveMsg('');
     const editData = (Object.keys(customBlocks).length || Object.keys(closureBlocks).length || autoClosures || mixPreset !== 'balanced')
       ? {
@@ -1079,6 +1088,62 @@ function BuilderInner() {
     return showId;
   }
 
+  // ── No-account flow: build + preview freely, sign up only at Save/Export ─────
+  // Stash the FULL builder state (settings + the in-memory song) in IndexedDB, then send them to
+  // sign up; on return restoreDraftIfAny() rebuilds everything so nothing is lost.
+  async function requireAuth(pending: 'save' | 'export') {
+    const customBlocksSer = Object.fromEntries(Object.entries(customBlocks).map(([ch, set]) => [ch, [...set]]));
+    const settings = { name, model, style, intensity, bpm, isPublic, songTitle, songArtist, mixPreset, autoClosures, extraModels, customBlocks: customBlocksSer, closureBlocks };
+    const audio = audioFile ? { blob: audioFile as Blob, name: audioFile.name, type: audioFile.type } : null;
+    await saveDraft({ settings, audio, pending, savedAt: Date.now() });
+    router.push(`/auth?mode=signup&next=${encodeURIComponent('/builder')}`);
+  }
+
+  // Re-decode + re-analyze a restored song (skips ID3 re-read + vibe auto-detect — we kept those).
+  async function restoreAudio(file: File, preset: string, auto: boolean, mdl: TeslaModel) {
+    setAudioFile(file); setAudioUploaded(false);
+    try {
+      const raw = await file.arrayBuffer();
+      rawAudioRef.current = raw.slice(0);
+      const ctx = new AudioContext();
+      const ab = await ctx.decodeAudioData(raw.slice(0));
+      audioDurationRef.current = ab.duration;
+      await ctx.close();
+      setAnalyzing(true);
+      try { wavBlobRef.current = audioBufferToWav(await resampleTo44100(ab)); } catch { wavBlobRef.current = null; }
+      decodedRef.current = ab;
+      const result = await analyzeAudioToFrames(ab, MODELS[mdl], { autoClosures: auto, model: mdl, preset });
+      setAudioFrames(result.frames); setAudioTriggers(result.triggerFrames); setWaveformData(result.waveformData);
+    } catch { /* ignore — they can re-add the song */ }
+    setAnalyzing(false);
+  }
+
+  async function restoreDraftIfAny() {
+    const draft = await loadDraft();
+    if (!draft) return;
+    await clearDraft();
+    const s = draft.settings as Record<string, unknown>;
+    if (typeof s.name === 'string') setName(s.name);
+    if (typeof s.model === 'string') setModel(s.model as TeslaModel);
+    if (typeof s.style === 'string') setStyle(s.style as ShowStyle);
+    if (typeof s.intensity === 'number') setIntensity(s.intensity);
+    if (typeof s.bpm === 'number') setBpm(s.bpm);
+    setIsPublic(!!s.isPublic);
+    if (typeof s.songTitle === 'string') setSongTitle(s.songTitle);
+    if (typeof s.songArtist === 'string') setSongArtist(s.songArtist);
+    if (typeof s.mixPreset === 'string') { setMixPreset(s.mixPreset); vibeUserSet.current = true; }
+    setAutoClosures(!!s.autoClosures);
+    setExtraModels(Array.isArray(s.extraModels) ? s.extraModels as TeslaModel[] : []);
+    setCustomBlocks(s.customBlocks ? Object.fromEntries(Object.entries(s.customBlocks as Record<string, number[]>).map(([ch, arr]) => [Number(ch), new Set(arr)])) : {});
+    setClosureBlocks((s.closureBlocks as ClosureBlocks) ?? {});
+    if (draft.audio) {
+      const file = new File([draft.audio.blob], draft.audio.name, { type: draft.audio.type });
+      restoreAudio(file, (s.mixPreset as string) ?? 'balanced', !!s.autoClosures, (s.model as TeslaModel) ?? 'model3');
+    }
+    setSaveMsg('Welcome back — your show is right where you left it. Hit Export to finish. ✨');
+    setTimeout(() => setSaveMsg(''), 9000);
+  }
+
   // ── Checkout handlers for the pay/subscribe choice prompt ─────────────────
   // All three routes are CORS-safe (same-origin) and surface their real error.
   async function checkoutPerExport() {
@@ -1106,6 +1171,7 @@ function BuilderInner() {
   }
 
   async function exportZip() {
+    if (!authed) { await requireAuth('export'); return; }   // no account yet → sign up, then restore + continue
     setExporting(true);
     setCheckoutMsg('');
 
