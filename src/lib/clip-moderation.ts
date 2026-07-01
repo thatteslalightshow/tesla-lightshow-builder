@@ -11,7 +11,7 @@ export type Moderation = { ok: boolean; reason?: string }
 const CDN = {
   tf: 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js',
   coco: 'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
-  nsfw: 'https://cdn.jsdelivr.net/npm/nsfwjs@4.2.1/dist/nsfwjs.min.js',
+  nsfw: 'https://cdn.jsdelivr.net/npm/nsfwjs@4.3.0/dist/browser/nsfwjs.min.js',
 }
 
 function loadScript(src: string): Promise<void> {
@@ -24,31 +24,42 @@ function loadScript(src: string): Promise<void> {
 }
 
 let coco: any = null, nsfw: any = null
-async function loadModels(): Promise<void> {
-  if (coco && nsfw) return
-  await loadScript(CDN.tf)
-  await Promise.all([loadScript(CDN.coco), loadScript(CDN.nsfw)])
-  const w = window as any
-  const [c, n] = await Promise.all([coco ?? w.cocoSsd.load(), nsfw ?? w.nsfwjs.load()])
-  coco = c; nsfw = n
+let loadPromise: Promise<void> | null = null
+
+// Load the models EXACTLY ONCE — a shared promise, so concurrent/repeat calls (React re-renders, retries)
+// never kick off a second load (which races and throws "Could not load the model"). Full TF.js first, then
+// each model BEST-EFFORT so a single flaky model can't take the whole tool down. Never throws.
+function loadModels(): Promise<void> {
+  if (!loadPromise) loadPromise = (async () => {
+    const w = window as any
+    await loadScript(CDN.tf)                                                    // full TF first (nsfwjs's graph model needs it)
+    try { await loadScript(CDN.nsfw); nsfw = await w.nsfwjs.load() } catch { nsfw = null }   // NSFW gate — best-effort
+    try { await loadScript(CDN.coco); coco = await w.cocoSsd.load() } catch { coco = null }   // vehicle gate — best-effort
+  })()
+  return loadPromise
 }
 
-// PASS requires a car/truck visible in ≥1 sampled frame AND no clearly-explicit frame. Fails closed.
+// PASS: no clearly-explicit frame, and — if the vehicle detector loaded — a car/truck in ≥1 frame. Each
+// check is enforced when its model is available; needs at least one to have loaded (else we can't verify).
 export async function moderateFrames(frames: HTMLCanvasElement[]): Promise<Moderation> {
-  try { await loadModels() } catch { return { ok: false, reason: 'Could not load the on-device content checker. Check your connection and try again.' } }
-  if (!coco || !nsfw) return { ok: false, reason: 'Content checker unavailable. Try again.' }
+  await loadModels()
+  if (!coco && !nsfw) { loadPromise = null; return { ok: false, reason: 'Could not load the on-device content checker. Check your connection and try again.' } }
 
   let sawVehicle = false
   for (const f of frames) {
-    const preds: Array<{ className: string; probability: number }> = await nsfw.classify(f)
-    const p: Record<string, number> = {}
-    for (const x of preds) p[x.className] = x.probability
-    if ((p.Porn ?? 0) > 0.5 || (p.Hentai ?? 0) > 0.5 || (p.Sexy ?? 0) > 0.85) {
-      return { ok: false, reason: "This video doesn't look appropriate for the site, so we can't brand it." }
+    if (nsfw) {
+      const preds: Array<{ className: string; probability: number }> = await nsfw.classify(f)
+      const p: Record<string, number> = {}
+      for (const x of preds) p[x.className] = x.probability
+      if ((p.Porn ?? 0) > 0.5 || (p.Hentai ?? 0) > 0.5 || (p.Sexy ?? 0) > 0.85) {
+        return { ok: false, reason: "This video doesn't look appropriate for the site, so we can't brand it." }
+      }
     }
-    const objs: Array<{ class: string; score: number }> = await coco.detect(f)
-    if (objs.some(o => (o.class === 'car' || o.class === 'truck') && o.score > 0.45)) sawVehicle = true
+    if (coco) {
+      const objs: Array<{ class: string; score: number }> = await coco.detect(f)
+      if (objs.some(o => (o.class === 'car' || o.class === 'truck') && o.score > 0.45)) sawVehicle = true
+    }
   }
-  if (!sawVehicle) return { ok: false, reason: "We couldn't spot a Tesla in the video — make sure your car is clearly in frame, then try again." }
+  if (coco && !sawVehicle) return { ok: false, reason: "We couldn't spot a Tesla in the video — make sure your car is clearly in frame, then try again." }
   return { ok: true }
 }

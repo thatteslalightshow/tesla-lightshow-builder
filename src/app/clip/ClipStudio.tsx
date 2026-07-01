@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { moderateFrames } from '@/lib/clip-moderation'
 
 // Shareable-clip studio — turn a phone video of YOUR Tesla running a show into a branded 9:16 clip for
@@ -9,7 +9,7 @@ import { moderateFrames } from '@/lib/clip-moderation'
 // export locally. See src/lib/clip-moderation.ts for the guardrail.
 
 type Stage = 'idle' | 'checking' | 'rejected' | 'ready' | 'recording' | 'done'
-const OUT_W = 1080, OUT_H = 1920, MAX_SEC = 30, HANDLE = '@ThatTeslaLightshow'
+const OUT_W = 1080, OUT_H = 1920, MAX_SEC = 30
 
 // Grab `count` evenly-spaced frames from a loaded video as small canvases for the moderation check.
 async function sampleFrames(video: HTMLVideoElement, count: number): Promise<HTMLCanvasElement[]> {
@@ -40,18 +40,13 @@ export default function ClipStudio() {
   const [caption, setCaption] = useState('')
   const [fileName, setFileName] = useState('')
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
+  const [downloadName, setDownloadName] = useState('tesla-lightshow-clip.webm')
   const videoRef = useRef<HTMLVideoElement | null>(null)
-  const logoRef = useRef<HTMLImageElement | null>(null)
-
-  const loadLogo = useCallback(() => {
-    if (logoRef.current) return
-    const img = new Image(); img.crossOrigin = 'anonymous'; img.src = '/brand/logo.png'; logoRef.current = img
-  }, [])
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setDownloadUrl(null); setFileName(file.name); loadLogo()
+    setDownloadUrl(null); setFileName(file.name)
     const video = document.createElement('video')
     video.muted = true; video.playsInline = true; video.preload = 'auto'
     video.src = URL.createObjectURL(file)
@@ -81,7 +76,8 @@ export default function ClipStudio() {
     const vStream = (video as any).captureStream ? (video as any).captureStream() as MediaStream : null
     const audio = vStream?.getAudioTracks?.() ?? []
     const mixed = new MediaStream([...cStream.getVideoTracks(), ...audio])
-    const mime = ['video/mp4', 'video/webm;codecs=vp9', 'video/webm'].find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm'
+    // Prefer MP4 (H.264) — what TikTok/Instagram want — when the browser can record it; else WebM.
+    const mime = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'].find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm'
     const rec = new MediaRecorder(mixed, { mimeType: mime, videoBitsPerSecond: 8_000_000 })
     const chunks: BlobPart[] = []
     rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data) }
@@ -91,19 +87,25 @@ export default function ClipStudio() {
       const { dx, dy, dw, dh } = coverRect(video.videoWidth || 720, video.videoHeight || 1280)
       ctx.fillStyle = '#000'; ctx.fillRect(0, 0, OUT_W, OUT_H)
       ctx.drawImage(video, dx, dy, dw, dh)
-      // bottom brand bar
-      const barH = 220
-      const grad = ctx.createLinearGradient(0, OUT_H - barH * 1.6, 0, OUT_H)
-      grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(0,0,0,0.72)')
-      ctx.fillStyle = grad; ctx.fillRect(0, OUT_H - barH * 1.6, OUT_W, barH * 1.6)
-      const logo = logoRef.current
-      if (logo && logo.complete && logo.naturalWidth) { const lw = 300, lh = (logo.naturalHeight / logo.naturalWidth) * lw; ctx.drawImage(logo, 48, OUT_H - lh - 56, lw, lh) }
-      ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = '600 40px system-ui, sans-serif'; ctx.textBaseline = 'alphabetic'
-      ctx.fillText(HANDLE, 48, OUT_H - 28)
-      if (caption.trim()) { ctx.fillStyle = '#fff'; ctx.font = '700 54px system-ui, sans-serif'; ctx.fillText(caption.trim().slice(0, 42), 48, OUT_H - 300) }
+      // bottom scrim for legibility over any footage
+      const grad = ctx.createLinearGradient(0, OUT_H - 340, 0, OUT_H)
+      grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(0,0,0,0.6)')
+      ctx.fillStyle = grad; ctx.fillRect(0, OUT_H - 340, OUT_W, 340)
+      ctx.textBaseline = 'alphabetic'
+      ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 2
+      // optional caption (the user's text), bold, above the handle — brand display font (Space Grotesk)
+      if (caption.trim()) { ctx.fillStyle = '#fff'; ctx.font = '700 56px "Space Grotesk", system-ui, sans-serif'; ctx.fillText(caption.trim().slice(0, 42), 48, OUT_H - 108) }
+      // clean handle watermark in the brand font — red "@" brand pop, no bulky logo
+      ctx.font = '700 46px "Space Grotesk", system-ui, sans-serif'
+      ctx.fillStyle = '#e8404a'; ctx.fillText('@', 48, OUT_H - 44)
+      const atW = ctx.measureText('@').width
+      ctx.fillStyle = 'rgba(255,255,255,0.96)'; ctx.fillText('ThatTeslaLightshow', 48 + atW + 2, OUT_H - 44)
+      ctx.shadowBlur = 0; ctx.shadowOffsetY = 0
       if (!video.paused && !video.ended && video.currentTime < MAX_SEC) requestAnimationFrame(draw)
     }
 
+    // Make sure the brand font (Space Grotesk) is loaded before we render, or canvas falls back to system-ui.
+    try { await Promise.all([document.fonts.load('700 46px "Space Grotesk"'), document.fonts.load('700 56px "Space Grotesk"')]) } catch { /* fall back to system font */ }
     try {
       video.currentTime = 0; video.muted = false
       await video.play()
@@ -112,7 +114,9 @@ export default function ClipStudio() {
       video.onended = stop
       const timer = setTimeout(stop, MAX_SEC * 1000)
       const blob = await done; clearTimeout(timer)
-      setDownloadUrl(URL.createObjectURL(blob)); setStage('done'); setMsg('Your clip is ready — download and post it!')
+      setDownloadName(`tesla-lightshow-clip.${mime.includes('mp4') ? 'mp4' : 'webm'}`)
+      setDownloadUrl(URL.createObjectURL(blob)); setStage('done')
+      setMsg(mime.includes('mp4') ? 'Your MP4 clip is ready — download and post it!' : 'Your clip is ready (WebM). Great for YouTube; for TikTok/Instagram you may need to convert to MP4.')
     } catch {
       setStage('ready'); setMsg('Rendering failed — your browser may not support in-page recording. Try Chrome.')
     }
@@ -149,13 +153,13 @@ export default function ClipStudio() {
 
           {stage === 'done' && downloadUrl && (
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <a href={downloadUrl} download="tesla-lightshow-clip.webm" className="btn btn-primary btn-sm">⬇ Download clip</a>
-              <button onClick={() => { setStage('idle'); setMsg(''); setCaption(''); setFileName(''); setDownloadUrl(null) }} className="btn btn-sm" style={{ background: 'var(--bg3)', border: '1px solid var(--border)' }}>Make another</button>
+              <a href={downloadUrl} download={downloadName} className="btn btn-primary btn-sm">⬇ Download clip</a>
+              <button onClick={() => { setStage('idle'); setMsg(''); setCaption(''); setFileName(''); setDownloadUrl(null) }} className="btn btn-sm" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid var(--border)', color: 'var(--text)' }}>Make another</button>
             </div>
           )}
 
           {stage === 'rejected' && (
-            <button onClick={() => { setStage('idle'); setMsg('') }} className="btn btn-sm" style={{ alignSelf: 'flex-start', background: 'var(--bg3)', border: '1px solid var(--border)' }}>Try another video</button>
+            <button onClick={() => { setStage('idle'); setMsg('') }} className="btn btn-sm" style={{ alignSelf: 'flex-start', background: 'rgba(255,255,255,0.08)', border: '1px solid var(--border)', color: 'var(--text)' }}>Try another video</button>
           )}
         </div>
       )}
