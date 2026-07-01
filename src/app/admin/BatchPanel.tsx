@@ -68,11 +68,18 @@ export default function BatchPanel() {
         const ab44 = await resampleTo44100(ab)
         const wavBlob = audioBufferToWav(ab44)
         const L = ab44.getChannelData(0); const R = ab44.numberOfChannels > 1 ? ab44.getChannelData(1) : L
-        // AUTO-VIBE: first pass reads the audio-derived vibe (same classifyVibe the customer builder uses),
-        // then build the final show with that vibe — so a batch gets the right mix per song, not all 'balanced'.
-        // suggestedPreset is independent of the preset passed in, so pass 1 doubles as the 'balanced' build.
+        // VIBE = Apple's genre first (matches how the song is actually classified), audio classifier as
+        // fallback. The genre lookup sends only title/artist TEXT (no audio) to our /api/genre proxy.
+        let appleVibe: string | null = null
+        try {
+          const gq = `${title} ${tags.artist?.trim() ?? ''}`.trim()
+          const gr = await fetch(`/api/genre?q=${encodeURIComponent(gq)}`)
+          if (gr.ok) appleVibe = (await gr.json())?.vibe ?? null
+        } catch { /* offline / no match → fall back to the audio classifier below */ }
+        // First analysis also yields suggestedPreset (the audio-classifier fallback). suggestedPreset is
+        // independent of the preset passed in, so this pass doubles as the 'balanced' build.
         const first = analyzePCM(L, R, ab44.sampleRate, def.zones, channels, { autoClosures: true, model, preset: 'balanced' })
-        const vibe = first.suggestedPreset
+        const vibe = appleVibe ?? first.suggestedPreset
         const frames = vibe === 'balanced'
           ? first.frames
           : analyzePCM(L, R, ab44.sampleRate, def.zones, channels, { autoClosures: true, model, preset: vibe }).frames

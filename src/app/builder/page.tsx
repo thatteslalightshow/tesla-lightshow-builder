@@ -870,15 +870,23 @@ function BuilderInner() {
     setAudioTriggers(new Set());
     setWaveformData(null);
 
-    // Read song title + artist from the MP3's ID3 tags (filename fallback)
-    parseId3(file).then(tags => {
+    // Read song title + artist from the ID3 tags (filename fallback), and start an Apple-genre lookup
+    // for the vibe (title/artist TEXT only — no audio). The genre promise is awaited during analysis.
+    const tagsPromise = parseId3(file).catch(() => ({} as { title?: string; artist?: string }));
+    tagsPromise.then(tags => {
       const title = tags.title?.trim() || titleFromFilename(file.name);
       setSongTitle(title);
       if (tags.artist?.trim()) setSongArtist(tags.artist.trim());
       // If the show still has the default name, adopt the detected song title
       setName(prev => (!prev || prev === 'My Light Show' || prev === 'Untitled Show') ? title : prev);
-    }).catch(() => {
-      setSongTitle(titleFromFilename(file.name));
+    });
+    const appleVibePromise = tagsPromise.then(async tags => {
+      try {
+        const t = tags.title?.trim() || titleFromFilename(file.name);
+        const r = await fetch(`/api/genre?q=${encodeURIComponent(`${t} ${tags.artist?.trim() ?? ''}`.trim())}`);
+        if (r.ok) return ((await r.json())?.vibe as string | null) ?? null;
+      } catch { /* offline / no match → fall back to the audio classifier */ }
+      return null;
     });
 
     const reader = new FileReader();
@@ -909,9 +917,12 @@ function BuilderInner() {
           if (result.bpm > 60) setBpm(Math.max(60, Math.min(200, result.bpm)));
           // ── Auto-build: apply the detected vibe (unless the user picked one) and
           // suggest closures if the song has clear drops (suggest-and-confirm). ──
-          setDetectedVibe(result.suggestedPreset);
-          if (!vibeUserSet.current && result.suggestedPreset !== mixPreset) {
-            setMixPreset(result.suggestedPreset); // triggers re-analysis with the detected vibe
+          // Prefer Apple's genre for the vibe (matches how the song is actually classified); fall back
+          // to the audio classifier when there's no match.
+          const autoVibe = (await appleVibePromise) ?? result.suggestedPreset;
+          setDetectedVibe(autoVibe);
+          if (!vibeUserSet.current && autoVibe !== mixPreset) {
+            setMixPreset(autoVibe); // triggers re-analysis with the detected vibe
           }
         } catch { /* fall back to generated frames */ }
         setAnalyzing(false);
