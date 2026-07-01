@@ -460,10 +460,12 @@ function buildModelSClosures(gltfScene: THREE.Group, scene: THREE.Scene): Closur
     return pivot;
   };
 
-  // Doors + their windows. Each door (ch 41-44, the "door handle" family on S)
-  // swings out around its front vertical edge; its window (ch 36-39) is nested
-  // INSIDE the door pivot so the glass swings with the door AND can still roll
-  // down (translated within the door's frame, like a real window).
+  // Doors + their windows. Ch 41-44 are the DOOR-HANDLE family on S — on the real car this
+  // presents the flush handles (a small motion), NOT a full door swing (Model S has no powered
+  // door-open). So the panel only CRACKS slightly (a subtle acknowledgment) rather than flying
+  // wide open — otherwise the handle "flap" in the choreography looks like the doors opening and
+  // closing at random. The window (ch 36-39) is nested inside the door pivot so the glass rides
+  // with the crack AND can still roll down within the frame like a real window.
   const DOORS = [
     { door: 'Door_LF', win: 'Window_LF', doorCh: 41, winCh: 36 },
     { door: 'Door_LR', win: 'Window_LR', doorCh: 42, winCh: 37 },
@@ -477,7 +479,7 @@ function buildModelSClosures(gltfScene: THREE.Group, scene: THREE.Scene): Closur
       const b = worldBox(doorNode); const c = b.getCenter(new THREE.Vector3());
       const side: 1 | -1 = c.z >= 0 ? 1 : -1;       // body side the door sits on
       const pivot = pivotAt(doorNode, new THREE.Vector3(b.max.x, c.y, c.z)); // hinge front edge
-      out.push({ ch: d.doorCh, open: 0, apply: o => { pivot.rotation.y = side * 0.62 * o; } });
+      out.push({ ch: d.doorCh, open: 0, apply: o => { pivot.rotation.y = side * 0.14 * o; } }); // subtle crack — handle present, not a door swing
       if (winNode) {
         const wb = worldBox(winNode);
         const drop = (wb.max.y - wb.min.y) * 0.92;
