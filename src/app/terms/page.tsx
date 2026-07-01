@@ -4,6 +4,7 @@ import LegalPage from '@/components/LegalPage'
 export const metadata: Metadata = {
   title: 'Terms of Service',
   description: 'The terms for using ThatTeslaLightshow.',
+  alternates: { canonical: '/terms' },
 }
 
 export default function TermsPage() {

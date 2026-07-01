@@ -4,6 +4,7 @@ import LegalPage from '@/components/LegalPage'
 export const metadata: Metadata = {
   title: 'Privacy Policy',
   description: 'How ThatTeslaLightshow collects, uses, and protects your information.',
+  alternates: { canonical: '/privacy' },
 }
 
 export default function PrivacyPage() {

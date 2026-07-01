@@ -5,6 +5,37 @@ import LegalPage from '@/components/LegalPage'
 export const metadata: Metadata = {
   title: 'FAQ — Tesla Light Show Builder',
   description: 'Common questions about building, exporting, and running custom Tesla light shows.',
+  alternates: { canonical: '/faq' },
+}
+
+// Plain-text mirror of the visible Q&As below, for FAQPage rich results in Google.
+// KEEP IN SYNC with the <Q> blocks in the component (Google requires structured-data
+// answers to match the on-page text).
+const FAQ_LD: { q: string; a: string }[] = [
+  { q: 'What is ThatTeslaLightshow?', a: "It's a web app that builds custom light shows for your Tesla, synced to your music. You pick a song, our engine choreographs the lights (and optionally the doors, windows, and other closures) to the beat, and you export a file package you load onto a USB drive to run on your car." },
+  { q: 'How does it work?', a: 'Upload a song so our engine can choreograph to it, preview your show in 3D in the browser, then export. You get a LightShow folder with your .fseq sequence and step-by-step instructions. You add your own copy of the song to the folder, copy it onto a USB drive, plug it into your Tesla, and start the show from the Toybox. Choreography by us. Soundtrack by you.' },
+  { q: 'Which Teslas are supported?', a: 'Model S (2021+), Model 3, Model X (2021+), Model Y, and Cybertruck, running Tesla software v11.0 (2021.44.25) or newer. Shows are not model-specific — a single show runs on any supported vehicle, and each car performs the lights and closures it has. The refreshed Model Y (Juniper) works too — its front light bar dances right along with the music.' },
+  { q: 'Is it free?', a: "You can build and preview shows for free, forever. Your first export is free. After that it's $3.99 per export, or you can subscribe to Creator for unlimited exports (and free community-show downloads)." },
+  { q: 'Do the doors and windows really move?', a: "Yes — if you enable Auto-choreograph closures, the show can open and dance your doors, windows, mirrors, liftgate/frunk, and charge port to the music, staying within Tesla's published limits. Because these are physical movements, always make sure your car has clear space and keep people and objects away. You run shows at your own risk — see our Terms." },
+  { q: 'What music can I use?', a: 'Any song you have a copy of — upload an MP3 or WAV so our engine can analyze the beat and build the choreography. You bring your own copy of the track to actually run the show. The music belongs to the artists who made it, and we keep you on the right side of the music while your Tesla does it justice.' },
+  { q: 'Do you include the music with my show?', a: "No — and that's on purpose. Choreography by us. Soundtrack by you. Your export is the light sequence (.fseq), not the song. We use your upload only to build the show, then delete it the moment you export — we never store, ship, or share anyone's audio. To run the show, drop your own copy of the same song into the LightShow folder." },
+  { q: 'How do I load a show onto my Tesla?', a: 'Format a USB drive as exFAT or FAT32 (not NTFS), copy the LightShow folder to its root, plug it into a front USB or the glovebox port, then tap Toybox → Light Show → Schedule Show. Full walkthrough in the guide.' },
+  { q: 'Can I share or buy community shows?', a: "Yes. You can make your shows public in the community gallery, and acquire shows others have shared. Community shows are choreography only — the .fseq plus the song's title, artist, and tempo, never anyone's audio — so it's bring-your-own-music just like your own exports. When you add a community show to your library, it's tailored to your Tesla model automatically. Subscribers get community downloads free; otherwise it's $3.99." },
+  { q: 'Can I cancel my subscription?', a: 'Anytime, from your dashboard — you keep access through the end of your billing period.' },
+  { q: "It didn't work on my car — what should I check?", a: "Make sure: your Tesla software is v11.0+; the USB is exFAT/FAT32 (not NTFS) with a base-level LightShow folder; the .fseq and audio filenames match; and there's no TeslaCam folder on the drive." },
+  { q: 'Is my data safe?', a: 'We use encrypted connections and trusted providers (payments via Stripe, never stored by us). See our Privacy Policy for details.' },
+  { q: "What if my show doesn't run right?", a: "Reach out to support@thatteslalightshow.com — we'll help you get it running. And if the problem turns out to be on our end, we'll make it right. We usually respond within 48–72 business hours." },
+  { q: 'Still need help?', a: 'We usually respond within 48–72 business hours. Email support@thatteslalightshow.com for anything about your shows or your account, or billing@thatteslalightshow.com for payments, refunds, or subscription questions. You can also DM @ThatTeslaLightshow on Instagram or TikTok.' },
+]
+
+const FAQ_STRUCTURED_DATA = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: FAQ_LD.map((f) => ({
+    '@type': 'Question',
+    name: f.q,
+    acceptedAnswer: { '@type': 'Answer', text: f.a },
+  })),
 }
 
 function Q({ q, children }: { q: string; children: React.ReactNode }) {
@@ -18,6 +49,8 @@ function Q({ q, children }: { q: string; children: React.ReactNode }) {
 
 export default function FaqPage() {
   return (
+    <>
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_STRUCTURED_DATA) }} />
     <LegalPage
       title="Frequently asked questions"
       intro="Everything you need to know about building a show and running it on your Tesla. Still stuck? Check the step-by-step guide or email us at support@thatteslalightshow.com."
@@ -78,5 +111,6 @@ export default function FaqPage() {
         We&apos;re happy to help — we usually respond within <strong>48–72 business hours</strong>. Email <a href="mailto:support@thatteslalightshow.com"><strong>support@thatteslalightshow.com</strong></a> for anything about your shows or your account, or <a href="mailto:billing@thatteslalightshow.com"><strong>billing@thatteslalightshow.com</strong></a> for payments, refunds, or subscription questions. You can also DM <strong>@ThatTeslaLightshow</strong> on Instagram or TikTok. See our <Link href="/contact">contact page</Link> for all the ways to reach us.
       </Q>
     </LegalPage>
+    </>
   )
 }

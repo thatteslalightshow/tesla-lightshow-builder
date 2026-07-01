@@ -8,6 +8,7 @@ import SiteMenu from '@/components/SiteMenu'
 export const metadata: Metadata = {
   title: 'Show Gallery',
   description: 'Browse community-created Tesla light shows. Preview, like, or remix any public show.',
+  alternates: { canonical: '/gallery' },
 }
 
 export const revalidate = 30

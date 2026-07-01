@@ -5,6 +5,7 @@ import LegalPage from '@/components/LegalPage'
 export const metadata: Metadata = {
   title: 'Contact — ThatTeslaLightshow',
   description: 'Get in touch with ThatTeslaLightshow — support, billing, and social.',
+  alternates: { canonical: '/contact' },
 }
 
 export default function ContactPage() {

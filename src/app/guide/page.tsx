@@ -7,6 +7,25 @@ import SocialLinks from '@/components/SocialLinks'
 export const metadata: Metadata = {
   title: 'Guide — How to build & load a Tesla light show',
   description: 'Step-by-step: build your show, format a USB drive (Windows & Mac), and run your custom light show on your Tesla.',
+  alternates: { canonical: '/guide' },
+}
+
+// HowTo structured data → step-by-step rich result in Google for "how to make a Tesla light show".
+// Mirrors the four Sections on the page.
+const SITE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://thatteslalightshow.com'
+const HOWTO_STRUCTURED_DATA = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: 'How to build and run a custom Tesla light show',
+  description: 'Turn any song into a custom Tesla light show: build it in the browser, format a USB drive, copy the show onto it, and run it on your Tesla.',
+  totalTime: 'PT15M',
+  tool: [{ '@type': 'HowToTool', name: 'A USB drive (formatted exFAT or FAT32)' }],
+  step: [
+    { '@type': 'HowToStep', name: 'Build your show', url: `${SITE_URL}/guide#build`, text: 'Upload any audio file (MP3, WAV, M4A, AAC, OGG). Pick your Tesla model and a light-show style and watch it animate live in 3D. Optionally paint individual lights or place door/window closures, then export. You get a ZIP containing a LightShow folder with lightshow.fseq and lightshow.wav.' },
+    { '@type': 'HowToStep', name: 'Format a USB drive', url: `${SITE_URL}/guide#usb`, text: 'Format a USB drive as exFAT or FAT32 (not NTFS), with no TeslaCam folder. On Windows: File Explorer, right-click the drive, Format. On macOS: Disk Utility, Erase as ExFAT with the Master Boot Record scheme.' },
+    { '@type': 'HowToStep', name: 'Copy the show onto the drive', url: `${SITE_URL}/guide#copy`, text: 'Unzip the export and copy the entire LightShow folder to the top level of the USB drive. Inside should be lightshow.fseq and lightshow.wav, with matching names.' },
+    { '@type': 'HowToStep', name: 'Run it on your Tesla', url: `${SITE_URL}/guide#run`, text: 'Plug the USB into a front USB/USB-C or the glovebox port. On the screen go to Toybox, Light Show, Schedule Show, pick your show, and put the car in Park with the doors closed for the full effect.' },
+  ],
 }
 
 function Step({ n, title, children }: { n: string; title: string; children: React.ReactNode }) {
@@ -34,6 +53,7 @@ function Section({ id, eyebrow, title, children }: { id?: string; eyebrow: strin
 export default function GuidePage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(HOWTO_STRUCTURED_DATA) }} />
       {/* Nav */}
       <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 2rem', borderBottom: '1px solid var(--border)', background: 'rgba(10,10,15,0.9)', backdropFilter: 'blur(12px)', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

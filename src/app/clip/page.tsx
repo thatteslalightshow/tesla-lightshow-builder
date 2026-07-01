@@ -7,6 +7,7 @@ import ClipStudio from './ClipStudio'
 export const metadata: Metadata = {
   title: 'Make a Shareable Clip',
   description: 'Turn a video of your Tesla light show into a branded 9:16 clip for TikTok, Reels, and Stories — all in your browser, nothing uploaded.',
+  alternates: { canonical: '/clip' },
 }
 
 export default function ClipPage() {

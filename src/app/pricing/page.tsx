@@ -7,6 +7,7 @@ import SiteMenu from '@/components/SiteMenu'
 export const metadata: Metadata = {
   title: 'Pricing',
   description: 'Build and preview Tesla light shows free. Pay $3.99 per export, or go unlimited with Creator at $6.99/mo.',
+  alternates: { canonical: '/pricing' },
 }
 
 const FREE_FEATURES = [
