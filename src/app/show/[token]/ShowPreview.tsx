@@ -283,6 +283,10 @@ export default function ShowPreview({ show, audioUrl, audioName, songLinks }: Pr
               {acquiring ? 'Adding…' : 'Add to my library'}
             </button>
             {acqError && <div style={{ width: '100%', fontSize: 12, color: '#ff8a8a' }}>{acqError}</div>}
+            <Link href={`/builder?remix=${show.share_token}`} style={{ width: '100%', fontSize: 12, color: 'var(--muted)', textDecoration: 'none' }}>
+              …or <span style={{ color: 'var(--red)', fontWeight: 600 }}>remix it into your own show →</span>{' '}
+              <span style={{ color: 'var(--muted2)' }}>(free — start a new show from this one&apos;s vibe &amp; model)</span>
+            </Link>
           </div>
         )}
 
