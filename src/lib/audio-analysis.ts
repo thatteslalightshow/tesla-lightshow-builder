@@ -85,6 +85,14 @@ function bandOf(type: string): Band {
   }
 }
 
+// The FRONT "voice" beams — main beams, signature/DRL bars, front fog. These are the fixtures that
+// read as "always on": they ride continuous band energy, so they get the sustain-aware hold treatment
+// (applyFrontHolds) instead of the fixed tempo envelope. nx > 0.5 keeps it to FRONT-facing fixtures,
+// so the rear fog (same 'fog' type, nx < 0) and the rear/tail cluster are untouched.
+function isFrontBeam(z: LightZone): boolean {
+  return (z.type === 'headlight' || z.type === 'highbeam' || z.type === 'drl' || z.type === 'fog') && z.nx > 0.5
+}
+
 // FFT-based per-band SPECTRAL-FLUX onset detection (SuperFlux-style). RMS loudness can't see
 // fast RE-ARTICULATED notes (e.g. tremolo-picked guitar) because the level barely moves — but the
 // SPECTRUM changes on every new note. We STFT a mono, down-sampled mix and sum the positive
@@ -434,17 +442,21 @@ export interface MixParams {
                       // snapping back to symmetric UNISON on drops (0 = off)
   lead: number      // how hard PICKED/STRUMMED notes (guitar "presence" band ~2.5kHz) drive the lights
   sustain: number   // light hold/release as a fraction of a beat — higher = lights breathe, less strobe
+  frontHold: number // FRONT beams only: sustain-aware hold length. The front "voice" beams follow the
+                    // real note — a short linear anti-strobe release, extended to a long tail only while a
+                    // note is genuinely ringing — so they swell on held notes and ease off in the gaps
+                    // instead of a constant DC wash. higher = longer sustains (0 ≈ crisp, no extra hold).
   flourish: number  // signature move strength at big moments (360 chase / symmetric ping-pong)
   density: number   // NEGATIVE SPACE: target fraction of light fixtures lit at once. Pro shows sit ~0.10-0.15
                     // (mostly dark, a few sharp accents) — this dials the sparse "hand-placed" look per vibe.
 }
 export const MIX_PRESETS: Record<string, MixParams> = {
-  balanced:  { bassWeight: 1.0,  punch: 1.0, sparkle: 1.0,  contrast: 0.72, closureSections: 6, phrasing: 0.5, expression: 0.5,  lead: 0.6,  sustain: 0.6,  flourish: 0.6, density: 0.82 },  // = original feel
-  edm:       { bassWeight: 1.3,  punch: 1.5, sparkle: 1.3,  contrast: 0.62, closureSections: 8, phrasing: 0.9, expression: 0.5,  lead: 0.4,  sustain: 0.45, flourish: 0.85, density: 0.90 }, // big drops, lots of movement
-  hiphop:    { bassWeight: 1.45, punch: 1.3, sparkle: 0.85, contrast: 0.70, closureSections: 4, phrasing: 0.6, expression: 0.6,  lead: 0.35, sustain: 0.55, flourish: 0.6, density: 0.80 },  // 808-forward
-  rock:      { bassWeight: 1.05, punch: 1.6, sparkle: 1.1,  contrast: 0.74, closureSections: 4, phrasing: 0.7, expression: 0.55, lead: 1.0,  sustain: 0.5,  flourish: 0.9, density: 0.88 },  // punchy drums + guitar
-  pop:       { bassWeight: 1.0,  punch: 1.1, sparkle: 1.25, contrast: 0.78, closureSections: 4, phrasing: 0.7, expression: 0.7,  lead: 0.7,  sustain: 0.6,  flourish: 0.7, density: 0.80 },  // bright, melodic
-  cinematic: { bassWeight: 0.85, punch: 0.7, sparkle: 0.8,  contrast: 0.85, closureSections: 2, phrasing: 0.2, expression: 0.35, lead: 0.5,  sustain: 0.9,  flourish: 0.4, density: 0.72 },  // smooth, minimal
+  balanced:  { bassWeight: 1.0,  punch: 1.0, sparkle: 1.0,  contrast: 0.72, closureSections: 6, phrasing: 0.5, expression: 0.5,  lead: 0.6,  sustain: 0.6,  frontHold: 0.45, flourish: 0.6, density: 0.82 },  // = original feel
+  edm:       { bassWeight: 1.3,  punch: 1.5, sparkle: 1.3,  contrast: 0.62, closureSections: 8, phrasing: 0.9, expression: 0.5,  lead: 0.4,  sustain: 0.45, frontHold: 0.3,  flourish: 0.85, density: 0.90 }, // big drops, lots of movement
+  hiphop:    { bassWeight: 1.45, punch: 1.3, sparkle: 0.85, contrast: 0.70, closureSections: 4, phrasing: 0.6, expression: 0.6,  lead: 0.35, sustain: 0.55, frontHold: 0.35, flourish: 0.6, density: 0.80 },  // 808-forward
+  rock:      { bassWeight: 1.05, punch: 1.6, sparkle: 1.1,  contrast: 0.74, closureSections: 4, phrasing: 0.7, expression: 0.55, lead: 1.0,  sustain: 0.5,  frontHold: 0.45, flourish: 0.9, density: 0.88 },  // punchy drums + guitar
+  pop:       { bassWeight: 1.0,  punch: 1.1, sparkle: 1.25, contrast: 0.78, closureSections: 4, phrasing: 0.7, expression: 0.7,  lead: 0.7,  sustain: 0.6,  frontHold: 0.45, flourish: 0.7, density: 0.80 },  // bright, melodic
+  cinematic: { bassWeight: 0.85, punch: 0.7, sparkle: 0.8,  contrast: 0.85, closureSections: 2, phrasing: 0.2, expression: 0.35, lead: 0.5,  sustain: 0.9,  frontHold: 0.8,  flourish: 0.4, density: 0.72 },  // smooth, minimal
 }
 
 // ─── Phase 2: musical phrasing + deliberate asymmetry ───────────────────────────
@@ -605,13 +617,59 @@ function applyLightEnvelope(frames: Uint8Array[], zones: LightZone[], bpm: numbe
   const releaseFrames = Math.max(6, beatFrames * sustain)        // ~120ms floor → no strobe
   const coef = Math.exp(-1 / releaseFrames)
   for (const z of zones) {
-    if (z.type === 'closure') continue
+    if (z.type === 'closure' || isFrontBeam(z)) continue   // FRONT beams get the sustain-aware hold instead
     const ch = z.channel
     let prev = 0
     for (let f = 0; f < frames.length; f++) {
       const cur = frames[f][ch]
       prev = cur >= prev ? cur : Math.max(cur, Math.round(prev * coef))   // fast attack, slow release
       frames[f][ch] = prev
+    }
+  }
+}
+
+// Phase 1b: SUSTAIN-AWARE holds on the FRONT "voice" beams (note-duration). The reshaped front base
+// already BREATHES (dim between hits, bright on each strike) but flickers frame-to-frame around the
+// on/off line (strobey on its own). This layer does two things, and only these two:
+//   1. ANTI-STROBE: after each strike the beam releases LINEARLY to the live base over a short tail, so
+//      sub-strobe flicker merges into a clean flash — but because the release is linear it reaches the
+//      base within a BOUNDED number of frames, so the real gaps between notes fully reappear (unlike an
+//      exponential tail, which lingers and smears the breathing into a wash).
+//   2. NOTE-DURATION: while the triggering band's energy stays near its onset level (the note is still
+//      ringing) the release slows to a long tail, so a genuinely SUSTAINED note stays lit for its real
+//      length; a staccato stab, whose energy collapses at once, gets the short tail and drops. This is
+//      the deliberate short-to-long variety the pros show — and it MODULATES the breathing base, decaying
+//      toward it and never below, so it never hard-gates to black.
+// Front only; rear/rhythm keep applyLightEnvelope's groove. `strength` = the vibe's frontHold.
+function applyFrontHolds(
+  frames: Uint8Array[], zones: LightZone[], E: Record<Band, Record<Side, number[]>>,
+  O: Record<Band, number[]>, bpm: number, FPS: number, strength: number,
+): void {
+  const beatFrames = (60 / bpm) * FPS
+  const shortTail = Math.max(6, beatFrames * 0.36)                        // stab/anti-strobe release: frames to fall full→base (~180ms floor)
+  const longTail = Math.max(shortTail, beatFrames * (0.9 + 2.2 * strength)) // sustained-note release: much longer, per vibe
+  const stepFast = 255 / shortTail                                       // LINEAR fall rates (per frame) — bounded release, so breathing returns
+  const stepSlow = 255 / longTail
+  for (const z of zones) {
+    if (!isFrontBeam(z)) continue
+    const ch = z.channel
+    const band = bandOf(z.type)
+    const en = E[band][sideOf(z)]
+    const on = O[band]
+    let prev = 0, trigE = 0
+    for (let f = 0; f < frames.length; f++) {
+      const e = en[f]
+      const cur = frames[f][ch]
+      if (cur >= prev) { prev = cur; trigE = e }                          // fast attack — remember the note's onset energy
+      else {
+        // A genuine SUSTAIN = the note is still RINGING (energy near its onset level) AND it is NOT being
+        // re-articulated (band onset flux is quiet) — a held vocal / bent guitar / pad. Only that gets the
+        // long tail. Dense staccato keeps firing onsets, so each hit takes the short anti-strobe tail and
+        // drops — no gap-filling wash. Either way it never falls below the live base, so breathing shows.
+        const sustaining = e >= trigE * 0.55 && on[f] < 0.14
+        prev = Math.max(cur, prev - (sustaining ? stepSlow : stepFast))
+      }
+      frames[f][ch] = Math.round(prev)
     }
   }
 }
@@ -880,8 +938,18 @@ export function analyzePCM(
       switch (zone.type) {
         case 'turn_front': case 'turn_rear': b = (punch * 1.5 + gtr * 0.8) * P.sparkle * (0.4 + 0.6 * dens); break
         case 'marker': b = (energy * 0.45 + punch * 0.9 + gtr * 0.6) * P.sparkle * (0.3 + 0.7 * dens); break
-        case 'drl': case 'highbeam': b = energy * 0.95 + punch * 0.5 * P.punch + gtr * 0.7; break
-        default: b = (energy * 0.9 + punch * 1.0 * P.punch) * P.bassWeight + gtr * 0.45; break
+        default:
+          if (isFrontBeam(zone)) {
+            // FRONT "voice" beams: only a THIN energy floor (a dim loudness cue that lets them breathe),
+            // with the real drive coming from onsets + picked/lead notes — so between hits the beam falls
+            // dim and each note reads as a deliberate strike, instead of the constant DC wash it was.
+            // applyFrontHolds then sustains genuinely held notes to their real length (note-duration).
+            b = energy * 0.15 + punch * 1.0 * P.punch + gtr * 0.9
+          } else {
+            // rear beams (tail/brake/rear fog) + any other fixture — unchanged reactive base.
+            b = (energy * 0.9 + punch * 1.0 * P.punch) * P.bassWeight + gtr * 0.45
+          }
+          break
       }
       frame[zone.channel] = Math.round(curve(b) * 255)
     })
@@ -890,6 +958,9 @@ export function analyzePCM(
 
   // Phase 1: light hold/release envelope so flashes land WITH the beat instead of strobing.
   applyLightEnvelope(frames, zones, bpm, FPS, P.sustain)
+  // Phase 1b: sustain-aware holds on the FRONT beams — they follow the real note length (linear
+  // anti-strobe release, extended for genuine sustains) so they breathe instead of a constant DC wash.
+  applyFrontHolds(frames, zones, E, O, bpm, FPS, P.frontHold)
 
   // Phase 2: layer beat-synced phrasing (ping-pong + sweep) over the reactive base.
   const lightAnchor = triggerFrames.size ? Math.min(...triggerFrames) : 0
