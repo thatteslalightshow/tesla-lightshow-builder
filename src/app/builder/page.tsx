@@ -1844,7 +1844,10 @@ function BuilderInner() {
           <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 440, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '1.5rem', boxShadow: '0 12px 50px rgba(0,0,0,0.6)' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, marginBottom: 8 }}>Heads up — this show moves your car</div>
             <div style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.65, marginBottom: 10 }}>
-              You&apos;ve got <strong style={{ color: 'var(--text)' }}>Auto-choreograph closures</strong> on, so during the show your Tesla will physically open and close its doors, windows, mirrors{model === 'modelX' ? ', and falcon-wing doors' : ''}. Park somewhere with clearance all around — especially overhead and to the sides — and keep people and pets clear. Your Tesla will also show its own confirmation before the show runs.
+              You&apos;ve got <strong style={{ color: 'var(--text)' }}>Auto-choreograph closures</strong> on, so during the show your Tesla will physically open and close its doors, windows, mirrors{model === 'modelX' ? ', and falcon-wing doors' : ''}. Park somewhere with clearance all around — especially overhead and to the sides — and keep people and pets clear.
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6, background: 'rgba(0,232,135,0.06)', border: '1px solid rgba(0,232,135,0.18)', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
+              <strong style={{ color: 'var(--text)' }}>Built to stay safe:</strong> every move is kept within Tesla&apos;s published closure limits, and your car shows its <strong style={{ color: 'var(--text)' }}>own on-screen confirmation</strong> before anything runs. Prefer no movement? Lights-only is one tap below.
             </div>
             <button
               onClick={() => { try { localStorage.setItem('ttls_closure_ack', '1'); } catch { /* private mode */ } setClosureAckOpen(false); exportZip(); }}
