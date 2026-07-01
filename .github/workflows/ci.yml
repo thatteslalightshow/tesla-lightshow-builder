@@ -1,0 +1,30 @@
+# The repo's verification bar (see AGENTS.md), enforced on every push:
+# type-check + lint + FSEQ conformance/safety/regression harness + production build.
+# Deploys stay on Vercel; this only gates correctness.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      # Dummy values so prerendered pages (e.g. /gallery ISR) can build without a
+      # real backend — their Supabase queries fail soft and render empty. No real
+      # secrets belong in CI; Stripe/Resend/Sentry are all guarded behind env checks.
+      NEXT_PUBLIC_SUPABASE_URL: https://ci-dummy.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: ci-dummy-service-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run type-check
+      - run: npm run lint
+      - run: npm run test:fseq
+      - run: npm run build
