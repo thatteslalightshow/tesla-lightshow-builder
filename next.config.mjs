@@ -6,6 +6,18 @@ const nextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   experimental: { instrumentationHook: true },
+  webpack: (config) => {
+    // The server-side WASM MP3 decoder (mpg123-decoder → @wasm-audio-decoders → @eshaz/web-worker)
+    // loads its worker through a dynamic require() that webpack can't statically analyze, producing a
+    // benign "Critical dependency: the request of a dependency is an expression" warning. It's used only
+    // in api/export (BYOM server fallback) and works fine — silence just this module so the build stops
+    // reporting "Compiled with warnings" and a genuine warning can't hide in the noise.
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings ?? []),
+      { module: /@eshaz[\\/]web-worker/ },
+    ];
+    return config;
+  },
 };
 
 // Wrap with Sentry. With no org/project/authToken, source-map upload is skipped
@@ -13,4 +25,7 @@ const nextConfig = {
 export default withSentryConfig(nextConfig, {
   silent: true,
   disableLogger: true,
+  // Upload source maps to Sentry (for readable stack traces) but DELETE them from the deployed bundle
+  // afterward, so we never serve our original source to end users. No-op when upload is skipped.
+  sourcemaps: { deleteSourcemapsAfterUpload: true },
 });
