@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase, type Show } from '@/lib/supabase';
+import VideoLinkPanel from '@/components/VideoLinkPanel';
 import SocialLinks from '@/components/SocialLinks';
 import BrandLogo from '@/components/BrandLogo';
 
@@ -317,6 +318,12 @@ export default function DashboardPage() {
                     </button>
                   )}
                 </div>
+
+                {/* Public shows: nudge the creator to link their real-car video (growth flywheel) */}
+                {show.is_public && (() => {
+                  const sl = show as unknown as { social_url?: string | null; social_status?: string | null };
+                  return <VideoLinkPanel showId={show.id} initialUrl={sl.social_url ?? null} initialStatus={sl.social_status ?? null} compact />;
+                })()}
 
                 <div style={{ display: 'flex', gap: 8 }}>
                   <Link href={`/builder?id=${show.id}`} className="btn btn-ghost btn-sm" style={{ flex: 1, textAlign: 'center' }}>Edit</Link>
