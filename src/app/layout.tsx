@@ -11,10 +11,10 @@ export const metadata: Metadata = {
     default: "ThatTeslaLightshow — Tesla Light Show Builder",
     template: "%s · ThatTeslaLightshow",
   },
-  description: "Build custom Tesla light shows synced to your music. Export ready for USB.",
+  description: "Turn any song into a custom Tesla light show in minutes — no xLights. Auto-synced to the beat, previewed in 3D, exported ready for USB.",
   openGraph: {
     title: "ThatTeslaLightshow — Tesla Light Show Builder",
-    description: "Build custom Tesla light shows synced to your music. Export ready for USB.",
+    description: "Turn any song into a custom Tesla light show in minutes — no xLights. Auto-synced to the beat, previewed in 3D, exported ready for USB.",
     siteName: "ThatTeslaLightshow",
     type: "website",
     images: [{ url: "/brand/og.png", width: 1200, height: 630, alt: "That Lightshow — Tesla Lightshow Builder" }],
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "ThatTeslaLightshow — Tesla Light Show Builder",
-    description: "Build custom Tesla light shows synced to your music.",
+    description: "Turn any song into a custom Tesla light show in minutes — no xLights.",
     site: "@ThatTeslaLightshow",
     images: ["/brand/og.png"],
   },

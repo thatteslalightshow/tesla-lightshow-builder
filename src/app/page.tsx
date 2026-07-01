@@ -184,8 +184,9 @@ export default function Home() {
           </h1>
 
           <p style={{ fontSize:'clamp(.95rem,2vw,1.15rem)', color:'rgba(255,255,255,0.4)', lineHeight:1.75, maxWidth:520, margin:'0 auto 3rem' }}>
-            Upload any song. Watch 48 channels sync to every beat in real time.
-            Export a Tesla-ready file to USB in seconds.
+            Custom Tesla light shows without xLights — or the hours of manual sequencing it takes.
+            Upload any song, our engine syncs 48 channels to every beat, and you export a
+            Tesla-ready USB file in minutes.
           </p>
 
           <div style={{ display:'flex', gap:12, justifyContent:'center', flexWrap:'wrap', marginBottom:'5rem' }}>
@@ -222,8 +223,42 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ── NO XLIGHTS ───────────────────────────────────────────────────── */}
+      <section style={{ position:'relative', zIndex:1, padding:'7rem 2rem' }}>
+        <div style={{ maxWidth:960, margin:'0 auto' }}>
+          <SLabel>No xLights required</SLabel>
+          <h2 style={{ fontFamily:'var(--font-display)', fontSize:'clamp(1.8rem,4vw,2.8rem)', fontWeight:700, letterSpacing:'-1.5px', marginBottom:'1rem', lineHeight:1.05 }}>
+            The show, without<br />the four-hour setup.
+          </h2>
+          <p style={{ fontSize:15, color:'rgba(255,255,255,0.35)', marginBottom:'3.5rem', maxWidth:520, lineHeight:1.7 }}>
+            Custom Tesla light shows normally mean xLights — desktop software, channel-by-channel sequencing, and hours per song. We do the choreography for you, in the browser, from any track.
+          </p>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))', gap:1, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.06)', borderRadius:16, overflow:'hidden' }}>
+            {/* The xLights way */}
+            <div style={{ padding:'2.5rem', background:'#000' }}>
+              <div style={{ fontSize:12, fontWeight:600, letterSpacing:'.12em', color:'rgba(255,255,255,0.3)', textTransform:'uppercase', marginBottom:20 }}>The xLights way</div>
+              {['Install and learn desktop sequencing software','Map every channel by hand','~4 hours of work for a single song','A steep learning curve before your first show'].map(f=>(
+                <div key={f} style={{ display:'flex', gap:10, fontSize:14, color:'rgba(255,255,255,0.4)', marginBottom:12, alignItems:'flex-start' }}>
+                  <span style={{ color:'rgba(255,255,255,0.25)', fontSize:13, marginTop:1 }}>✕</span>{f}
+                </div>
+              ))}
+            </div>
+            {/* The ThatTeslaLightshow way */}
+            <div style={{ padding:'2.5rem', background:'#0a0000', position:'relative' }}>
+              <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,#e8404a,#ff6030)' }} />
+              <div style={{ fontSize:12, fontWeight:600, letterSpacing:'.12em', color:'#e8404a', textTransform:'uppercase', marginBottom:20 }}>The ThatTeslaLightshow way</div>
+              {['Upload any song — nothing to install','The engine choreographs 48 channels to the beat','A finished, USB-ready show in minutes','Preview live in 3D, then export'].map(f=>(
+                <div key={f} style={{ display:'flex', gap:10, fontSize:14, color:'rgba(255,255,255,0.55)', marginBottom:12, alignItems:'flex-start' }}>
+                  <span style={{ color:'#00e887', fontSize:12, marginTop:1 }}>✓</span>{f}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── HOW IT WORKS ─────────────────────────────────────────────────── */}
-      <section style={{ position:'relative', zIndex:1, maxWidth:820, margin:'0 auto', padding:'7rem 2rem' }}>
+      <section style={{ position:'relative', zIndex:1, maxWidth:820, margin:'0 auto', padding:'7rem 2rem', borderTop:'1px solid rgba(255,255,255,0.06)' }}>
         <SLabel>How it works</SLabel>
         <h2 style={{ fontFamily:'var(--font-display)', fontSize:'clamp(1.8rem,4vw,2.8rem)', fontWeight:700, letterSpacing:'-1.5px', marginBottom:'1rem', lineHeight:1.05 }}>
           From song to USB.<br />Three steps.
