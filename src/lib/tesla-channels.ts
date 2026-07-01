@@ -202,7 +202,8 @@ export const MODEL_CLOSURES: Record<TeslaModel, ClosureFamily[]> = {
 // (and can't be cloned onto other owners' cars). Enforces the same invariants the engine upholds:
 //   • only valid closure command bytes (0/63/127/191/255),
 //   • per-family actuation counts within CLOSURE_LIMITS,
-//   • falcon doors NEVER actuate on the same frame (the simultaneous-actuation fault), and
+//   • falcon doors NEVER actuate within ~3.5s of each other (the simultaneous-actuation fault),
+//   • heavy closures HOLD each Open for ~full travel (a brief blip stalls a heavy door), and
 //   • Model X: a window never moves while a door moves (the false-pinch).
 // Returns { ok:true } or { ok:false, reason }. Designed to PASS all legit engine output.
 export function validateClosureSafety(fseq: Uint8Array, model: TeslaModel): { ok: boolean; reason?: string } {
@@ -222,21 +223,26 @@ export function validateClosureSafety(fseq: Uint8Array, model: TeslaModel): { ok
   const closureChs = [...chFam.keys()].filter(ch => ch >= 0 && ch < channels)
   const VALID = new Set<number>(Object.values(CLOSURE_CMD))
 
-  // per channel: validate every byte, collect rising-edge frames + non-zero runs
+  // per channel: validate every byte, collect rising-edge frames, non-zero runs, and OPEN(63) runs
   const edges: Record<number, number[]> = {}
   const runs: Record<number, [number, number][]> = {}
+  const openRuns: Record<number, [number, number][]> = {}   // contiguous "open" (63) spans, for hold-for-travel
+  const OPEN = CLOSURE_CMD.open
   for (const ch of closureChs) {
-    edges[ch] = []; runs[ch] = []
-    let prev = 0, runStart = -1
+    edges[ch] = []; runs[ch] = []; openRuns[ch] = []
+    let prev = 0, runStart = -1, openStart = -1
     for (let f = 0; f < frames; f++) {
       const v = valAt(f, ch)
       if (!VALID.has(v)) return { ok: false, reason: `invalid closure byte ${v} on ch${ch} @${f}` }
       if (v !== prev && v !== 0) edges[ch].push(f)            // a new actuation command starts here
       if (v !== 0 && runStart < 0) runStart = f
       else if (v === 0 && runStart >= 0) { runs[ch].push([runStart, f]); runStart = -1 }
+      if (v === OPEN && openStart < 0) openStart = f
+      else if (v !== OPEN && openStart >= 0) { openRuns[ch].push([openStart, f]); openStart = -1 }
       prev = v
     }
     if (runStart >= 0) runs[ch].push([runStart, frames])
+    if (openStart >= 0) openRuns[ch].push([openStart, frames])
   }
 
   // group channels by family
@@ -249,11 +255,34 @@ export function validateClosureSafety(fseq: Uint8Array, model: TeslaModel): { ok
     if (n > CLOSURE_LIMITS[fam]) return { ok: false, reason: `${fam} actuations ${n} > limit ${CLOSURE_LIMITS[fam]}` }
   }
 
-  // 2) falcon doors must never actuate on the SAME frame
+  // 2) falcon doors must never actuate within the ~3.5s stagger of each other. The heavy
+  //    double-hinged doors + pinch sensors can't both swing near-simultaneously via a show
+  //    (arbitration stalls one door) — the engine offsets the 2nd door by FALCON_STAGGER, and
+  //    a hand-edited/cloned show must too. Rejects same-frame AND near-simultaneous edges.
+  const FALCON_MIN_GAP = Math.round(FPS * 3.5)
   const falconChs = famChs.falcon_doors ?? []
-  if (falconChs.length === 2) {
-    const other = new Set(edges[falconChs[1]])
-    for (const f of edges[falconChs[0]]) if (other.has(f)) return { ok: false, reason: `falcon doors actuate on the same frame @${f}` }
+  if (falconChs.length >= 2) {
+    const e0 = edges[falconChs[0]], e1 = edges[falconChs[1]]
+    for (const a of e0) for (const b of e1) {
+      const gap = Math.abs(a - b)
+      if (gap < FALCON_MIN_GAP) return { ok: false, reason: `falcon doors actuate ${gap} frames apart (< ${FALCON_MIN_GAP}) @${Math.min(a, b)}` }
+    }
+  }
+
+  // 2b) HEAVY closures must HOLD each Open for ~full travel — a brief "blip" open commands the
+  //     heavy door to start swinging then idle, stalling it near-closed (a confirmed real-car fault).
+  //     Only heavy families (long travel); an Open still held at the song's end is exempt (that's the
+  //     leave-open-vs-truncate finale case, not a mid-show blip).
+  const HEAVY = (Object.keys(CLOSURE_DURATIONS) as ClosureFamily[]).filter(f => CLOSURE_DURATIONS[f] >= 10)
+  const heavySet = new Set<ClosureFamily>(HEAVY)
+  for (const ch of closureChs) {
+    const fam = chFam.get(ch)!
+    if (!heavySet.has(fam)) continue
+    const minHold = Math.floor(0.9 * CLOSURE_DURATIONS[fam] * FPS)
+    for (const [s, e] of openRuns[ch]) {
+      if (e >= frames) continue                                   // held to the end — not a blip
+      if (e - s < minHold) return { ok: false, reason: `${fam} ch${ch} Open held ${e - s} frames < ${minHold} (blip stalls heavy closure) @${s}` }
+    }
   }
 
   // 3) Model X: a window may never be in motion while a door is in motion (false-pinch)

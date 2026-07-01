@@ -21,6 +21,9 @@ export default function LightStrip({
   const accent = ACCENT[style] ?? '#e8404a';
   const beat = 60 / (bpm && bpm > 0 ? bpm : 120); // seconds per beat
   const maxOpacity = 0.35 + (Math.min(100, Math.max(0, intensity)) / 100) * 0.65;
+  // Photosensitive safety: never let a strip flash faster than ~3 Hz (WCAG 2.3.1),
+  // no matter how fast the song. One flash per animation cycle → min 0.34s per cycle.
+  const MIN_CYCLE = 0.34;
 
   const zones = Array.from({ length: ZONES }, (_, i) => {
     let animationName = 'ls-pulse';
@@ -79,13 +82,14 @@ export default function LightStrip({
     return (
       <span
         key={i}
+        className="ls-zone"
         style={{
           flex: 1,
           borderRadius: 3,
           background: accent,
           boxShadow: `0 0 8px ${accent}`,
           animationName,
-          animationDuration: `${duration}s`,
+          animationDuration: `${Math.max(MIN_CYCLE, duration)}s`,
           animationDelay: `${delay}s`,
           animationIterationCount: 'infinite',
           animationTimingFunction: 'ease-in-out',
@@ -99,6 +103,7 @@ export default function LightStrip({
 
   return (
     <div
+      className="ls-strip"
       style={{
         height,
         display: 'flex',

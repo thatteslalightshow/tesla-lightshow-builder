@@ -20,17 +20,20 @@ function Particles() {
       o: Math.random() * .3 + .05,
       c: ['#e8404a','#ffffff','#ff8c00','#ffffff','#ffffff'][Math.floor(Math.random()*5)],
     }));
+    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     let raf: number;
     const tick = () => {
       ctx.clearRect(0, 0, c.width, c.height);
       pts.forEach(p => {
-        p.x = (p.x + p.vx + c.width)  % c.width;
-        p.y = (p.y + p.vy + c.height) % c.height;
+        if (!reduce) {                                   // hold static for reduced-motion users
+          p.x = (p.x + p.vx + c.width)  % c.width;
+          p.y = (p.y + p.vy + c.height) % c.height;
+        }
         ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
         ctx.fillStyle = p.c; ctx.globalAlpha = p.o; ctx.fill();
       });
       ctx.globalAlpha = 1;
-      raf = requestAnimationFrame(tick);
+      if (!reduce) raf = requestAnimationFrame(tick);
     };
     tick();
     window.addEventListener('resize', resize);

@@ -179,6 +179,16 @@ export async function POST(req: Request) {
   const isAcquired = !!show.source_show_id
 
   const entitled = isPrivileged || isSubscribed || hasPaid || isFreeExport || isAcquired
+  // A gift credit is spent (reserved) up-front for race-safety, BEFORE the safety gate + zip build. If
+  // anything downstream fails, we must give it back — otherwise a paying redeemer loses the credit and
+  // gets nothing (P0-4). `giftSpent` + the try/finally below guarantee a refund on every failure path.
+  let giftSpent = false
+  let exportSucceeded = false
+  const refundGift = async () => {
+    const { data: p } = await admin.from('profiles').select('gift_credits').eq('id', user.id).maybeSingle()
+    const cur = (p as { gift_credits?: number } | null)?.gift_credits ?? 0
+    await admin.from('profiles').update({ gift_credits: cur + 1 }).eq('id', user.id)
+  }
   if (!entitled) {
     // No free/sub/purchase entitlement → spend a banked GIFT credit if they have one. Atomic
     // compare-and-set so two concurrent exports can never both spend the same credit (Phase-0 lesson).
@@ -193,7 +203,12 @@ export async function POST(req: Request) {
     if (!spent || spent.length === 0) {
       return NextResponse.json({ error: 'subscription_required' }, { status: 402 })
     }
+    giftSpent = true
   }
+
+  // Everything past the gift spend is wrapped so a later failure (unsafe closures, zip/upload, sign,
+  // or an unexpected throw) refunds the reserved credit. Only the success return sets exportSucceeded.
+  try {
 
   // ── Load audio (each show has at most one row; no fragile column ordering) ──
   const { data: audioRows } = await admin
@@ -498,6 +513,7 @@ export async function POST(req: Request) {
   if (body.client_fseq === true) await admin.storage.from('fseq-exports').remove([incomingPath]).then(() => null, () => null)
 
   const safeName = show.name.replace(/\s+/g, '_')
+  exportSucceeded = true
   return NextResponse.json({
     url: signedUrl,
     filename: `${safeName}_lightshow.zip`,
@@ -507,4 +523,8 @@ export async function POST(req: Request) {
     models_exported: [show.tesla_model, ...extraModels],
     audio_removed: !isPrivileged,
   })
+  } finally {
+    // Failed after spending a gift credit (unsafe closures, zip/upload/sign error, or a throw) → refund it.
+    if (giftSpent && !exportSucceeded) await refundGift()
+  }
 }

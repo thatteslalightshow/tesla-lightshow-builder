@@ -346,6 +346,9 @@ export default function ShowPreview({ show, audioUrl, audioName, songLinks }: Pr
               <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.7)', letterSpacing: '.03em' }}>
                 {audioReady ? 'Play with audio' : 'Loading audio…'}
               </span>
+              <span style={{ fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.4)', letterSpacing: '.02em' }}>
+                ⚡ Contains flashing lights
+              </span>
             </button>
           )}
 

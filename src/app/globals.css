@@ -47,6 +47,20 @@ input,select,textarea{font-family:var(--font-body);outline:none}
 @keyframes ls-pulse{0%,100%{opacity:.12}50%{opacity:var(--ls-peak,1)}}
 @keyframes ls-blip{0%,12%{opacity:var(--ls-peak,1)}13%,100%{opacity:.1}}
 @keyframes ls-strobe{0%,40%{opacity:.1}45%,55%{opacity:var(--ls-peak,1)}60%,100%{opacity:.1}}
+
+/* ── Photosensitive / vestibular safety ─────────────────────────────────────
+   This product flashes lights to music. Honor prefers-reduced-motion: freeze all
+   looping animations and hold the light-strip previews at a steady LIT state
+   (never flashing) for anyone who's asked the OS to reduce motion (WCAG 2.3.3). */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:0.001ms!important;
+    animation-iteration-count:1!important;
+    transition-duration:0.001ms!important;
+    scroll-behavior:auto!important;
+  }
+  .ls-zone{animation:none!important;opacity:var(--ls-peak,0.7)!important}
+}
 .gallery-card:hover{border-color:var(--red)!important;transform:translateY(-2px)}
 /* Brand tagline under the logo hides on small screens to avoid crowding the nav */
 @media(max-width:560px){.brand-tagline{display:none}}

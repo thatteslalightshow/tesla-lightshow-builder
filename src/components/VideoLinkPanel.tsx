@@ -5,8 +5,9 @@ import { parseSocialLink } from '@/lib/social-link'
 import { moderateImage } from '@/lib/clip-moderation'
 
 // Reusable "link your real-car video" control — paste a TikTok/YouTube post → on-device thumbnail check
-// (car + appropriate) → save. Clean auto-approves (live); flagged is held for admin review. Used on the
-// show page and, in `compact` form, on the My Shows dashboard. Caller must ensure the user OWNS the show.
+// (car + appropriate) gives instant feedback, then save. Every link is HELD for admin review before it
+// goes live (the server never trusts the device check — see api/shows/link). Used on the show page and,
+// in `compact` form, on the My Shows dashboard. Caller must ensure the user OWNS the show.
 export default function VideoLinkPanel({
   showId, initialUrl = null, initialStatus = null, compact = false,
 }: { showId: string; initialUrl?: string | null; initialStatus?: string | null; compact?: boolean }) {
