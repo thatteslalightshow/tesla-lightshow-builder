@@ -6,6 +6,7 @@ import { supabase, type Show } from '@/lib/supabase';
 import VideoLinkPanel from '@/components/VideoLinkPanel';
 import SocialLinks from '@/components/SocialLinks';
 import BrandLogo from '@/components/BrandLogo';
+import SiteMenu from '@/components/SiteMenu';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -130,7 +131,10 @@ export default function DashboardPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
       <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 2rem', borderBottom: '1px solid var(--border)', background: 'rgba(10,10,15,0.9)', backdropFilter: 'blur(12px)', position: 'sticky', top: 0, zIndex: 10 }}>
-        <BrandLogo />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <BrandLogo />
+          <SiteMenu align="left" />
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Link href="/gallery" className="btn btn-ghost btn-sm">Gallery</Link>
           {isAdmin && (

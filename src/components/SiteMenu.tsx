@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { supabase } from '@/lib/supabase';
 
 // Surfaces the site's resource links (previously buried in the footer) from the top
 // nav of every main page. One lightweight dropdown reused across home/pricing/gallery.
@@ -20,7 +22,18 @@ const SECONDARY = [
 
 export default function SiteMenu({ align = 'right' }: { align?: 'left' | 'right' }) {
   const [open, setOpen] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+
+  // Auth-aware nav: reflect signed-in state everywhere the menu appears, and keep it in sync on login/out.
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSignedIn(!!data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => setSignedIn(!!session));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  async function signOut() { await supabase.auth.signOut(); setOpen(false); router.push('/'); }
 
   useEffect(() => {
     if (!open) return;
@@ -47,6 +60,7 @@ export default function SiteMenu({ align = 'right' }: { align?: 'left' | 'right'
         onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
         onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.6)')}>
         <span className="site-menu-label">Menu</span>
+        {signedIn && <span title="Signed in" style={{ width: 6, height: 6, borderRadius: '50%', background: '#00e887', boxShadow: '0 0 6px #00e887', display: 'inline-block' }} />}
         <span className="site-menu-chev" style={{ fontSize: 9, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>▼</span>
         <svg className="site-menu-burger" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
           <line x1="3.5" y1="7" x2="20.5" y2="7" /><line x1="3.5" y1="12" x2="20.5" y2="12" /><line x1="3.5" y1="17" x2="20.5" y2="17" />
@@ -54,9 +68,22 @@ export default function SiteMenu({ align = 'right' }: { align?: 'left' | 'right'
       </button>
       {open && (
         <div role="menu" style={{ position: 'absolute', top: 'calc(100% + 8px)', [align]: 0, minWidth: 188, padding: 6, background: 'rgba(15,15,20,0.97)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, boxShadow: '0 12px 40px rgba(0,0,0,0.5)', zIndex: 100 } as React.CSSProperties}>
+          {item({ href: signedIn ? '/dashboard' : '/auth', label: signedIn ? 'My Shows' : 'Sign in' }, false)}
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '5px 8px' }} />
           {PRIMARY.map(l => item(l, false))}
           <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '5px 8px' }} />
           {SECONDARY.map(l => item(l, true))}
+          {signedIn && (
+            <>
+              <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '5px 8px' }} />
+              <button onClick={signOut} role="menuitem"
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', fontSize: 13.5, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none', borderRadius: 8, cursor: 'pointer' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; e.currentTarget.style.color = '#fff'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; }}>
+                Sign out
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>
