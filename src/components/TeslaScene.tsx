@@ -532,11 +532,13 @@ function buildModelSClosures(gltfScene: THREE.Group, scene: THREE.Scene): Closur
   return out;
 }
 
-// bytes: 0 idle · 63 open · 127 dance · 191 close · 255 stop → target openness
-function closureTarget(byte: number, tSec: number): number {
+// bytes: 0 idle · 63 open · 127 dance · 191 close · 255 stop → target openness.
+// `danceVal` is the current oscillation (0..1) computed in SHOW time so the dance stays synced to the
+// music/playback (was wall-clock, which drifted and looked random).
+function closureTarget(byte: number, danceVal: number): number {
   if (byte < 32) return 0;                          // idle
   if (byte < 96) return 1;                          // open
-  if (byte < 160) return 0.5 + 0.5 * Math.sin(tSec * 7); // dance — oscillate
+  if (byte < 160) return danceVal;                  // dance — oscillate on the beat, in show time
   return 0;                                         // close / stop
 }
 
@@ -557,6 +559,7 @@ export default function TeslaScene({
   const frameDataRef = useRef<Uint8Array[]>([]);
   const frameIdxRef = useRef(0);
   const previewBeatRef = useRef<number | null>(null);
+  const showSecRef = useRef(0);   // current SHOW time (s) — drives the closure "dance" in musical time, not wall-clock
   const customFramesRef = useRef<Uint8Array[] | null>(null);
   const bpmRef = useRef(bpm);   // current bpm for the render loop (avoids stale closure)
   const idleOnceRef = useRef(idleOnce);
@@ -894,6 +897,7 @@ export default function TeslaScene({
             // stretched over the whole preview, hence "lights don't match the song").
             const secs = (pb * 60) / (bpmRef.current || 120);
             frame = frames[Math.floor(secs * FPS) % frames.length];
+            showSecRef.current = secs;
           } else if (idleOnceRef.current && frameIdxRef.current >= Math.min(frames.length, 15 * FPS)) {
             // Builder: the idle demo has played through once (≤15s) — rest with the lights off
             // instead of looping forever, so the car sits calm while you build.
@@ -902,6 +906,7 @@ export default function TeslaScene({
           } else {
             frame = frames[frameIdxRef.current % frames.length];
             frameIdxRef.current++;
+            showSecRef.current = frameIdxRef.current / FPS;
           }
           activeFrameRef.current = frame;
           // Don't drive the lights until the model has loaded — otherwise the
@@ -930,11 +935,13 @@ export default function TeslaScene({
       const closureObjs = closureObjsRef.current;
       if (closureObjs.length) {
         const frame = activeFrameRef.current;
-        const tSec = now / 1000;
+        // one open↔close oscillation per 2 beats, clocked to SHOW time (pauses when playback pauses,
+        // scrubs with the show) instead of wall-clock — so a "dance" command reads as musical, not random.
+        const danceVal = 0.5 + 0.5 * Math.sin(showSecRef.current * (bpmRef.current / 60) * Math.PI);
         const pz = pulseRef.current;
         if (pz && now >= pz.until) pulseRef.current = null;
         closureObjs.forEach(co => {
-          let target = frame ? closureTarget(frame[co.ch] ?? 0, tSec) : 0;
+          let target = frame ? closureTarget(frame[co.ch] ?? 0, danceVal) : 0;
           if (pz && pz.ch === co.ch && now < pz.until) target = pz.target; // instant click feedback
           co.open += (target - co.open) * 0.18;
           if (co.open < 0.004) co.open = 0;
