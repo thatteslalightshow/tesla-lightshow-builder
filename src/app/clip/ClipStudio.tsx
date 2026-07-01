@@ -42,6 +42,9 @@ export default function ClipStudio() {
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
   const [downloadName, setDownloadName] = useState('tesla-lightshow-clip.webm')
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  // WebAudio tap for silent recording. createMediaElementSource is once-per-element, so the graph is
+  // cached and reused if a failed render is retried on the same video.
+  const audioTapRef = useRef<{ el: HTMLVideoElement; ctx: AudioContext; dest: MediaStreamAudioDestinationNode } | null>(null)
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -72,9 +75,23 @@ export default function ClipStudio() {
     const ctx = canvas.getContext('2d')!
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const cStream = (canvas as any).captureStream(30) as MediaStream
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const vStream = (video as any).captureStream ? (video as any).captureStream() as MediaStream : null
-    const audio = vStream?.getAudioTracks?.() ?? []
+    // Tap the video's audio into the recording WITHOUT playing it out loud: MediaElementSource
+    // reroutes the element's output into the WebAudio graph, and we connect it only to the
+    // recorder's destination — never ctx.destination — so the render is silent for the user
+    // but the clip keeps its sound. (The old video.captureStream() path needed the element
+    // unmuted, which blasted the song over the speakers during every render.)
+    let audio: MediaStreamTrack[] = []
+    try {
+      if (audioTapRef.current?.el !== video) {
+        audioTapRef.current?.ctx.close().catch(() => null)         // release the previous video's tap
+        const ctx = new AudioContext()
+        const dest = ctx.createMediaStreamDestination()
+        ctx.createMediaElementSource(video).connect(dest)
+        audioTapRef.current = { el: video, ctx, dest }
+      }
+      await audioTapRef.current.ctx.resume()                       // autoplay policy: resume on the click gesture
+      audio = audioTapRef.current.dest.stream.getAudioTracks()
+    } catch { audio = [] }                                         // no audio support → export video-only
     const mixed = new MediaStream([...cStream.getVideoTracks(), ...audio])
     // Prefer MP4 (H.264) — what TikTok/Instagram want — when the browser can record it; else WebM.
     const mime = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'].find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm'
@@ -107,6 +124,9 @@ export default function ClipStudio() {
     // Make sure the brand font (Space Grotesk) is loaded before we render, or canvas falls back to system-ui.
     try { await Promise.all([document.fonts.load('700 46px "Space Grotesk"'), document.fonts.load('700 56px "Space Grotesk"')]) } catch { /* fall back to system font */ }
     try {
+      // Stays MUTED-free but silent: with the element routed through the WebAudio tap above, its
+      // output no longer reaches the speakers. `muted` must be false or some engines zero the
+      // signal feeding the tap — and the recorded clip would be silent.
       video.currentTime = 0; video.muted = false
       await video.play()
       rec.start(); requestAnimationFrame(draw)

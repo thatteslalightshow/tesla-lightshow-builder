@@ -38,8 +38,8 @@ let coco: any = null, nsfw: any = null
 let loadPromise: Promise<void> | null = null
 
 // Load the models EXACTLY ONCE — a shared promise, so concurrent/repeat calls (React re-renders, retries)
-// never kick off a second load (which races and throws "Could not load the model"). Full TF.js first, then
-// each model BEST-EFFORT so a single flaky model can't take the whole tool down. Never throws.
+// never kick off a second load (which races and throws "Could not load the model"). Full TF.js first.
+// Load failures are logged (a silent catch here once hid the NSFW gate being dead for months).
 function loadModels(): Promise<void> {
   if (!loadPromise) loadPromise = (async () => {
     const w = window as any
@@ -49,17 +49,21 @@ function loadModels(): Promise<void> {
       await loadScript(VENDOR.nsfw)
       await Promise.all([loadScript(VENDOR.nsfwModel), loadScript(VENDOR.nsfwWeights)])
       nsfw = await w.nsfwjs.load()
-    } catch { nsfw = null }                                                     // NSFW gate — best-effort
-    try { await loadScript(VENDOR.coco); coco = await w.cocoSsd.load({ modelUrl: COCO_MODEL_URL }) } catch { coco = null }   // vehicle gate — best-effort
+    } catch (e) { nsfw = null; console.warn('[clip-moderation] NSFW model failed to load:', e) }
+    try { await loadScript(VENDOR.coco); coco = await w.cocoSsd.load({ modelUrl: COCO_MODEL_URL }) }
+    catch (e) { coco = null; console.warn('[clip-moderation] vehicle model failed to load:', e) }
   })()
   return loadPromise
 }
 
-// PASS: no clearly-explicit frame, and — if the vehicle detector loaded — a car/truck in ≥1 frame. Each
-// check is enforced when its model is available; needs at least one to have loaded (else we can't verify).
+// PASS requires BOTH gates: no clearly-explicit frame AND a car/truck in ≥1 frame. FAIL CLOSED on load:
+// each gate used to be "enforced when its model is available", so one flaky model load silently skipped
+// its check — a no-car video shipped with our branding exactly that way. Both models are same-origin
+// now, so requiring both costs little; a failed load resets the shared promise so the NEXT attempt
+// retries instead of the failure poisoning the whole session.
 export async function moderateFrames(frames: HTMLCanvasElement[]): Promise<Moderation> {
   await loadModels()
-  if (!coco && !nsfw) { loadPromise = null; return { ok: false, reason: 'Could not load the on-device content checker. Check your connection and try again.' } }
+  if (!coco || !nsfw) { loadPromise = null; return { ok: false, reason: 'Could not load the on-device content checker. Check your connection and try again.' } }
 
   let sawVehicle = false
   for (const f of frames) {
