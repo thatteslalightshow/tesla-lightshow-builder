@@ -548,15 +548,17 @@ export interface MixParams {
                       // back in verses, bloom on choruses, blast real drops. It modulates `density` BEFORE
                       // every consumer (negative space / expression / flourish / ramping / closures), so the
                       // show follows song structure. 0 = pure frame-by-frame reaction (old feel); 1 = fully composed.
+  downbeat: number    // MEASURE/PHRASE dynamics: emphasis on the "1" of each bar + a build across each 4-bar
+                      // phrase, so the show breathes with the BAR and PHRASE, not just the beat. 0 = off.
 }
 export const MIX_PRESETS: Record<string, MixParams> = {
-  balanced:  { bassWeight: 1.0,  punch: 1.0, sparkle: 1.0,  contrast: 0.72, closureSections: 6, phrasing: 0.5, expression: 0.5,  lead: 0.6,  sustain: 0.6,  frontHold: 0.45, flourish: 0.6, density: 0.82, composition: 0.5 },  // = original feel
-  edm:       { bassWeight: 1.3,  punch: 1.5, sparkle: 1.3,  contrast: 0.62, closureSections: 8, phrasing: 0.9, expression: 0.5,  lead: 0.4,  sustain: 0.45, frontHold: 0.3,  flourish: 0.85, density: 0.90, composition: 0.7 }, // big drops, lots of movement
-  hiphop:    { bassWeight: 1.45, punch: 1.3, sparkle: 0.85, contrast: 0.70, closureSections: 4, phrasing: 0.6, expression: 0.6,  lead: 0.35, sustain: 0.55, frontHold: 0.35, flourish: 0.6, density: 0.80, composition: 0.4 },  // 808-forward
-  rock:      { bassWeight: 1.05, punch: 1.6, sparkle: 1.1,  contrast: 0.74, closureSections: 4, phrasing: 0.7, expression: 0.55, lead: 1.0,  sustain: 0.5,  frontHold: 0.45, flourish: 0.9, density: 0.88, composition: 0.45 },  // punchy drums + guitar
-  pop:       { bassWeight: 1.0,  punch: 1.1, sparkle: 1.25, contrast: 0.78, closureSections: 4, phrasing: 0.7, expression: 0.7,  lead: 0.7,  sustain: 0.6,  frontHold: 0.45, flourish: 0.7, density: 0.80, composition: 0.5 },  // bright, melodic
-  cinematic: { bassWeight: 0.85, punch: 0.7, sparkle: 0.8,  contrast: 0.85, closureSections: 2, phrasing: 0.2, expression: 0.35, lead: 0.5,  sustain: 0.9,  frontHold: 0.8,  flourish: 0.4, density: 0.72, composition: 0.7 },  // smooth, minimal
-  country:   { bassWeight: 1.05, punch: 1.2, sparkle: 1.0,  contrast: 0.74, closureSections: 4, phrasing: 0.6, expression: 0.6,  lead: 0.85, sustain: 0.6,  frontHold: 0.55, flourish: 0.7, density: 0.82, composition: 0.5 },  // guitar/vocal-forward, warm, mid-energy — steel/vocal SUSTAINS lean on frontHold, less punch/flourish than rock
+  balanced:  { bassWeight: 1.0,  punch: 1.0, sparkle: 1.0,  contrast: 0.72, closureSections: 6, phrasing: 0.5, expression: 0.5,  lead: 0.6,  sustain: 0.6,  frontHold: 0.45, flourish: 0.6, density: 0.82, composition: 0.5, downbeat: 0.45 },  // = original feel
+  edm:       { bassWeight: 1.3,  punch: 1.5, sparkle: 1.3,  contrast: 0.62, closureSections: 8, phrasing: 0.9, expression: 0.5,  lead: 0.4,  sustain: 0.45, frontHold: 0.3,  flourish: 0.85, density: 0.90, composition: 0.7, downbeat: 0.7 }, // big drops, lots of movement
+  hiphop:    { bassWeight: 1.45, punch: 1.3, sparkle: 0.85, contrast: 0.70, closureSections: 4, phrasing: 0.6, expression: 0.6,  lead: 0.35, sustain: 0.55, frontHold: 0.35, flourish: 0.6, density: 0.80, composition: 0.4, downbeat: 0.55 },  // 808-forward
+  rock:      { bassWeight: 1.05, punch: 1.6, sparkle: 1.1,  contrast: 0.74, closureSections: 4, phrasing: 0.7, expression: 0.55, lead: 1.0,  sustain: 0.5,  frontHold: 0.45, flourish: 0.9, density: 0.88, composition: 0.45, downbeat: 0.6 },  // punchy drums + guitar
+  pop:       { bassWeight: 1.0,  punch: 1.1, sparkle: 1.25, contrast: 0.78, closureSections: 4, phrasing: 0.7, expression: 0.7,  lead: 0.7,  sustain: 0.6,  frontHold: 0.45, flourish: 0.7, density: 0.80, composition: 0.5, downbeat: 0.5 },  // bright, melodic
+  cinematic: { bassWeight: 0.85, punch: 0.7, sparkle: 0.8,  contrast: 0.85, closureSections: 2, phrasing: 0.2, expression: 0.35, lead: 0.5,  sustain: 0.9,  frontHold: 0.8,  flourish: 0.4, density: 0.72, composition: 0.7, downbeat: 0.3 },  // smooth, minimal
+  country:   { bassWeight: 1.05, punch: 1.2, sparkle: 1.0,  contrast: 0.74, closureSections: 4, phrasing: 0.6, expression: 0.6,  lead: 0.85, sustain: 0.6,  frontHold: 0.55, flourish: 0.7, density: 0.82, composition: 0.5, downbeat: 0.5 },  // guitar/vocal-forward, warm, mid-energy — steel/vocal SUSTAINS lean on frontHold, less punch/flourish than rock
 }
 
 // ─── Phase 2: musical phrasing + deliberate asymmetry ───────────────────────────
@@ -608,6 +610,34 @@ function buildBeatGrid(onset: number[], totalFrames: number, FPS: number, bpm: n
     phase[f] = (gi - anchorIdx) + (f - a) / span          // continuous fractional beats, 0 at the anchor
   }
   return phase
+}
+
+// Phase 2c-bis: MEASURE / PHRASE dynamics (Build 1c facets) — make the show breathe with the BAR and the
+// PHRASE, not just the beat. Two gentle brightness modulations, both riding the tempo-tracked beat grid:
+//   • DOWNBEAT emphasis — a short lift on the "1" of each 4/4 bar (tapers over ~⅓ beat), so the top of
+//     every measure lands a touch harder — the difference between a pulse and a phrase.
+//   • PHRASE build — a slow rise across the last stretch of each 4-bar phrase, an anticipation swell into
+//     the next downbeat (how pros telegraph a section change).
+// It only lifts fixtures the music ALREADY lit (never creates light), is gated by energy (quiet stays
+// calm), and runs before negative space so an emphasized "1" can bloom a little fuller. Per-vibe `downbeat`.
+function applyMeasureDynamics(frames: Uint8Array[], zones: LightZone[], beatPhase: Float64Array, density: number[], strength: number): void {
+  if (strength <= 0) return
+  const light = zones.filter(z => z.type !== 'closure')
+  const BAR = 4, PHRASE = 16   // 4/4 bar, 4-bar phrase (the common case)
+  for (let f = 0; f < frames.length; f++) {
+    const ph = beatPhase[f]
+    const barPos = ((ph % BAR) + BAR) % BAR
+    const downbeat = Math.max(0, 1 - barPos / 0.35)                       // 1 on the "1", gone by ⅓ beat
+    const phrasePos = ((((ph % PHRASE) + PHRASE) % PHRASE) / PHRASE)      // 0..1 through the phrase
+    const build = Math.pow(phrasePos, 3)                                  // rises only near the phrase end
+    const boost = strength * (downbeat * 0.32 + build * 0.20) * (0.4 + 0.6 * density[f])
+    if (boost < 0.01) continue
+    for (const z of light) {
+      const v = frames[f][z.channel]
+      if (v < 8) continue                                                 // emphasize what's playing, don't light the dark
+      frames[f][z.channel] = Math.min(255, Math.round(v * (1 + boost)))
+    }
+  }
 }
 
 // ── NEGATIVE SPACE ────────────────────────────────────────────────────────────────────────────────
@@ -1104,6 +1134,9 @@ export function analyzePCM(
       if (Op[f] > Op[f - 1] && Op[f] >= Op[f + 1] && Op[f] > (s / n) * 1.5 + 0.02 && f - last >= minGap) { presenceOnsets.push(f); last = f }
     } }
   applyFlourish(frames, density, presenceEnv, presenceOnsets, FPS, zones, P.flourish)
+
+  // Phase 2c-bis: measure/phrase dynamics — emphasize the "1" of each bar + build across each phrase.
+  applyMeasureDynamics(frames, zones, beatPhase, density, P.downbeat)
 
   // Phase 2d: a LIGHT touch of negative space — rest only the DIMMEST fixtures (the per-vibe `density`
   // target is HIGH, so the bright, "breathing" majority is untouched). This nods to the pro "less is
