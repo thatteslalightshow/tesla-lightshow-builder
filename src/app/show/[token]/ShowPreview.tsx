@@ -54,6 +54,9 @@ export default function ShowPreview({ show, audioUrl, audioName, songLinks }: Pr
   // Creator's linked social post (TikTok/YouTube) — approved links show a "Watch it" button; the owner
   // can add one (checked on-device, held for admin review if flagged).
   const s = show as unknown as { social_url?: string | null; social_status?: string | null };
+  // TRUE only for the signed-in creator of THIS show. Guards against a null viewerId matching a null
+  // show.user_id (which wrongly exposed the owner panel to anyone, and hid the acquire CTA from everyone).
+  const isOwner = signedIn && !!viewerId && viewerId === show.user_id;
   const [socialUrl, setSocialUrl]       = useState<string | null>(s.social_url ?? null);
   const [socialStatus, setSocialStatus] = useState<string | null>(s.social_status ?? null);
   const [linkInput, setLinkInput]       = useState('');
@@ -299,8 +302,8 @@ export default function ShowPreview({ show, audioUrl, audioName, songLinks }: Pr
           </button>
         </div>
 
-        {/* Acquire CTA — run this community show on your own Tesla */}
-        {viewerId !== show.user_id && (
+        {/* Acquire CTA — run this community show on your own Tesla (everyone except the show's own creator) */}
+        {!isOwner && (
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem', borderRadius: 14, background: 'rgba(232,64,74,0.06)', border: '1px solid rgba(232,64,74,0.25)' }}>
             <div style={{ flex: 1, minWidth: 200 }}>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, marginBottom: 2 }}>Run this on your Tesla</div>
@@ -333,8 +336,8 @@ export default function ShowPreview({ show, audioUrl, audioName, songLinks }: Pr
           </a>
         )}
 
-        {/* Owner: add / manage the real-car video link */}
-        {viewerId === show.user_id && (
+        {/* Owner: add / manage the real-car video link — ONLY the signed-in creator */}
+        {isOwner && (
           <div style={{ padding: '1rem 1.25rem', marginBottom: '1.5rem', borderRadius: 14, background: 'var(--bg2)', border: '1px solid var(--border)' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, marginBottom: 2 }}>Link your video</div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
