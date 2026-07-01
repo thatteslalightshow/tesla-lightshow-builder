@@ -9,13 +9,16 @@
  *   4. REGRESSION   — a hash of the engine's frame output is compared to a committed golden
  *                     (scripts/fseq-golden.json). If the output changes, the run FAILS so an engine
  *                     tweak can't silently alter a model's show. Re-bless intentional changes with --bless.
+ *   5. NEGATIVE     — hand-crafted UNSAFE fseqs that validateClosureSafety must REJECT (one per
+ *                     invariant), plus a safe control it must pass. A passing golden alone doesn't
+ *                     prove a guard works — this locks the validator itself against regression.
  *
  * Run:   npx tsx scripts/fseq-regression.ts          (check)
  *        npx tsx scripts/fseq-regression.ts --bless   (accept current output as the new golden)
  */
 import * as fs from 'fs'
 import * as path from 'path'
-import { MODELS, STEP_MS, validateClosureSafety } from '../src/lib/tesla-channels'
+import { MODELS, STEP_MS, CLOSURE_CMD, validateClosureSafety } from '../src/lib/tesla-channels'
 import { analyzePCM } from '../src/lib/audio-analysis'
 import { buildFseq, validateFseq } from '../src/lib/fseq'
 import type { TeslaModel } from '../src/lib/supabase'
@@ -90,6 +93,66 @@ for (const model of MODEL_LIST) {
 
   if (problems.length) { failures++; console.log(`✗ ${model.padEnd(11)} ${problems.join(' | ')}`) }
   else console.log(`✓ ${model.padEnd(11)} ${res.frames.length} frames · ${def.channelCount}ch · ${res.dropCount} drops · ${closureFrames} closure-frames · hash ${hash}${golden[model] ? '' : ' (no golden yet)'}`)
+}
+
+// ── NEGATIVE closure-safety cases ────────────────────────────────────────────────────────────────
+// Each paints an unsafe pattern straight onto closure channels and asserts the validator REJECTS it
+// with the right reason. Channels are looked up by id from the authoritative map (never hardcoded).
+const CH = Object.fromEntries(
+  MODELS.modelX.zones.filter(z => z.closure).map(z => [z.id, z.channel]),
+) as Record<string, number>
+
+function craftFseq(frames: number, paint: (fr: Uint8Array[]) => void): Uint8Array {
+  const fr = Array.from({ length: frames }, () => new Uint8Array(200))
+  paint(fr)
+  return buildFseq(200, frames, stepMs, fr)
+}
+
+const negatives: { name: string; model: TeslaModel; expect: string; fseq: Uint8Array }[] = [
+  {
+    name: 'invalid closure command byte', model: 'model3', expect: 'invalid closure byte',
+    fseq: craftFseq(200, fr => { fr[50][CH.mirror_l] = 100 }),                 // 100 is not a valid command
+  },
+  {
+    name: 'per-family limit exceeded (mirrors 21 > 20)', model: 'model3', expect: 'mirrors actuations',
+    fseq: craftFseq(2000, fr => {
+      for (let i = 0; i < 21; i++) for (let f = i * 60; f < i * 60 + 20; f++) fr[f][CH.mirror_l] = CLOSURE_CMD.open
+    }),
+  },
+  {
+    name: 'falcon doors actuate simultaneously', model: 'modelX', expect: 'falcon doors actuate',
+    fseq: craftFseq(1200, fr => {
+      // both doors open on the same frame, held to the end (so only the stagger rule can fire)
+      for (let f = 100; f < 1200; f++) { fr[f][CH.falcon_l] = CLOSURE_CMD.open; fr[f][CH.falcon_r] = CLOSURE_CMD.open }
+    }),
+  },
+  {
+    name: 'heavy closure blip (liftgate open 2s « 14s travel)', model: 'modelY', expect: 'blip stalls heavy closure',
+    fseq: craftFseq(2000, fr => { for (let f = 10; f < 110; f++) fr[f][CH.liftgate] = CLOSURE_CMD.open }),
+  },
+  {
+    name: 'Model X window moves while door moves', model: 'modelX', expect: 'window',
+    fseq: craftFseq(1500, fr => {
+      for (let f = 0; f < 1500; f++) fr[f][CH.front_door_l] = CLOSURE_CMD.open // held to end → not a blip
+      for (let f = 500; f < 700; f++) fr[f][CH.window_fl] = CLOSURE_CMD.open   // window during door travel
+    }),
+  },
+]
+
+console.log('')
+for (const t of negatives) {
+  const res = validateClosureSafety(t.fseq, t.model)
+  if (res.ok) { failures++; console.log(`✗ NEGATIVE ${t.name} — validator ACCEPTED an unsafe fseq`) }
+  else if (!res.reason?.includes(t.expect)) { failures++; console.log(`✗ NEGATIVE ${t.name} — rejected for the wrong reason: ${res.reason}`) }
+  else console.log(`✓ NEGATIVE ${t.name} → rejected (${res.reason})`)
+}
+
+// Safe control: a plain mirror gesture must PASS (proves the guards aren't rejecting everything).
+{
+  const safe = craftFseq(500, fr => { for (let f = 100; f < 220; f++) fr[f][CH.mirror_l] = CLOSURE_CMD.open })
+  const res = validateClosureSafety(safe, 'model3')
+  if (!res.ok) { failures++; console.log(`✗ CONTROL safe mirror gesture was rejected: ${res.reason}`) }
+  else console.log('✓ CONTROL safe mirror gesture passes')
 }
 
 if (bless) {
