@@ -177,17 +177,13 @@ function detectSections(totalC: number[], FPS: number): { start: number; end: nu
   return out
 }
 
-// COMPOSED CHOREOGRAPHY — a whole-song intensity ARC in 0..1: low through quiet sections (verses,
-// breakdowns), high through loud ones (choruses, drops). Unlike the local ~1.5s density envelope, this
-// reads the MACRO shape of the track so the conductor can hold back and bloom across the song. It's
-// built from a heavily smoothed energy envelope run FORWARD then BACKWARD (zero-phase, so the arc lines
-// up with the sections instead of lagging), normalized to THIS track's own 10th–90th-percentile dynamic
-// range, and CENTERED on 0.5 then scaled by how dynamic the song actually is — so a flat, evenly-loud
-// song yields ~0.5 everywhere (the conductor barely touches it) while a dynamic song swings wide.
-function buildStructureArc(totalC: number[], FPS: number): Float64Array {
+// The zero-phase-smoothed, percentile-normalized ENERGY envelope in 0..1 (uncentered). It's both the
+// fallback arc and the per-section "how loud is this part" source. `structure` = how dynamic the whole
+// track is (0 = flat/compressed → the conductor barely touches it; 1 = clearly dynamic).
+function energyArc(totalC: number[], FPS: number): { arc: Float64Array; structure: number } {
   const n = totalC.length
   const arc = new Float64Array(n)
-  if (!n) return arc
+  if (!n) return { arc, structure: 0 }
   const coef = Math.exp(-1 / (FPS * 3)) // ~3s time constant → section scale, not beats
   const sm = new Float64Array(n)
   let a = 0
@@ -198,12 +194,82 @@ function buildStructureArc(totalC: number[], FPS: number): Float64Array {
   const lo = sorted[Math.floor(n * 0.10)] ?? 0
   const hi = sorted[Math.floor(n * 0.90)] ?? 1
   const span = hi - lo
-  const structure = Math.min(1, span / 0.28) // 0 = flat/compressed song → no arc; 1 = clearly dynamic
-  for (let f = 0; f < n; f++) {
-    const norm = span > 1e-6 ? Math.min(1, Math.max(0, (sm[f] - lo) / span)) : 0.5
-    arc[f] = 0.5 + (norm - 0.5) * structure // center on 0.5, widen only for genuinely dynamic songs
+  const structure = Math.min(1, span / 0.28)
+  for (let f = 0; f < n; f++) arc[f] = span > 1e-6 ? Math.min(1, Math.max(0, (sm[f] - lo) / span)) : 0.5
+  return { arc, structure }
+}
+
+// COMPOSED CHOREOGRAPHY — a whole-song intensity ARC in 0..1: low through quiet sections (verses,
+// breakdowns), high through loud ones (choruses, drops). It reads the MACRO SECTION structure of the
+// track (not just local energy) so the conductor can hold back and bloom across the song:
+//   • segment the song with a SELF-SIMILARITY matrix + Foote NOVELTY over coarse TIMBRAL features (so
+//     boundaries land where the section actually changes — verse→chorus adds brightness/energy — not just
+//     where it gets louder), then
+//   • give each section ONE intensity level from its own energy and lay it down as a piecewise arc,
+//     smoothed at the seams — so a whole verse reads uniformly calm and a whole chorus uniformly full
+//     ("sections have identity"), instead of the arc wandering within a section.
+// Falls back to the plain energy arc when the song is too short or has no clear structure. Finally it's
+// CENTERED on 0.5 and scaled by how dynamic the song is, so a flat/evenly-loud song stays ~0.5 everywhere.
+function buildStructureArc(totalC: number[], E: Record<Band, Record<Side, number[]>>, FPS: number): Float64Array {
+  const n = totalC.length
+  const out = new Float64Array(n)
+  const base = energyArc(totalC, FPS)
+  const finish = (raw: Float64Array) => { for (let f = 0; f < n; f++) out[f] = 0.5 + (raw[f] - 0.5) * base.structure; return out }
+  if (n < FPS * 12 || base.structure < 0.15) return finish(base.arc) // too short / too flat → energy arc
+
+  // ── coarse timbral features at ~2 fps (sections span tens of seconds), L2-normalized so the matrix
+  //    compares TIMBRE (what section this is), energy-invariant ──
+  const step = Math.max(1, Math.round(FPS / 2))
+  const m = Math.floor(n / step)
+  if (m < 8) return finish(base.arc)
+  const B = E.bass.C, M = E.mid.C, H = E.high.C
+  const fb: number[] = [], fm: number[] = [], fh: number[] = []
+  for (let k = 0; k < m; k++) {
+    let sb = 0, sm2 = 0, sh = 0
+    for (let f = k * step; f < (k + 1) * step && f < n; f++) { sb += B[f]; sm2 += M[f]; sh += H[f] }
+    const nrm = Math.hypot(sb, sm2, sh) || 1
+    fb.push(sb / nrm); fm.push(sm2 / nrm); fh.push(sh / nrm)
   }
-  return arc
+  const sim = (i: number, j: number) => fb[i] * fb[j] + fm[i] * fm[j] + fh[i] * fh[j] // cosine
+
+  // ── Foote novelty: a checkerboard correlation along the diagonal peaks at section boundaries ──
+  const w = Math.max(3, Math.round((FPS / step) * 2.5)) // ~2.5s half-window
+  const nov = new Float64Array(m)
+  for (let k = w; k < m - w; k++) {
+    let same = 0, cross = 0, c = 0
+    for (let x = 1; x <= w; x++) for (let y = 1; y <= w; y++) {
+      same += sim(k - x, k - y) + sim(k + x - 1, k + y - 1)   // both-before + both-after (within-section)
+      cross += sim(k - x, k + y - 1) + sim(k + x - 1, k - y)  // before×after (cross-section)
+      c++
+    }
+    nov[k] = (same - cross) / (2 * c)
+  }
+  const nv = [...nov].filter(v => v > 0).sort((p, q) => p - q)
+  const thr = (nv[Math.floor(nv.length * 0.75)] ?? 0) * 0.9
+  const minSeg = Math.max(2, Math.round((FPS / step) * 4)) // ≥4s sections
+  const bounds: number[] = [0]
+  for (let k = w; k < m - w; k++) {
+    if (nov[k] > thr && nov[k] >= nov[k - 1] && nov[k] > nov[k + 1] && k - bounds[bounds.length - 1] >= minSeg) bounds.push(k)
+  }
+  bounds.push(m)
+  if (bounds.length <= 2) return finish(base.arc) // no real sections found → energy arc
+
+  // ── each section gets ONE level = the median of the energy arc across it ──
+  const coarseLvl = new Float64Array(m)
+  for (let s = 0; s < bounds.length - 1; s++) {
+    const seg: number[] = []
+    for (let k = bounds[s]; k < bounds[s + 1]; k++) seg.push(base.arc[Math.min(n - 1, k * step)])
+    seg.sort((p, q) => p - q)
+    const lvl = seg[Math.floor(seg.length / 2)] ?? 0.5
+    for (let k = bounds[s]; k < bounds[s + 1]; k++) coarseLvl[k] = lvl
+  }
+  // lay down per frame, then smooth ~0.8s at the seams (zero-phase) so boundaries ease instead of stepping
+  const raw = new Float64Array(n)
+  for (let f = 0; f < n; f++) raw[f] = coarseLvl[Math.min(m - 1, Math.floor(f / step))]
+  const sc = Math.exp(-1 / (FPS * 0.8))
+  let a2 = raw[0]; for (let f = 0; f < n; f++) { a2 = a2 * sc + raw[f] * (1 - sc); raw[f] = a2 }
+  let b2 = raw[n - 1]; for (let f = n - 1; f >= 0; f--) { b2 = b2 * sc + raw[f] * (1 - sc); raw[f] = b2 }
+  return finish(raw)
 }
 
 // Approximate seconds for a closure to fully CLOSE (open durations live in
@@ -913,7 +979,7 @@ export function analyzePCM(
   // vibe's `composition` — so composition=0 is byte-identical to the old behavior, and a flat song (arc≈0.5
   // everywhere) is barely touched. It MODULATES the breathing envelope; it never hard-gates.
   if (P.composition > 0) {
-    const arc = buildStructureArc(totalC, FPS)
+    const arc = buildStructureArc(totalC, E, FPS)
     for (let f = 0; f < totalFrames; f++) {
       const scale = 0.72 + 0.56 * arc[f]
       density[f] = Math.min(1, density[f] * (1 - P.composition + P.composition * scale))
