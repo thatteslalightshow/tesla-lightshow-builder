@@ -30,10 +30,13 @@ const SECURITY_HEADERS = {
 // Routes that authenticate themselves (signature / token) and must NOT be
 // gated by the cookie-session check in middleware.
 const PUBLIC_API_ROUTES = new Set([
-  '/api/stripe/webhook', // verified via Stripe signature
-  '/api/shows/view',     // anonymous view counter (increment-only)
-  '/api/stats',          // public homepage counter (aggregate counts, no PII)
-  '/api/gift/checkout',  // anyone can buy a gift (no account needed); Stripe collects the buyer email
+  '/api/stripe/webhook',     // verified via Stripe signature
+  '/api/shows/view',         // anonymous view counter (increment-only)
+  '/api/stats',              // public homepage counter (aggregate counts, no PII)
+  '/api/gift/checkout',      // anyone can buy a gift (no account needed); Stripe collects the buyer email
+  '/api/email/unsubscribe',  // clicked from email clients (no session); verified via HMAC token
+  '/api/community/videos',   // homepage "real Teslas" strip — public, admin-approved rows only
+  '/api/track',              // anonymous page-view ingest; validated + rate-limited in the route
 ])
 
 export async function middleware(req: NextRequest) {
