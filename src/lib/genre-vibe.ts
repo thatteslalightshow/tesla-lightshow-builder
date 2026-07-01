@@ -3,9 +3,8 @@
 // more reliable than guessing the vibe from raw audio features. Returns null when nothing matches, so
 // the caller can fall back to the audio classifier (classifyVibe).
 //
-// Country has no dedicated preset yet — it maps to COUNTRY_VIBE below (change this one line, or add a
-// real 'country' preset in MIX_PRESETS, if the ear-test wants something different for country).
-export const COUNTRY_VIBE = 'rock'
+// Country maps to its own dedicated 'country' vibe preset (MIX_PRESETS.country).
+export const COUNTRY_VIBE = 'country'
 
 export function genreToVibe(genre: string | undefined | null): string | null {
   if (!genre) return null

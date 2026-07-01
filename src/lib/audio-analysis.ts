@@ -457,6 +457,7 @@ export const MIX_PRESETS: Record<string, MixParams> = {
   rock:      { bassWeight: 1.05, punch: 1.6, sparkle: 1.1,  contrast: 0.74, closureSections: 4, phrasing: 0.7, expression: 0.55, lead: 1.0,  sustain: 0.5,  frontHold: 0.45, flourish: 0.9, density: 0.88 },  // punchy drums + guitar
   pop:       { bassWeight: 1.0,  punch: 1.1, sparkle: 1.25, contrast: 0.78, closureSections: 4, phrasing: 0.7, expression: 0.7,  lead: 0.7,  sustain: 0.6,  frontHold: 0.45, flourish: 0.7, density: 0.80 },  // bright, melodic
   cinematic: { bassWeight: 0.85, punch: 0.7, sparkle: 0.8,  contrast: 0.85, closureSections: 2, phrasing: 0.2, expression: 0.35, lead: 0.5,  sustain: 0.9,  frontHold: 0.8,  flourish: 0.4, density: 0.72 },  // smooth, minimal
+  country:   { bassWeight: 1.05, punch: 1.2, sparkle: 1.0,  contrast: 0.74, closureSections: 4, phrasing: 0.6, expression: 0.6,  lead: 0.85, sustain: 0.6,  frontHold: 0.55, flourish: 0.7, density: 0.82 },  // guitar/vocal-forward, warm, mid-energy — steel/vocal SUSTAINS lean on frontHold, less punch/flourish than rock
 }
 
 // ─── Phase 2: musical phrasing + deliberate asymmetry ───────────────────────────

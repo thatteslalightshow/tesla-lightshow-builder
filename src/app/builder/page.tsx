@@ -1502,7 +1502,7 @@ function BuilderInner() {
                   )}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                  {([['balanced', 'Balanced'], ['edm', 'EDM'], ['hiphop', 'Hip-Hop'], ['rock', 'Rock'], ['pop', 'Pop'], ['cinematic', 'Cinematic']] as const).map(([k, label]) => (
+                  {([['balanced', 'Balanced'], ['edm', 'EDM'], ['hiphop', 'Hip-Hop'], ['rock', 'Rock'], ['pop', 'Pop'], ['country', 'Country'], ['cinematic', 'Cinematic']] as const).map(([k, label]) => (
                     <button key={k} onClick={() => { vibeUserSet.current = true; setMixPreset(k); }} disabled={analyzing}
                       style={{ padding: '4px 9px', fontSize: 11, borderRadius: 6, cursor: analyzing ? 'default' : 'pointer',
                         background: mixPreset === k ? 'rgba(232,64,74,0.18)' : 'rgba(255,255,255,0.04)',
