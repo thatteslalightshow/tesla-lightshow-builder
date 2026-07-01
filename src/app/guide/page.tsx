@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import BrandLogo from '@/components/BrandLogo'
+import SiteMenu from '@/components/SiteMenu'
 import SocialLinks from '@/components/SocialLinks'
 
 export const metadata: Metadata = {
@@ -35,7 +36,10 @@ export default function GuidePage() {
     <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
       {/* Nav */}
       <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 2rem', borderBottom: '1px solid var(--border)', background: 'rgba(10,10,15,0.9)', backdropFilter: 'blur(12px)', position: 'sticky', top: 0, zIndex: 10 }}>
-        <BrandLogo />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <BrandLogo />
+          <SiteMenu align="left" />
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Link href="/gallery" className="btn btn-ghost btn-sm">Gallery</Link>
           <Link href="/builder" className="btn btn-primary btn-sm">+ New Show</Link>
@@ -87,7 +91,7 @@ export default function GuidePage() {
           </div>
 
           <div>
-            <h3 style={subhead}>On Windows</h3>
+            <h3 style={{ ...subhead, textTransform: 'none' }}>On Windows</h3>
             <ol style={olStyle}>
               <li>Plug in the USB drive and open <strong style={{ color: 'var(--text)' }}>File Explorer</strong>.</li>
               <li>Right-click the drive → <strong style={{ color: 'var(--text)' }}>Format…</strong></li>
@@ -97,7 +101,7 @@ export default function GuidePage() {
           </div>
 
           <div>
-            <h3 style={subhead}>On macOS</h3>
+            <h3 style={{ ...subhead, textTransform: 'none' }}>On macOS</h3>
             <ol style={olStyle}>
               <li>Plug in the USB drive and open <strong style={{ color: 'var(--text)' }}>Disk Utility</strong> (Applications → Utilities, or search with Spotlight).</li>
               <li>In the sidebar, click <strong style={{ color: 'var(--text)' }}>View → Show All Devices</strong>, then select the <strong style={{ color: 'var(--text)' }}>top-level drive</strong> (the device, not the volume under it).</li>

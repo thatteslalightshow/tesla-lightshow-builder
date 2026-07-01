@@ -6,6 +6,7 @@ import { supabase, type Show } from '@/lib/supabase';
 import TeslaScene from '@/components/TeslaScene';
 import SocialLinks from '@/components/SocialLinks';
 import BrandLogo from '@/components/BrandLogo';
+import SiteMenu from '@/components/SiteMenu';
 import type { SongLinks } from '@/lib/song-links';
 import { providerOf, SOCIAL_LABEL } from '@/lib/social-link';
 
@@ -207,7 +208,10 @@ export default function ShowPreview({ show, audioUrl, audioName, songLinks }: Pr
 
       {/* Nav */}
       <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2rem', height: 54, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(16px)', borderBottom: '1px solid rgba(255,255,255,0.07)', position: 'sticky', top: 0, zIndex: 50 }}>
-        <BrandLogo boxSize={30} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <BrandLogo boxSize={30} />
+          <SiteMenu align="left" />
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={copyLink} style={{ padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 600, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', transition: 'all .15s' }}>
             {copied ? '✓ Copied!' : '↑ Share'}

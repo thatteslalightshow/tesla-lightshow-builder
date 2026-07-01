@@ -64,13 +64,11 @@ input,select,textarea{font-family:var(--font-body);outline:none}
 /* model row stays vertical on desktop */
 .builder-models{display:flex;flex-direction:column;gap:4px}
 
-/* SiteMenu: "Menu" text on desktop, hamburger icon on mobile */
-.site-menu-burger{display:none}
+/* SiteMenu: consistent hamburger icon on every page + every screen size */
+.site-menu-label,.site-menu-chev{display:none}
+.site-menu-burger{display:block}
 
 @media(max-width:768px){
-  /* SiteMenu → hamburger icon */
-  .site-menu-label,.site-menu-chev{display:none}
-  .site-menu-burger{display:block}
   /* builder two-column → single column; controls (model + song) FIRST, preview below */
   .builder-grid{grid-template-columns:1fr}
   .builder-sidebar{border-right:none!important;border-bottom:1px solid var(--border);order:1;max-height:none;padding:1rem!important}

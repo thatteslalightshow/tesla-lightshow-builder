@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import BrandLogo from '@/components/BrandLogo'
+import SiteMenu from '@/components/SiteMenu'
 
 // Shared chrome for the Privacy / Terms / FAQ content pages.
 export default function LegalPage({ title, updated, intro, children }: {
@@ -11,7 +12,10 @@ export default function LegalPage({ title, updated, intro, children }: {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, background: 'rgba(10,10,15,0.9)', backdropFilter: 'blur(10px)', zIndex: 10 }}>
-        <Link href="/" style={{ display: 'flex' }}><BrandLogo boxSize={30} /></Link>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Link href="/" style={{ display: 'flex' }}><BrandLogo boxSize={30} /></Link>
+          <SiteMenu align="left" />
+        </div>
         <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
           <Link href="/faq" style={{ color: 'var(--muted)' }}>FAQ</Link>
           <Link href="/contact" style={{ color: 'var(--muted)' }}>Contact</Link>
