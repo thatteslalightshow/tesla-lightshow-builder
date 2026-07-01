@@ -177,6 +177,35 @@ function detectSections(totalC: number[], FPS: number): { start: number; end: nu
   return out
 }
 
+// COMPOSED CHOREOGRAPHY — a whole-song intensity ARC in 0..1: low through quiet sections (verses,
+// breakdowns), high through loud ones (choruses, drops). Unlike the local ~1.5s density envelope, this
+// reads the MACRO shape of the track so the conductor can hold back and bloom across the song. It's
+// built from a heavily smoothed energy envelope run FORWARD then BACKWARD (zero-phase, so the arc lines
+// up with the sections instead of lagging), normalized to THIS track's own 10th–90th-percentile dynamic
+// range, and CENTERED on 0.5 then scaled by how dynamic the song actually is — so a flat, evenly-loud
+// song yields ~0.5 everywhere (the conductor barely touches it) while a dynamic song swings wide.
+function buildStructureArc(totalC: number[], FPS: number): Float64Array {
+  const n = totalC.length
+  const arc = new Float64Array(n)
+  if (!n) return arc
+  const coef = Math.exp(-1 / (FPS * 3)) // ~3s time constant → section scale, not beats
+  const sm = new Float64Array(n)
+  let a = 0
+  for (let f = 0; f < n; f++) { a = a * coef + totalC[f] * (1 - coef); sm[f] = a }         // forward
+  let b = 0
+  for (let f = n - 1; f >= 0; f--) { b = b * coef + sm[f] * (1 - coef); sm[f] = b }         // backward → zero-phase
+  const sorted = [...sm].sort((x, y) => x - y)
+  const lo = sorted[Math.floor(n * 0.10)] ?? 0
+  const hi = sorted[Math.floor(n * 0.90)] ?? 1
+  const span = hi - lo
+  const structure = Math.min(1, span / 0.28) // 0 = flat/compressed song → no arc; 1 = clearly dynamic
+  for (let f = 0; f < n; f++) {
+    const norm = span > 1e-6 ? Math.min(1, Math.max(0, (sm[f] - lo) / span)) : 0.5
+    arc[f] = 0.5 + (norm - 0.5) * structure // center on 0.5, widen only for genuinely dynamic songs
+  }
+  return arc
+}
+
 // Approximate seconds for a closure to fully CLOSE (open durations live in
 // CLOSURE_DURATIONS). We hold every command for its full travel time rather than
 // firing a brief pulse — a real Model X showed the falcon doors stalling ~1 inch
@@ -449,15 +478,19 @@ export interface MixParams {
   flourish: number  // signature move strength at big moments (360 chase / symmetric ping-pong)
   density: number   // NEGATIVE SPACE: target fraction of light fixtures lit at once. Pro shows sit ~0.10-0.15
                     // (mostly dark, a few sharp accents) — this dials the sparse "hand-placed" look per vibe.
+  composition: number // COMPOSED CHOREOGRAPHY: how much a whole-song intensity ARC shapes the show — hold
+                      // back in verses, bloom on choruses, blast real drops. It modulates `density` BEFORE
+                      // every consumer (negative space / expression / flourish / ramping / closures), so the
+                      // show follows song structure. 0 = pure frame-by-frame reaction (old feel); 1 = fully composed.
 }
 export const MIX_PRESETS: Record<string, MixParams> = {
-  balanced:  { bassWeight: 1.0,  punch: 1.0, sparkle: 1.0,  contrast: 0.72, closureSections: 6, phrasing: 0.5, expression: 0.5,  lead: 0.6,  sustain: 0.6,  frontHold: 0.45, flourish: 0.6, density: 0.82 },  // = original feel
-  edm:       { bassWeight: 1.3,  punch: 1.5, sparkle: 1.3,  contrast: 0.62, closureSections: 8, phrasing: 0.9, expression: 0.5,  lead: 0.4,  sustain: 0.45, frontHold: 0.3,  flourish: 0.85, density: 0.90 }, // big drops, lots of movement
-  hiphop:    { bassWeight: 1.45, punch: 1.3, sparkle: 0.85, contrast: 0.70, closureSections: 4, phrasing: 0.6, expression: 0.6,  lead: 0.35, sustain: 0.55, frontHold: 0.35, flourish: 0.6, density: 0.80 },  // 808-forward
-  rock:      { bassWeight: 1.05, punch: 1.6, sparkle: 1.1,  contrast: 0.74, closureSections: 4, phrasing: 0.7, expression: 0.55, lead: 1.0,  sustain: 0.5,  frontHold: 0.45, flourish: 0.9, density: 0.88 },  // punchy drums + guitar
-  pop:       { bassWeight: 1.0,  punch: 1.1, sparkle: 1.25, contrast: 0.78, closureSections: 4, phrasing: 0.7, expression: 0.7,  lead: 0.7,  sustain: 0.6,  frontHold: 0.45, flourish: 0.7, density: 0.80 },  // bright, melodic
-  cinematic: { bassWeight: 0.85, punch: 0.7, sparkle: 0.8,  contrast: 0.85, closureSections: 2, phrasing: 0.2, expression: 0.35, lead: 0.5,  sustain: 0.9,  frontHold: 0.8,  flourish: 0.4, density: 0.72 },  // smooth, minimal
-  country:   { bassWeight: 1.05, punch: 1.2, sparkle: 1.0,  contrast: 0.74, closureSections: 4, phrasing: 0.6, expression: 0.6,  lead: 0.85, sustain: 0.6,  frontHold: 0.55, flourish: 0.7, density: 0.82 },  // guitar/vocal-forward, warm, mid-energy — steel/vocal SUSTAINS lean on frontHold, less punch/flourish than rock
+  balanced:  { bassWeight: 1.0,  punch: 1.0, sparkle: 1.0,  contrast: 0.72, closureSections: 6, phrasing: 0.5, expression: 0.5,  lead: 0.6,  sustain: 0.6,  frontHold: 0.45, flourish: 0.6, density: 0.82, composition: 0.5 },  // = original feel
+  edm:       { bassWeight: 1.3,  punch: 1.5, sparkle: 1.3,  contrast: 0.62, closureSections: 8, phrasing: 0.9, expression: 0.5,  lead: 0.4,  sustain: 0.45, frontHold: 0.3,  flourish: 0.85, density: 0.90, composition: 0.7 }, // big drops, lots of movement
+  hiphop:    { bassWeight: 1.45, punch: 1.3, sparkle: 0.85, contrast: 0.70, closureSections: 4, phrasing: 0.6, expression: 0.6,  lead: 0.35, sustain: 0.55, frontHold: 0.35, flourish: 0.6, density: 0.80, composition: 0.4 },  // 808-forward
+  rock:      { bassWeight: 1.05, punch: 1.6, sparkle: 1.1,  contrast: 0.74, closureSections: 4, phrasing: 0.7, expression: 0.55, lead: 1.0,  sustain: 0.5,  frontHold: 0.45, flourish: 0.9, density: 0.88, composition: 0.45 },  // punchy drums + guitar
+  pop:       { bassWeight: 1.0,  punch: 1.1, sparkle: 1.25, contrast: 0.78, closureSections: 4, phrasing: 0.7, expression: 0.7,  lead: 0.7,  sustain: 0.6,  frontHold: 0.45, flourish: 0.7, density: 0.80, composition: 0.5 },  // bright, melodic
+  cinematic: { bassWeight: 0.85, punch: 0.7, sparkle: 0.8,  contrast: 0.85, closureSections: 2, phrasing: 0.2, expression: 0.35, lead: 0.5,  sustain: 0.9,  frontHold: 0.8,  flourish: 0.4, density: 0.72, composition: 0.7 },  // smooth, minimal
+  country:   { bassWeight: 1.05, punch: 1.2, sparkle: 1.0,  contrast: 0.74, closureSections: 4, phrasing: 0.6, expression: 0.6,  lead: 0.85, sustain: 0.6,  frontHold: 0.55, flourish: 0.7, density: 0.82, composition: 0.5 },  // guitar/vocal-forward, warm, mid-energy — steel/vocal SUSTAINS lean on frontHold, less punch/flourish than rock
 }
 
 // ─── Phase 2: musical phrasing + deliberate asymmetry ───────────────────────────
@@ -872,6 +905,20 @@ export function analyzePCM(
   // Density envelope (how busy the show should be right now).
   const density: number[] = new Array(totalFrames).fill(0)
   { let acc = 0; for (let f = 0; f < totalFrames; f++) { acc = acc * 0.92 + totalC[f] * 0.08; density[f] = Math.min(1, acc * 1.6) } }
+
+  // ── COMPOSED CHOREOGRAPHY (the conductor) ── shape the local density envelope by the whole-song
+  // intensity arc BEFORE any consumer reads it, so negative space, expression, flourish, ramping, and
+  // closures all follow song structure: pull back in verses/breakdowns, bloom on choruses, blast drops.
+  // The scale runs 0.72 (arc=0, verse) → 1.28 (arc=1, chorus), neutral at arc=0.5, then blended by the
+  // vibe's `composition` — so composition=0 is byte-identical to the old behavior, and a flat song (arc≈0.5
+  // everywhere) is barely touched. It MODULATES the breathing envelope; it never hard-gates.
+  if (P.composition > 0) {
+    const arc = buildStructureArc(totalC, FPS)
+    for (let f = 0; f < totalFrames; f++) {
+      const scale = 0.72 + 0.56 * arc[f]
+      density[f] = Math.min(1, density[f] * (1 - P.composition + P.composition * scale))
+    }
+  }
 
   // Expression: stronger STEREO separation — push each band's L/R away from the center mix
   // so panned content reads as visibly independent sides. Gated to calmer passages (eased off
