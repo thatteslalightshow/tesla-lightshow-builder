@@ -8,7 +8,6 @@ import SocialLinks from '@/components/SocialLinks';
 import BrandLogo from '@/components/BrandLogo';
 import type { SongLinks } from '@/lib/song-links';
 import { providerOf, SOCIAL_LABEL } from '@/lib/social-link';
-import VideoLinkPanel from '@/components/VideoLinkPanel';
 
 const MODEL_LABELS: Record<string, string> = {
   model3: 'Model 3', modelY: 'Model Y', modelS: 'Model S',
@@ -310,16 +309,8 @@ export default function ShowPreview({ show, audioUrl, audioName, songLinks }: Pr
           </a>
         )}
 
-        {/* Owner: add / manage the real-car video link — ONLY the signed-in creator */}
-        {isOwner && (
-          <div style={{ padding: '1rem 1.25rem', marginBottom: '1.5rem', borderRadius: 14, background: 'var(--bg2)', border: '1px solid var(--border)' }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, marginBottom: 2 }}>Link your video</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
-              Filmed your Tesla running this show? Paste your <strong>TikTok or YouTube</strong> post so viewers can watch the real thing. We check it&apos;s on-brand car footage before it goes live.
-            </div>
-            <VideoLinkPanel showId={show.id} initialUrl={socialUrl} initialStatus={socialStatus} />
-          </div>
-        )}
+        {/* Video-link MANAGEMENT lives only on the My Shows dashboard — the show page is public-facing
+            and only shows the approved "Watch it" link above. */}
 
         {/* Scene with play overlay + watermark */}
         <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', border: `1px solid ${playing ? 'rgba(0,232,135,0.2)' : 'rgba(255,255,255,0.08)'}`, transition: 'border-color .4s', background: '#09090f' }}>
