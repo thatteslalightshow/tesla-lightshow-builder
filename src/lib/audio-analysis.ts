@@ -654,6 +654,7 @@ function applyFrontHolds(
   for (const z of zones) {
     if (!isFrontBeam(z)) continue
     const ch = z.channel
+    const isDrl = z.type === 'drl'
     const band = bandOf(z.type)
     const en = E[band][sideOf(z)]
     const on = O[band]
@@ -667,7 +668,9 @@ function applyFrontHolds(
         // re-articulated (band onset flux is quiet) — a held vocal / bent guitar / pad. Only that gets the
         // long tail. Dense staccato keeps firing onsets, so each hit takes the short anti-strobe tail and
         // drops — no gap-filling wash. Either way it never falls below the live base, so breathing shows.
-        const sustaining = e >= trigE * 0.55 && on[f] < 0.14
+        // DRL/signature bars ride the near-continuous mid band, where a long tail just welds them on — so
+        // they only ever get the fast anti-strobe release, letting them PULSE with the beat.
+        const sustaining = !isDrl && e >= trigE * 0.55 && on[f] < 0.14
         prev = Math.max(cur, prev - (sustaining ? stepSlow : stepFast))
       }
       frames[f][ch] = Math.round(prev)
@@ -940,11 +943,18 @@ export function analyzePCM(
         case 'turn_front': case 'turn_rear': b = (punch * 1.5 + gtr * 0.8) * P.sparkle * (0.4 + 0.6 * dens); break
         case 'marker': b = (energy * 0.45 + punch * 0.9 + gtr * 0.6) * P.sparkle * (0.3 + 0.7 * dens); break
         default:
-          if (isFrontBeam(zone)) {
-            // FRONT "voice" beams: only a THIN energy floor (a dim loudness cue that lets them breathe),
-            // with the real drive coming from onsets + picked/lead notes — so between hits the beam falls
-            // dim and each note reads as a deliberate strike, instead of the constant DC wash it was.
-            // applyFrontHolds then sustains genuinely held notes to their real length (note-duration).
+          if (zone.type === 'drl') {
+            // Signature/DRL bars (the big front strips) ride the near-CONTINUOUS mid band (synths/vocals),
+            // so a flat energy floor + big punch pins them into a saturated wash — worst on high-punch vibes
+            // like EDM. Drive them almost purely by TRANSIENTS (near-zero energy floor, lighter punch) so
+            // they PULSE with the beat and fall dark between hits, the way the bass-driven main beams do —
+            // then SECTION-gate by density so they pull back in builds/verses and blast on the drop/chorus.
+            b = (energy * 0.05 + punch * 0.6 * P.punch + gtr * 0.85) * (0.4 + 0.6 * dens)
+          } else if (isFrontBeam(zone)) {
+            // FRONT main beams + front fog (bass-driven): only a THIN energy floor (a dim loudness cue that
+            // lets them breathe), with the real drive from onsets + picked/lead notes — so between hits the
+            // beam falls dim and each note reads as a deliberate strike, instead of the constant DC wash it
+            // was. applyFrontHolds then sustains genuinely held notes to their real length (note-duration).
             b = energy * 0.15 + punch * 1.0 * P.punch + gtr * 0.9
           } else {
             // rear beams (tail/brake/rear fog) + any other fixture — unchanged reactive base.
