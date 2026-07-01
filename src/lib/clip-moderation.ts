@@ -2,17 +2,28 @@
 // sample frames from the user's OWN video and check them ON-DEVICE, so our branding only ever ends up on
 // real-car, on-brand footage. Song profanity is AUDIO and untouched; this is visual only.
 //
-// The TF.js libs are loaded from CDN at RUNTIME (not bundled): they're large, and nsfwjs ships its model
-// as shards webpack can't statically analyse. It FAILS CLOSED — if the models can't load, we reject.
-// Hardening follow-up: self-host the libs + weights under /public and drop the CDN (also lets us tighten CSP).
+// The TF.js libs load at RUNTIME (not webpack-bundled: they're large, and nsfwjs resolves its model
+// through script-registered globals webpack can't analyse) from SELF-HOSTED copies under /public — no
+// CDN, so CSP needs no external script/connect hosts and a third party can't alter what runs the
+// guardrail. Pinned versions in public/vendor/ (tf 4.22.0, coco-ssd 2.2.3, nsfwjs 4.3.0); coco-ssd's
+// weights (lite_mobilenet_v2) mirrored under /models/coco-ssd/. It FAILS CLOSED — models can't load
+// → reject.
+//
+// nsfwjs's MobileNetV2 weights are NOT inside nsfwjs.min.js — the library expects the separate
+// model.min.js + shard scripts (which register window.model / window.group1_shard1of1) to be loaded
+// first, else load() throws. The CDN era loaded only the lib, so the NSFW gate silently never ran
+// (the catch nulled it out and only the vehicle check applied). Self-hosting fixed that.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export type Moderation = { ok: boolean; reason?: string }
 
-const CDN = {
-  tf: 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js',
-  coco: 'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
-  nsfw: 'https://cdn.jsdelivr.net/npm/nsfwjs@4.3.0/dist/browser/nsfwjs.min.js',
+const VENDOR = {
+  tf: '/vendor/tf.min.js',
+  coco: '/vendor/coco-ssd.min.js',
+  nsfw: '/vendor/nsfwjs.min.js',
+  nsfwModel: '/vendor/nsfw-mobilenet-v2/model.min.js',
+  nsfwWeights: '/vendor/nsfw-mobilenet-v2/group1-shard1of1.min.js',
 }
+const COCO_MODEL_URL = '/models/coco-ssd/model.json'
 
 function loadScript(src: string): Promise<void> {
   return new Promise((res, rej) => {
@@ -32,9 +43,14 @@ let loadPromise: Promise<void> | null = null
 function loadModels(): Promise<void> {
   if (!loadPromise) loadPromise = (async () => {
     const w = window as any
-    await loadScript(CDN.tf)                                                    // full TF first (nsfwjs's graph model needs it)
-    try { await loadScript(CDN.nsfw); nsfw = await w.nsfwjs.load() } catch { nsfw = null }   // NSFW gate — best-effort
-    try { await loadScript(CDN.coco); coco = await w.cocoSsd.load() } catch { coco = null }   // vehicle gate — best-effort
+    await loadScript(VENDOR.tf)                                                 // full TF first (the models need it)
+    try {
+      // Model + weight scripts MUST come before load() — they register the globals it resolves.
+      await loadScript(VENDOR.nsfw)
+      await Promise.all([loadScript(VENDOR.nsfwModel), loadScript(VENDOR.nsfwWeights)])
+      nsfw = await w.nsfwjs.load()
+    } catch { nsfw = null }                                                     // NSFW gate — best-effort
+    try { await loadScript(VENDOR.coco); coco = await w.cocoSsd.load({ modelUrl: COCO_MODEL_URL }) } catch { coco = null }   // vehicle gate — best-effort
   })()
   return loadPromise
 }

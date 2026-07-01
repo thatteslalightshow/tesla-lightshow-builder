@@ -13,15 +13,16 @@ const SECURITY_HEADERS = {
     "default-src 'self'",
     // Prod only needs 'wasm-unsafe-eval' (the audio decoder's WASM) — not blanket eval. Dev/HMR
     // still needs 'unsafe-eval' for Fast Refresh. ('unsafe-inline' stays until inline scripts are
-    // nonce'd — a separate, larger change.)
-    `script-src 'self' ${process.env.NODE_ENV === 'production' ? "'wasm-unsafe-eval'" : "'unsafe-eval'"} 'unsafe-inline' https://cdn.jsdelivr.net`,
+    // nonce'd — a separate, larger change.) The clip-moderation TF.js libs + weights are
+    // self-hosted under /public (see clip-moderation.ts), so no external script/connect hosts.
+    `script-src 'self' ${process.env.NODE_ENV === 'production' ? "'wasm-unsafe-eval'" : "'unsafe-eval'"} 'unsafe-inline'`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob:",
     "media-src 'self' blob: https://*.supabase.co",
-    // connect-src: Supabase + the on-device clip-moderation model weights (TF.js coco-ssd / nsfwjs) fetched
-    // from CDN. TODO: self-host those weights under /public and drop the external hosts.
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co blob: https://storage.googleapis.com https://cdn.jsdelivr.net https://tfhub.dev https://*.kaggle.com https://raw.githubusercontent.com",
+    // *.ingest.us.sentry.io: browser-side Sentry error reports, once NEXT_PUBLIC_SENTRY_DSN is
+    // set (the old CSP silently blocked them — US region per the org's API host).
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co blob: https://*.ingest.us.sentry.io",
     "worker-src 'self' blob:",
     "frame-ancestors 'none'",
   ].join('; '),
