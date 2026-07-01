@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 // nav of every main page. One lightweight dropdown reused across home/pricing/gallery.
 const PRIMARY = [
   { href: '/gallery', label: 'Community Gallery' },
+  { href: '/clip', label: 'Make a Clip' },
   { href: '/guide', label: 'Setup Guide' },
   { href: '/pricing', label: 'Pricing' },
   { href: '/faq', label: 'FAQ' },

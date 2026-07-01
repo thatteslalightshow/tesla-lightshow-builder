@@ -14,12 +14,14 @@ const SECURITY_HEADERS = {
     // Prod only needs 'wasm-unsafe-eval' (the audio decoder's WASM) — not blanket eval. Dev/HMR
     // still needs 'unsafe-eval' for Fast Refresh. ('unsafe-inline' stays until inline scripts are
     // nonce'd — a separate, larger change.)
-    `script-src 'self' ${process.env.NODE_ENV === 'production' ? "'wasm-unsafe-eval'" : "'unsafe-eval'"} 'unsafe-inline'`,
+    `script-src 'self' ${process.env.NODE_ENV === 'production' ? "'wasm-unsafe-eval'" : "'unsafe-eval'"} 'unsafe-inline' https://cdn.jsdelivr.net`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob:",
     "media-src 'self' blob: https://*.supabase.co",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co blob:",
+    // connect-src: Supabase + the on-device clip-moderation model weights (TF.js coco-ssd / nsfwjs) fetched
+    // from CDN. TODO: self-host those weights under /public and drop the external hosts.
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co blob: https://storage.googleapis.com https://cdn.jsdelivr.net https://tfhub.dev https://*.kaggle.com https://raw.githubusercontent.com",
     "worker-src 'self' blob:",
     "frame-ancestors 'none'",
   ].join('; '),
