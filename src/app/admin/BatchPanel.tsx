@@ -5,6 +5,7 @@ import { parseId3, titleFromFilename } from '@/lib/id3'
 import { audioBufferToWav, resampleTo44100 } from '@/lib/wav'
 import { analyzePCM } from '@/lib/audio-analysis'
 import { MODELS, getChannelCount, STEP_MS } from '@/lib/tesla-channels'
+import { buildFseq } from '@/lib/fseq'
 import type { TeslaModel } from '@/lib/supabase'
 import JSZip from 'jszip'
 
@@ -16,16 +17,6 @@ const MODEL_LIST = [
 const MAX = 8
 type Status = 'pending' | 'working' | 'done' | 'failed'
 
-// PSEQ v2 FSEQ writer (same format as the server export).
-function buildFseq(channels: number, frames: number, stepMs: number, frameData: Uint8Array[]): Uint8Array {
-  const buf = new Uint8Array(32 + frames * channels)
-  const view = new DataView(buf.buffer)
-  buf[0] = 0x50; buf[1] = 0x53; buf[2] = 0x45; buf[3] = 0x51
-  view.setUint16(4, 32, true); buf[6] = 0; buf[7] = 2; view.setUint16(8, 32, true)
-  view.setUint32(10, channels, true); view.setUint32(14, frames, true); view.setUint16(18, stepMs, true)
-  for (let f = 0; f < frames; f++) buf.set(frameData[f] ?? new Uint8Array(channels), 32 + f * channels)
-  return buf
-}
 function sanitize(name: string): string {
   return (name || 'lightshow').replace(/[/\\:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'lightshow'
 }

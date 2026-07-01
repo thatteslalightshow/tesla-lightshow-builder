@@ -6,6 +6,28 @@ export interface FseqValidation {
 }
 
 /**
+ * Write frames to a Tesla-compatible FSEQ v2 (PSEQ) binary — 32-byte header, uncompressed.
+ * Single source of truth shared by the builder export, the admin batch tool, and the regression
+ * harness so they can't drift. (Byte 20 = compression stays 0 = uncompressed, which validateFseq requires.)
+ */
+export function buildFseq(channels: number, frames: number, stepMs: number, frameData: Uint8Array[]): Uint8Array {
+  const headerSize = 32
+  const buf = new Uint8Array(headerSize + frames * channels)
+  const view = new DataView(buf.buffer)
+  buf[0] = 0x50; buf[1] = 0x53; buf[2] = 0x45; buf[3] = 0x51   // "PSEQ"
+  view.setUint16(4, headerSize, true)                          // data start offset
+  buf[6] = 0; buf[7] = 2                                       // v2.0
+  view.setUint16(8, headerSize, true)                          // fixed-header size
+  view.setUint32(10, channels, true)
+  view.setUint32(14, frames, true)
+  view.setUint16(18, stepMs, true)
+  for (let f = 0; f < frames; f++) {
+    buf.set(frameData[f] ?? new Uint8Array(channels), headerSize + f * channels)
+  }
+  return buf
+}
+
+/**
  * Validate an FSEQ v2 binary buffer for Tesla compatibility.
  * Returns structured errors, warnings, and info lines.
  */

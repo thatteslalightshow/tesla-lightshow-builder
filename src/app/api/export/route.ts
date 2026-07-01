@@ -4,6 +4,7 @@ import { getAuthedUser } from '@/lib/auth'
 import { rateLimitOk } from '@/lib/rate-limit'
 import { getChannelCount, generateFrames, buildEditFrames, hasEdits, MODELS, FPS, STEP_MS, validateClosureSafety, type EditData } from '@/lib/tesla-channels'
 import { analyzePCM } from '@/lib/audio-analysis'
+import { buildFseq } from '@/lib/fseq'
 import { sendExportDownload } from '@/lib/email'
 import { deleteShowAudio } from '@/lib/audio-storage'
 import { MPEGDecoder } from 'mpg123-decoder'
@@ -116,23 +117,6 @@ export const maxDuration = 120
 // link (+ BYOM setup steps) as a backup, so it should stay valid long enough that a
 // customer can grab it from their inbox later (1 hour was far too short).
 const EXPORT_EXPIRY_SEC = 7 * 24 * 3600
-
-function buildFseq(channels: number, frames: number, stepMs: number, frameData: Uint8Array[]): Uint8Array {
-  const headerSize = 32
-  const buf = new Uint8Array(headerSize + frames * channels)
-  const view = new DataView(buf.buffer)
-  buf[0] = 0x50; buf[1] = 0x53; buf[2] = 0x45; buf[3] = 0x51
-  view.setUint16(4, headerSize, true)
-  buf[6] = 0; buf[7] = 2
-  view.setUint16(8, headerSize, true)
-  view.setUint32(10, channels, true)
-  view.setUint32(14, frames, true)
-  view.setUint16(18, stepMs, true)
-  for (let f = 0; f < frames; f++) {
-    buf.set(frameData[f] ?? new Uint8Array(channels), headerSize + f * channels)
-  }
-  return buf
-}
 
 // Validate a client-uploaded FSEQ before trusting it. The builder "fast path" uploads the
 // frames it ALREADY computed (the exact ones it previewed — same analyzePCM call, so identical
