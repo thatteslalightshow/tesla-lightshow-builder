@@ -1968,11 +1968,14 @@ function BuilderInner() {
             <div>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14, marginBottom: 3 }}>Show downloaded!</div>
               <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
-                When you post the video, tag <strong style={{ color: 'rgba(255,255,255,0.7)' }}>@ThatTeslaLightshow</strong> on TikTok or Instagram — we love to feature community shows!
+                Filmed your Tesla running it? Turn your clip into a branded, share-ready video in seconds — then tag <strong style={{ color: 'rgba(255,255,255,0.7)' }}>@ThatTeslaLightshow</strong> when you post. We feature community shows!
               </div>
             </div>
             <button onClick={() => setShowSharePrompt(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 18, lineHeight: 1, flexShrink: 0, paddingTop: 1 }}>×</button>
           </div>
+          <Link href="/clip" style={{ display: 'block', textAlign: 'center', padding: '10px', borderRadius: 8, background: 'var(--red)', color: '#fff', fontSize: 13, fontWeight: 700, textDecoration: 'none', marginBottom: 10 }}>
+            ⚡ Make a shareable clip →
+          </Link>
           <div style={{ display: 'flex', gap: 8 }}>
             <a href="https://tiktok.com/@ThatTeslaLightshow" target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: '8px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.65)', textAlign: 'center', textDecoration: 'none' }}>TikTok</a>
             <a href="https://instagram.com/ThatTeslaLightshow" target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: '8px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.65)', textAlign: 'center', textDecoration: 'none' }}>Instagram</a>

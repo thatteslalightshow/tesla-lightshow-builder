@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import SocialLinks from '@/components/SocialLinks';
 import BrandLogo from '@/components/BrandLogo';
 import SiteMenu from '@/components/SiteMenu';
+import RealTeslaStrip from '@/components/RealTeslaStrip';
 
 // ─── Ambient particle field ───────────────────────────────────────────────────
 function Particles() {
@@ -225,6 +226,9 @@ export default function Home() {
           ))}
         </div>
       </section>
+
+      {/* ── REAL TESLAS (approved community videos; renders only when ≥3 exist) ── */}
+      <RealTeslaStrip />
 
       {/* ── NO XLIGHTS ───────────────────────────────────────────────────── */}
       <section style={{ position:'relative', zIndex:1, padding:'7rem 2rem' }}>
