@@ -475,10 +475,13 @@ function choreographClosures(frames: Uint8Array[], totalC: number[], density: nu
       if (!has(fam)) continue
       const cap = Math.min(CLOSURE_LIMITS[fam] - 1, 12)                 // headroom + taste
       for (const sec of byTime) {
-        if (sec.peak < topPeak * 0.55) continue                        // only the energetic sections
+        if (sec.peak < topPeak * 0.62) continue                        // RESTRAINT: only the clearly energetic sections
         // first grid position at/after the section start, anchored to the song's grid
         let g = anchor + Math.ceil((sec.start - anchor) / period) * period
-        for (; g + period * 2 < sec.end; g += period * 2) {
+        // RESTRAINT: advance a WHOLE rest period past each open+close (period*3, not *2) so the
+        // handles/mirrors move DELIBERATELY — a fold, a beat to breathe, a fold — instead of flapping
+        // open/closed on every grid slot (which read as random). Fewer gestures is strictly within limits.
+        for (; g + period * 2 < sec.end; g += period * 3) {
           if ((used[fam] ?? 0) + 2 > cap) break
           if ((density[Math.min(density.length - 1, Math.max(0, Math.round(g)))] ?? 1) < 0.25) continue  // stay calm through breakdowns
           const t = snap(g, Math.round(beat * 0.4))                    // pop on the real hit near the grid
