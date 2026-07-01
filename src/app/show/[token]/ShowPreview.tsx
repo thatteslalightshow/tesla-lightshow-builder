@@ -7,6 +7,8 @@ import TeslaScene from '@/components/TeslaScene';
 import SocialLinks from '@/components/SocialLinks';
 import BrandLogo from '@/components/BrandLogo';
 import type { SongLinks } from '@/lib/song-links';
+import { parseSocialLink, providerOf, SOCIAL_LABEL } from '@/lib/social-link';
+import { moderateImage } from '@/lib/clip-moderation';
 
 const MODEL_LABELS: Record<string, string> = {
   model3: 'Model 3', modelY: 'Model Y', modelS: 'Model S',
@@ -48,6 +50,39 @@ export default function ShowPreview({ show, audioUrl, audioName, songLinks }: Pr
   const [acquiring, setAcquiring] = useState(false);
   const [acqError, setAcqError]   = useState('');
   const [pickModel, setPickModel] = useState<string>(show.tesla_model);
+
+  // Creator's linked social post (TikTok/YouTube) — approved links show a "Watch it" button; the owner
+  // can add one (checked on-device, held for admin review if flagged).
+  const s = show as unknown as { social_url?: string | null; social_status?: string | null };
+  const [socialUrl, setSocialUrl]       = useState<string | null>(s.social_url ?? null);
+  const [socialStatus, setSocialStatus] = useState<string | null>(s.social_status ?? null);
+  const [linkInput, setLinkInput]       = useState('');
+  const [linkBusy, setLinkBusy]         = useState(false);
+  const [linkMsg, setLinkMsg]           = useState('');
+
+  async function submitLink() {
+    if (!parseSocialLink(linkInput)) { setLinkMsg('Please paste a public TikTok or YouTube link.'); return; }
+    setLinkBusy(true); setLinkMsg('Reading the post…');
+    try {
+      const r = await fetch('/api/oembed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: linkInput }) });
+      const data = await r.json();
+      if (!data.ok) { setLinkMsg(data.error || 'Could not read that post.'); setLinkBusy(false); return; }
+      // On-device check on the post's thumbnail. Clean → live; flagged / no preview → held for admin review.
+      let status = 'pending', reason: string | null = 'No preview image to verify — held for review.';
+      if (data.thumbnail) { setLinkMsg('Checking the post on your device…'); const mod = await moderateImage(data.thumbnail); status = mod.ok ? 'approved' : 'pending'; reason = mod.ok ? null : (mod.reason || 'Flagged by the automatic check.'); }
+      const save = await fetch('/api/shows/link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ show_id: show.id, url: data.url, status, reason, thumb_url: data.thumbUrl }) });
+      const sd = await save.json();
+      if (!save.ok) { setLinkMsg(sd.error || 'Could not save the link.'); setLinkBusy(false); return; }
+      setSocialUrl(data.url); setSocialStatus(sd.status);
+      setLinkMsg(sd.status === 'approved' ? '✓ Linked! Your video now shows on this show.' : "Submitted — it's in review and will appear once approved.");
+    } catch { setLinkMsg('Something went wrong. Try again.'); }
+    setLinkBusy(false);
+  }
+  async function removeLink() {
+    setLinkBusy(true);
+    try { await fetch('/api/shows/link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ show_id: show.id, url: null }) }); } catch { /* noop */ }
+    setSocialUrl(null); setSocialStatus(null); setLinkInput(''); setLinkMsg(''); setLinkBusy(false);
+  }
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rafRef   = useRef<number>(0);
@@ -287,6 +322,40 @@ export default function ShowPreview({ show, audioUrl, audioName, songLinks }: Pr
               …or <span style={{ color: 'var(--red)', fontWeight: 600 }}>remix it into your own show →</span>{' '}
               <span style={{ color: 'var(--muted2)' }}>(free — start a new show from this one&apos;s vibe &amp; model)</span>
             </Link>
+          </div>
+        )}
+
+        {/* Watch it — the creator's real-car clip on TikTok/YouTube (approved links only) */}
+        {socialUrl && socialStatus === 'approved' && (
+          <a href={socialUrl} target="_blank" rel="noreferrer"
+            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', marginBottom: '1.5rem', borderRadius: 12, background: 'rgba(0,232,135,0.08)', border: '1px solid rgba(0,232,135,0.28)', color: 'var(--text)', textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>
+            ▶ Watch this show on a real Tesla{providerOf(socialUrl) ? ` on ${SOCIAL_LABEL[providerOf(socialUrl)!]}` : ''} →
+          </a>
+        )}
+
+        {/* Owner: add / manage the real-car video link */}
+        {viewerId === show.user_id && (
+          <div style={{ padding: '1rem 1.25rem', marginBottom: '1.5rem', borderRadius: 14, background: 'var(--bg2)', border: '1px solid var(--border)' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, marginBottom: 2 }}>Link your video</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
+              Filmed your Tesla running this show? Paste your <strong>TikTok or YouTube</strong> post so viewers can watch the real thing. We check it&apos;s on-brand car footage before it goes live.
+            </div>
+            {socialUrl ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 10, ...(socialStatus === 'approved' ? { color: '#00e887', background: 'rgba(0,232,135,0.12)' } : { color: '#ffcf8a', background: 'rgba(255,180,80,0.12)' }) }}>
+                  {socialStatus === 'approved' ? '✓ Live' : socialStatus === 'rejected' ? '✕ Not approved' : '⏳ In review'}
+                </span>
+                <a href={socialUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--red)', wordBreak: 'break-all', flex: 1, minWidth: 160 }}>{socialUrl}</a>
+                <button onClick={removeLink} disabled={linkBusy} className="btn btn-sm" style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)' }}>Remove</button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <input value={linkInput} onChange={e => setLinkInput(e.target.value)} placeholder="https://tiktok.com/… or https://youtube.com/…"
+                  style={{ flex: 1, minWidth: 220, padding: '9px 12px', borderRadius: 9, background: 'var(--bg3)', color: 'var(--text)', border: '1px solid var(--border)', fontSize: 13 }} />
+                <button onClick={submitLink} disabled={linkBusy || !linkInput.trim()} className="btn btn-primary btn-sm">{linkBusy ? 'Checking…' : 'Add link'}</button>
+              </div>
+            )}
+            {linkMsg && <div style={{ fontSize: 12, color: linkMsg.startsWith('✓') ? 'var(--green)' : linkMsg.includes('review') ? '#ffcf8a' : linkMsg.includes('wrong') || linkMsg.includes('Could not') || linkMsg.includes('Please') ? '#ff8a8a' : 'var(--muted)', marginTop: 10 }}>{linkMsg}</div>}
           </div>
         )}
 

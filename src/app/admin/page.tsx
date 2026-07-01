@@ -7,6 +7,7 @@ import type { Metadata } from 'next'
 import AdminSweepPanel from './AdminSweepPanel'
 import BroadcastPanel from './BroadcastPanel'
 import BatchPanel from './BatchPanel'
+import LinkReviewQueue, { type PendingLink } from './LinkReviewQueue'
 import { fetchRecentSentryIssues } from '@/lib/sentry-issues'
 
 export const metadata: Metadata = { title: 'Admin' }
@@ -153,6 +154,15 @@ export default async function AdminPage() {
   let nudged30 = 0
   try { nudged30 = (await db.from('shows').select('*', { count: 'exact', head: true }).gte('reengage_48_at', cutoff)).count ?? 0 } catch { /* not migrated */ }
 
+  // Flagged community links awaiting review (defensive — column added in the social-link migration).
+  let pendingLinks: PendingLink[] = []
+  try {
+    const { data } = await db.from('shows')
+      .select('id, name, social_url, social_thumb_url, social_flag_reason, social_submitted_at')
+      .eq('social_status', 'pending').order('social_submitted_at', { ascending: true }).limit(50)
+    pendingLinks = (data ?? []) as PendingLink[]
+  } catch { /* not migrated yet */ }
+
   // Recent Sentry errors (null = not configured → show connect prompt).
   const sentryIssues = await fetchRecentSentryIssues()
 
@@ -227,6 +237,12 @@ export default async function AdminPage() {
             Send a seasonal campaign or announcement. Always <strong>send a proof to yourself first</strong> and review it — &ldquo;Send to all&rdquo; only unlocks after. Opted-out users are skipped automatically, and every email includes an unsubscribe link.
           </p>
           <BroadcastPanel />
+        </section>
+
+        {/* Community link review queue */}
+        <section>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 16 }}>Content review</div>
+          <LinkReviewQueue items={pendingLinks} />
         </section>
 
         {/* Batch test exports (admin/tester) */}

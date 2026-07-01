@@ -18,6 +18,7 @@ export interface GalleryShow {
   artist: string | null;  // song artist
   creator: string;        // display name, or "ThatTeslaLightshow" for official
   official: boolean;
+  hasVideo?: boolean;     // has an approved real-car video link
 }
 
 const MODEL_LABELS: Record<string, string> = {
@@ -110,7 +111,12 @@ function ShowCard({ show }: { show: GalleryShow }) {
         cursor: 'pointer', height: '100%',
       }}>
         {/* Animated preview */}
-        <LightStrip style={show.style} bpm={show.bpm} intensity={show.intensity} height={72} />
+        <div style={{ position: 'relative' }}>
+          <LightStrip style={show.style} bpm={show.bpm} intensity={show.intensity} height={72} />
+          {show.hasVideo && (
+            <span style={{ position: 'absolute', top: 6, right: 6, fontSize: 10, fontWeight: 700, color: '#fff', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.25)', padding: '2px 7px', borderRadius: 10 }}>▶ Real car</span>
+          )}
+        </div>
 
         {/* Title row: song title + artist · model */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>

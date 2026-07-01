@@ -26,6 +26,8 @@ interface ShowRow {
   like_count: number | null
   song_title?: string | null
   song_artist?: string | null
+  social_url?: string | null
+  social_status?: string | null
   created_at: string
   profiles: MaybeArr<{ display_name: string | null; is_admin: boolean | null; is_tester?: boolean | null }>
 }
@@ -45,7 +47,7 @@ export default async function GalleryPage() {
   // is_admin (for the OFFICIAL badge) lives on profiles and always exists, so
   // it's in both selects. Only song_title/song_artist depend on the newer
   // migration — if that hasn't run, FULL errors and we fall back to BASE.
-  const FULL = 'id, name, tesla_model, style, intensity, bpm, share_token, view_count, like_count, song_title, song_artist, created_at, profiles(display_name, is_admin, is_tester)'
+  const FULL = 'id, name, tesla_model, style, intensity, bpm, share_token, view_count, like_count, song_title, song_artist, social_url, social_status, created_at, profiles(display_name, is_admin, is_tester)'
   const BASE = 'id, name, tesla_model, style, intensity, bpm, share_token, created_at, profiles(display_name, is_admin)'
 
   let rows: ShowRow[] = []
@@ -90,6 +92,7 @@ export default async function GalleryPage() {
       artist: r.song_artist?.trim() || null,
       creator: isOfficial ? 'ThatTeslaLightshow' : (profile?.display_name ?? 'Anonymous'),
       official: isOfficial,
+      hasVideo: r.social_status === 'approved' && !!r.social_url,
     }
   })
 

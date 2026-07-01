@@ -63,3 +63,15 @@ export async function moderateFrames(frames: HTMLCanvasElement[]): Promise<Moder
   if (coco && !sawVehicle) return { ok: false, reason: "We couldn't spot a Tesla in the video — make sure your car is clearly in frame, then try again." }
   return { ok: true }
 }
+
+// Same on-device check on a single IMAGE (e.g. a linked post's oEmbed thumbnail, proxied same-origin as a
+// data URL so it isn't a tainted canvas). Used to gate community links to real, on-brand car footage.
+export async function moderateImage(src: string): Promise<Moderation> {
+  let img: HTMLImageElement
+  try {
+    img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('image')); i.src = src })
+  } catch { return { ok: false, reason: "Couldn't read the post's preview image." } }
+  const c = document.createElement('canvas'); c.width = 224; c.height = 224
+  c.getContext('2d')!.drawImage(img, 0, 0, 224, 224)
+  return moderateFrames([c])
+}
