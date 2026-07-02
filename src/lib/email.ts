@@ -1,8 +1,14 @@
 import { Resend } from 'resend';
 
-const resend = process.env.RESEND_API_KEY
-  ? new Resend(process.env.RESEND_API_KEY)
-  : null;
+// Module-scope construction must NEVER throw — it runs during `next build` page-data collection,
+// so a malformed key (e.g. a masked "re_ab••••" pasted into an env var) would fail every deploy.
+// (Resend puts the key straight into an Authorization header, which rejects non-Latin1 bytes.)
+function makeResend(): Resend | null {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return null;
+  try { return new Resend(key); } catch (e) { console.warn('[email] RESEND_API_KEY unusable:', e); return null; }
+}
+const resend = makeResend();
 
 const FROM = 'ThatTeslaLightshow <noreply@thatteslalightshow.com>';
 const REPLY_TO = 'support@thatteslalightshow.com';   // a customer replying to any of our emails reaches support@ (not the noreply void)

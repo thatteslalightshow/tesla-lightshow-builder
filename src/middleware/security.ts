@@ -1,4 +1,4 @@
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
@@ -40,7 +40,9 @@ const PUBLIC_API_ROUTES = new Set([
   '/api/track',              // anonymous page-view ingest; validated + rate-limited in the route
 ])
 
-export async function middleware(req: NextRequest) {
+// Next 16: the `middleware` convention is deprecated in favor of `proxy` (nodejs runtime).
+// Re-exported from src/proxy.ts.
+export async function proxy(req: NextRequest) {
   const res = NextResponse.next()
   Object.entries(SECURITY_HEADERS).forEach(([k, v]) => res.headers.set(k, v))
 
@@ -93,8 +95,19 @@ export async function middleware(req: NextRequest) {
     // Cookie sessions are validated here; bearer (mobile) tokens are validated by the route handler.
     // Per-user RATE LIMITING now lives in the route handlers (shared Supabase `check_rate`) — the old
     // in-memory limiter was per serverless instance, reset on cold start, and easy to evade.
+    // getSession() (local cookie check) is deliberate: this gate only needs "a session exists" —
+    // the route handlers do the authoritative getUser() revalidation.
     if (!hasBearer) {
-      const supabase = createMiddlewareClient({ req, res })
+      const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          cookies: {
+            getAll: () => req.cookies.getAll(),
+            setAll: (toSet) => toSet.forEach(({ name, value, options }) => res.cookies.set(name, value, options)),
+          },
+        },
+      )
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -104,6 +117,5 @@ export async function middleware(req: NextRequest) {
   return res
 }
 
-export const config = {
-  matcher: ['/api/:path*', '/((?!_next/static|_next/image|favicon.ico).*)'],
-}
+// The route matcher lives in src/proxy.ts — Next's static analysis can't read a re-exported
+// `config`, so defining it here would silently disable it.

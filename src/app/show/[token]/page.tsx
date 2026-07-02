@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import type { Metadata } from 'next'
 import { getAdminClient } from '@/lib/supabase'
 import { resolveSongLinks } from '@/lib/song-links'
@@ -8,15 +9,16 @@ import ShowPreview from './ShowPreview'
 export const dynamic = 'force-dynamic'
 
 interface Props {
-  params: { token: string }
+  params: Promise<{ token: string }>   // async in Next 15+; sync access removed in 16
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { token } = await params
   const admin = getAdminClient()
   const { data: show } = await admin
     .from('shows')
     .select('name, tesla_model, style')
-    .eq('share_token', params.token)
+    .eq('share_token', token)
     .eq('is_public', true)
     .single()
 
@@ -27,7 +29,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     modelX: 'Model X', cybertruck: 'Cybertruck',
   }
 
-  const url = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://thatteslalightshow.com'}/show/${params.token}`
+  const url = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://thatteslalightshow.com'}/show/${token}`
 
   return {
     title: show.name,
@@ -51,11 +53,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ShowPage({ params }: Props) {
+  const { token } = await params
   const admin = getAdminClient()
   const { data: show } = await admin
     .from('shows')
     .select('*')
-    .eq('share_token', params.token)
+    .eq('share_token', token)
     .single()
 
   if (!show) return notFound()
@@ -66,7 +69,7 @@ export default async function ShowPage({ params }: Props) {
         <div style={{ fontSize: '2.5rem' }}>🔒</div>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', fontWeight: 700 }}>This show is private</h1>
         <p style={{ fontSize: 13, color: 'var(--muted)' }}>The owner hasn&apos;t made this show public yet.</p>
-        <a href="/" className="btn btn-ghost btn-sm" style={{ marginTop: '0.5rem' }}>← Back to ThatTeslaLightshow</a>
+        <Link href="/" className="btn btn-ghost btn-sm" style={{ marginTop: '0.5rem' }}>← Back to ThatTeslaLightshow</Link>
       </div>
     )
   }

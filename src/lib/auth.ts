@@ -1,6 +1,5 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { getAdminClient } from './supabase'
+import { createRouteClient } from './supabase-server'
 
 export interface AuthedUser {
   id: string
@@ -32,7 +31,7 @@ export async function getAuthedUser(req: Request): Promise<AuthedUser | null> {
 
   // 2. Cookie session (web) — getUser() REVALIDATES the JWT with the auth server, so a revoked or
   // tampered cookie is rejected (getSession() only trusts the cookie's local signature).
-  const supabase = createRouteHandlerClient({ cookies })
+  const supabase = await createRouteClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (user) {
     return { id: user.id, email: user.email ?? null }

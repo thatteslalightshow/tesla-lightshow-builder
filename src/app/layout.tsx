@@ -3,10 +3,15 @@ import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
 import Track from "@/components/Track";
 
+// A malformed NEXT_PUBLIC_APP_URL (e.g. missing https://) must not be able to kill the whole
+// build — new URL() here threw during page-data collection and failed every preview deploy.
+function safeBaseUrl(): URL {
+  try { return new URL(process.env.NEXT_PUBLIC_APP_URL ?? "https://thatteslalightshow.com") }
+  catch { return new URL("https://thatteslalightshow.com") }
+}
+
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_APP_URL ?? "https://thatteslalightshow.com"
-  ),
+  metadataBase: safeBaseUrl(),
   title: {
     default: "ThatTeslaLightshow — Tesla Light Show Builder",
     template: "%s · ThatTeslaLightshow",

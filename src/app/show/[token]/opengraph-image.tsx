@@ -13,12 +13,13 @@ const STYLE_COLORS: Record<string, string> = {
   pulse: '#ff6b35', ripple: '#9d6bff', bounce: '#ff4aa0', twinkle: '#4ad8e8',
 }
 
-export default async function Image({ params }: { params: { token: string } }) {
+export default async function Image({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params   // async in Next 16
   const admin = getAdminClient()
   const { data: show } = await admin
     .from('shows')
     .select('name, tesla_model, style, bpm, intensity')
-    .eq('share_token', params.token)
+    .eq('share_token', token)
     .eq('is_public', true)
     .single()
 

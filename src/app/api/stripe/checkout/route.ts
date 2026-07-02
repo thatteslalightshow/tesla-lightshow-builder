@@ -1,6 +1,5 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { createRouteClient } from '@/lib/supabase-server'
 import Stripe from 'stripe'
 import { getAdminClient } from '@/lib/supabase'
 import { rateLimitOk } from '@/lib/rate-limit'
@@ -16,7 +15,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 })
   }
 
-  const supabase = createRouteHandlerClient({ cookies })
+  const supabase = await createRouteClient()
   const { data: { user } } = await supabase.auth.getUser()   // getUser revalidates the JWT (rejects revoked cookies)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
