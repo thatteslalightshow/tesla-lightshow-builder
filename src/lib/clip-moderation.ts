@@ -43,6 +43,13 @@ let loadPromise: Promise<void> | null = null
 function loadModels(): Promise<void> {
   if (!loadPromise) loadPromise = (async () => {
     const w = window as any
+    // tf.min.js bundles a regenerator-runtime shim whose bare global assignment throws in strict
+    // mode, falling back to Function('…') — which our CSP (no 'unsafe-eval') rightly blocks:
+    // EvalError in prod (Sentry JAVASCRIPT-NEXTJS-2), the polyfill never installs, and coco's
+    // async load dies downstream. Pre-creating the global property makes the plain assignment
+    // resolve, so the eval branch never runs — CSP stays tight. (Only reachable eval in the
+    // vendored bundles; tf's other Function('return this') sits behind `self` and can't fire.)
+    if (!('regeneratorRuntime' in w)) w.regeneratorRuntime = undefined
     await loadScript(VENDOR.tf)                                                 // full TF first (the models need it)
     try {
       // Model + weight scripts MUST come before load() — they register the globals it resolves.
