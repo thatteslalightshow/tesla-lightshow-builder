@@ -26,7 +26,7 @@ const nextConfig = {
 // (no build failure); runtime error capture still works once the DSN is set.
 export default withSentryConfig(nextConfig, {
   silent: true,
-  disableLogger: true,
+  webpack: { treeshake: { removeDebugLogging: true } },   // was disableLogger (deprecated in v10)
   // Upload source maps to Sentry (for readable stack traces) but DELETE them from the deployed bundle
   // afterward, so we never serve our original source to end users. No-op when upload is skipped.
   sourcemaps: { deleteSourcemapsAfterUpload: true },
