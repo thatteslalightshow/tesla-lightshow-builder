@@ -117,6 +117,5 @@ export async function proxy(req: NextRequest) {
   return res
 }
 
-export const config = {
-  matcher: ['/api/:path*', '/((?!_next/static|_next/image|favicon.ico).*)'],
-}
+// The route matcher lives in src/proxy.ts — Next's static analysis can't read a re-exported
+// `config`, so defining it here would silently disable it.
