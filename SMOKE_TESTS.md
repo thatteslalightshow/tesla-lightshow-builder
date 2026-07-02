@@ -75,6 +75,26 @@ Relevant directives: `media-src 'self' blob: https://*.supabase.co`, `connect-sr
 
 ---
 
+## 4. Clip studio — moderation gates + silent render
+
+**What it proves:** the on-device content guardrail (`src/lib/clip-moderation.ts`) actually enforces
+BOTH gates under the production CSP, and rendering doesn't blast audio over the speakers. This flow
+shipped broken three ways (dead NSFW model, CSP-blocked eval killing the vehicle model, fail-open
+gating) and looked fine the whole time — hence a permanent smoke test.
+
+**Steps & pass criteria** (run on the **production/preview** deploy — dev CSP allows `unsafe-eval`,
+which masks the exact failure this test exists for)
+1. Open **`/clip`** with the browser **console** open. Upload a video **without a car** (kids, pets, scenery).
+   - ✅ Rejected: "We couldn't spot a Tesla in the video…".
+   - ✅ **No `[clip-moderation]` warnings** in the console (a warning means a model failed to load —
+     the gate then fails CLOSED with "Could not load the on-device content checker", never a pass).
+2. Upload a real video of **your Tesla** and export the clip.
+   - ✅ Passes moderation; render runs **silently** (no song over the speakers).
+   - ✅ Downloaded clip **has sound** and the `@ThatTeslaLightshow` watermark.
+3. Console stays clean throughout — especially no `EvalError` / CSP violations from `/vendor/tf.min.js`.
+
+---
+
 ## Quick reference — what backs each test
 
 | Flow | Routes / tables |
@@ -82,6 +102,7 @@ Relevant directives: `media-src 'self' blob: https://*.supabase.co`, `connect-sr
 | Gifting | `POST /api/gift/checkout` · `POST /api/stripe/webhook` (inserts `gift_codes`, `sendGiftCode`) · `POST /api/gift/redeem` (→ `profiles.gift_credits`) · `POST /api/export` (spends a credit) |
 | Anon → signup | `/builder` (no-auth build) · `/auth?mode=signup` · Supabase auth + `profiles` |
 | CSP audio | `src/middleware/security.ts` (CSP) · builder preview (`blob:` media) · Supabase-hosted audio |
+| Clip studio | `/clip` (`ClipStudio.tsx`) · `src/lib/clip-moderation.ts` (both gates, fail-closed) · self-hosted `/vendor/*` + `/models/coco-ssd/*` |
 
 **Regression coverage note:** the export/engine output itself is guarded automatically by
 `npm run test:fseq` (conformance + closure-safety + golden-file regression across all 5 models) —
