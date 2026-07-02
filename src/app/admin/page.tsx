@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation'
-import { cookies } from 'next/headers'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createRouteClient } from '@/lib/supabase-server'
 import { getAdminClient } from '@/lib/supabase'
 import Link from 'next/link'
 import type { Metadata } from 'next'
@@ -53,7 +52,7 @@ function Table({ cols, rows }: { cols: string[]; rows: (string | number | null |
 
 export default async function AdminPage() {
   // Verify session
-  const supabaseAuth = createServerComponentClient({ cookies })
+  const supabaseAuth = await createRouteClient()
   const { data: { session } } = await supabaseAuth.auth.getSession()
   if (!session) redirect('/auth')
 

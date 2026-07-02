@@ -1,6 +1,5 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { createRouteClient } from '@/lib/supabase-server'
 import Stripe from 'stripe'
 
 // Fallback keeps module load from throwing during `next build` when the key isn't in the build env
@@ -16,7 +15,7 @@ export async function GET(req: Request) {
   const sessionId = searchParams.get('session_id')
   if (!sessionId) return NextResponse.json({ error: 'Missing session_id' }, { status: 400 })
 
-  const supabase = createRouteHandlerClient({ cookies })
+  const supabase = await createRouteClient()
   const { data: { user } } = await supabase.auth.getUser()   // getUser revalidates the JWT (rejects revoked cookies)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

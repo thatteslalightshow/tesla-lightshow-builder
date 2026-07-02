@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
 
 export type TeslaModel = 'model3' | 'modelY' | 'modelS' | 'modelX' | 'cybertruck'
 export type ShowStyle  = 'energetic' | 'wave' | 'strobe' | 'chase' | 'pulse' | 'ripple' | 'bounce' | 'twinkle'
@@ -36,7 +36,12 @@ export interface Show {
   updated_at:   string
 }
 
-export const supabase = createClientComponentClient()
+// Browser (client-component) client — @supabase/ssr replaces the deprecated auth-helpers
+// (removed with the Next 16 upgrade; auth-helpers relied on synchronous cookies()).
+export const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+)
 
 export function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL

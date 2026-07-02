@@ -5,7 +5,9 @@ const nextConfig = {
   images: { unoptimized: true },
   poweredByHeader: false,
   reactStrictMode: true,
-  experimental: { instrumentationHook: true },
+  // instrumentation.ts is stable since Next 15 — the experimental.instrumentationHook flag is gone.
+  // Turbopack is the Next 16 default, but this webpack config (and the Sentry wrapper) still needs
+  // webpack — `next build --webpack` in package.json opts out. Turbopack migration is a follow-up.
   webpack: (config) => {
     // The server-side WASM MP3 decoder (mpg123-decoder → @wasm-audio-decoders → @eshaz/web-worker)
     // loads its worker through a dynamic require() that webpack can't statically analyze, producing a

@@ -1,13 +1,12 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { createRouteClient } from '@/lib/supabase-server'
 import { getAdminClient } from '@/lib/supabase'
 
 // Step 2 of audio upload: after the browser has PUT the file straight to Storage
 // via the signed URL from /api/upload, record the audio_files row. Only metadata
 // is sent here, so it's a tiny request well under Vercel's body limit.
 export async function POST(req: Request) {
-  const supabase = createRouteHandlerClient({ cookies })
+  const supabase = await createRouteClient()
   const { data: { user } } = await supabase.auth.getUser()   // getUser revalidates the JWT (rejects revoked cookies)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

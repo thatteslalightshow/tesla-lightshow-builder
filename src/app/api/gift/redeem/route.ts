@@ -1,13 +1,12 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { createRouteClient } from '@/lib/supabase-server'
 import { getAdminClient } from '@/lib/supabase'
 
 // Redeem a gift code → bank one (or more) export credits on the signed-in account. Money-path, so it's
 // server-authoritative and race-safe: the code is CLAIMED with a conditional update (can't be redeemed
 // twice), and the balance is incremented with compare-and-set (can't clobber a concurrent export spend).
 export async function POST(req: Request) {
-  const supabase = createRouteHandlerClient({ cookies })
+  const supabase = await createRouteClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Please sign in to redeem a gift.' }, { status: 401 })
 

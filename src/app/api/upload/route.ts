@@ -1,6 +1,5 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { createRouteClient } from '@/lib/supabase-server'
 import { getAdminClient, validateAudioMeta, sanitizeFileName } from '@/lib/supabase'
 import { rateLimitOk } from '@/lib/rate-limit'
 
@@ -10,7 +9,7 @@ import { rateLimitOk } from '@/lib/rate-limit'
 // full-song WAV (~10MB/min), so streaming it here would always fail. The browser
 // PUTs to Supabase Storage, then calls /api/upload/commit to record the row.
 export async function POST(req: Request) {
-  const supabase = createRouteHandlerClient({ cookies })
+  const supabase = await createRouteClient()
   const { data: { user } } = await supabase.auth.getUser()   // getUser revalidates the JWT (rejects revoked cookies)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

@@ -39,7 +39,6 @@ export default function LinkReviewQueue({ items }: { items: PendingLink[] }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {rows.map(row => (
             <div key={row.id} style={{ display: 'flex', gap: 14, alignItems: 'center', padding: 12, background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 10 }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               {row.social_thumb_url
                 ? <img src={row.social_thumb_url} alt="" style={{ width: 64, height: 96, objectFit: 'cover', borderRadius: 6, flexShrink: 0, background: '#000' }} />
                 : <div style={{ width: 64, height: 96, borderRadius: 6, background: '#000', flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: 22 }}>🎬</div>}

@@ -1,6 +1,5 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { createRouteClient } from '@/lib/supabase-server'
 
 // OAuth (Google) + magic-link landing. Supabase redirects here with a one-time
 // `code` after the user authenticates; we exchange it for a session cookie and
@@ -17,7 +16,7 @@ export async function GET(req: Request) {
   }
 
   if (code) {
-    const supabase = createRouteHandlerClient({ cookies })
+    const supabase = await createRouteClient()
     const { error: exchangeErr } = await supabase.auth.exchangeCodeForSession(code)
     if (exchangeErr) {
       return NextResponse.redirect(new URL(`/auth?error=${encodeURIComponent(exchangeErr.message)}`, url.origin))

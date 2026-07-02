@@ -4,7 +4,6 @@ const config: CapacitorConfig = {
   appId:    'com.teslalightshow.app',
   appName:  'Tesla LightShow',
   webDir:   'out',
-  bundledWebRuntime: false,
   plugins: {
     Filesystem: { iosScheme: 'ionic' },
     PushNotifications: {
